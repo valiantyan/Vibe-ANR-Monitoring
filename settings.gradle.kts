@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Vibe-ANR-Monitoring"
 include(":app")
+include(":anr-monitor-sdk")
