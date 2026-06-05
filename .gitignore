@@ -1,0 +1,10 @@
+*.iml
+.gradle
+.idea/caches
+.idea/workspace.xml
+/build
+/captures
+/local.properties
+/.externalNativeBuild
+/.cxx
+/app/build

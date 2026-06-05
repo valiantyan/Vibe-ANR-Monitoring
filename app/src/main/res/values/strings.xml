@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Vibe ANR Monitoring</string>
+    <string name="main_title">Vibe ANR Monitoring</string>
+    <string name="main_subtitle">Empty Views Activity</string>
+</resources>
