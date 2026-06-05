@@ -801,7 +801,7 @@ git commit -m "新增 ANR SDK 对外 API 与领域模型"
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/core/privacy/ClassNameSanitizer.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/core/timeline/MessageRingBuffer.kt`
 
-- [ ] **步骤 1：编写失败的单元测试**
+- [x] **步骤 1：编写失败的单元测试**
 
 创建 `ClassNameSanitizerTest.kt`：
 
@@ -900,7 +900,7 @@ class MessageRingBufferTest {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -910,7 +910,7 @@ class MessageRingBufferTest {
 
 预期：FAIL，出现未解析引用 `ClassNameSanitizer` 和 `MessageRingBuffer`.
 
-- [ ] **步骤 3：新增核心实现**
+- [x] **步骤 3：新增核心实现**
 
 创建 `Clock.kt`：
 
@@ -1031,7 +1031,7 @@ class MessageRingBuffer(
 }
 ```
 
-- [ ] **步骤 4：运行测试**
+- [x] **步骤 4：运行测试**
 
 运行：
 
@@ -1041,7 +1041,7 @@ class MessageRingBuffer(
 
 预期：PASS。
 
-- [ ] **步骤 5：提交核心工具**
+- [x] **步骤 5：提交核心工具**
 
 运行：
 
