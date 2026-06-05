@@ -1062,7 +1062,7 @@ git commit -m "新增 ANR SDK 核心工具与消息缓冲"
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/looper/MainLooperTimelineCollector.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/looper/MainLooperPrinterInstaller.kt`
 
-- [ ] **步骤 1：编写失败的解析器和采集器测试**
+- [x] **步骤 1：编写失败的解析器和采集器测试**
 
 创建 `LooperMessageParserTest.kt`：
 
@@ -1154,7 +1154,7 @@ class MainLooperTimelineCollectorTest {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -1164,7 +1164,7 @@ class MainLooperTimelineCollectorTest {
 
 预期：FAIL，出现未解析引用 `LooperMessageParser` 和 `MainLooperTimelineCollector`.
 
-- [ ] **步骤 3：新增 Looper 时间线采集器**
+- [x] **步骤 3：新增 Looper 时间线采集器**
 
 创建 `LooperDispatchEvent.kt`：
 
@@ -1403,7 +1403,7 @@ class MainLooperPrinterInstaller(
 }
 ```
 
-- [ ] **步骤 4：运行 Looper 测试**
+- [x] **步骤 4：运行 Looper 测试**
 
 运行：
 
@@ -1413,7 +1413,7 @@ class MainLooperPrinterInstaller(
 
 预期：PASS。
 
-- [ ] **步骤 5：提交 Looper 采集器**
+- [x] **步骤 5：提交 Looper 采集器**
 
 运行：
 
