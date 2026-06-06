@@ -1878,7 +1878,7 @@ git commit -m "新增 Pending 队列快照与 Barrier 证据分析"
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionThresholds.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt`
 
-- [ ] **步骤 1：编写失败的归因测试**
+- [x] **步骤 1：编写失败的归因测试**
 
 创建 `AttributionAnalyzerTest.kt`：
 
@@ -2052,7 +2052,7 @@ class AttributionAnalyzerTest {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -2062,7 +2062,7 @@ class AttributionAnalyzerTest {
 
 预期：FAIL，出现未解析引用 `AttributionAnalyzer`.
 
-- [ ] **步骤 3：新增归因代码**
+- [x] **步骤 3：新增归因代码**
 
 创建 `AttributionThresholds.kt`：
 
@@ -2229,7 +2229,7 @@ class AttributionAnalyzer(
 }
 ```
 
-- [ ] **步骤 4：运行归因测试**
+- [x] **步骤 4：运行归因测试**
 
 运行：
 
@@ -2239,7 +2239,7 @@ class AttributionAnalyzer(
 
 预期：PASS。
 
-- [ ] **步骤 5：提交归因规则**
+- [x] **步骤 5：提交归因规则**
 
 运行：
 
