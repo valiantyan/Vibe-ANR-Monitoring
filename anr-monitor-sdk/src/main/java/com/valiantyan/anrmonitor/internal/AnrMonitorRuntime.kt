@@ -9,6 +9,8 @@ import com.valiantyan.anrmonitor.api.UploadResult
 import com.valiantyan.anrmonitor.collector.anrinfo.AnrInfoCollector
 import com.valiantyan.anrmonitor.collector.barrier.BarrierEvidenceCollector
 import com.valiantyan.anrmonitor.collector.barrier.BarrierTokenTracker
+import com.valiantyan.anrmonitor.collector.binder.BinderBlockClassifier
+import com.valiantyan.anrmonitor.collector.binder.BinderThreadStackCollector
 import com.valiantyan.anrmonitor.collector.checktime.ChecktimeMonitor
 import com.valiantyan.anrmonitor.collector.environment.EnvironmentSnapshotter
 import com.valiantyan.anrmonitor.collector.looper.MainLooperPrinterInstaller
@@ -30,9 +32,11 @@ import com.valiantyan.anrmonitor.domain.model.AnrInfoSnapshot
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
+import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
+import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
 import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 import com.valiantyan.anrmonitor.reporter.local.LocalAnrReportWriter
@@ -116,6 +120,12 @@ internal class AnrMonitorRuntime(
         tokenTracker = barrierTokenTracker,
         nativePollOnceMonitor = nativePollOnceMonitor,
     )
+
+    // Binder 阻塞疑似分类器，只输出 suspected 证据，不确认跨进程死锁。
+    private val binderBlockClassifier: BinderBlockClassifier = BinderBlockClassifier()
+
+    // 当前进程 Binder 线程栈采集器，作为跨进程阻塞疑似的进程内辅助证据。
+    private val binderThreadStackCollector: BinderThreadStackCollector = BinderThreadStackCollector()
 
     // 系统确认 ANR 信息采集器，用于区分疑似 ANR 和 ActivityManager 确认 ANR。
     private val anrInfoCollector: AnrInfoCollector = AnrInfoCollector.create(context = appContext)
@@ -213,6 +223,7 @@ internal class AnrMonitorRuntime(
     private fun buildSnapshot(nowUptimeMs: Long): AnrSnapshot {
         val anrInfo: AnrInfoSnapshot = anrInfoCollector.collect()
         val pendingQueue: PendingQueueSnapshot = capturePendingQueue()
+        val mainThreadStack: StackTraceSnapshot = stackCollector.capture()
         return AnrSnapshot(
             eventId = UUID.randomUUID().toString(),
             eventType = eventType(anrInfo = anrInfo),
@@ -224,7 +235,7 @@ internal class AnrMonitorRuntime(
             currentMessage = timelineCollector.currentMessage(),
             historyMessages = timelineCollector.historyMessages(),
             pendingQueue = pendingQueue,
-            mainThreadStack = stackCollector.capture(),
+            mainThreadStack = mainThreadStack,
             threadCpuRecords = captureThreadCpuRecords(),
             checktimeSummary = captureChecktimeSummary(),
             environmentSnapshot = captureEnvironmentSnapshot(),
@@ -233,6 +244,7 @@ internal class AnrMonitorRuntime(
                 nowUptimeMs = nowUptimeMs,
                 pendingQueue = pendingQueue,
             ),
+            binderBlockSnapshot = captureBinderBlockSnapshot(mainThreadStack = mainThreadStack),
         )
     }
 
@@ -309,6 +321,21 @@ internal class AnrMonitorRuntime(
             stuckThresholdMs = config.barrierTokenStuckThresholdMs,
             maxRecords = config.barrierEvidenceMaxRecords,
             pendingQueue = pendingQueue,
+        )
+    }
+
+    // 根据配置采集 Binder 疑似证据；关闭时保留原因，避免误读为未命中。
+    private fun captureBinderBlockSnapshot(mainThreadStack: StackTraceSnapshot): BinderBlockSnapshot {
+        if (!config.captureBinderEvidence) {
+            return BinderBlockSnapshot.unavailable(reason = "binder evidence capture disabled")
+        }
+        val binderThreadFrames: List<String> = binderThreadStackCollector.capture(
+            maxThreadCount = config.binderThreadMaxCount,
+            maxFramesPerThread = config.binderThreadStackMaxFrames,
+        )
+        return binderBlockClassifier.classify(
+            mainFrames = mainThreadStack.frames,
+            binderThreadFrames = binderThreadFrames,
         )
     }
 

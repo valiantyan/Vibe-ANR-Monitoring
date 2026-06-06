@@ -45,6 +45,9 @@ class AnrMonitorConfigTest {
         assertFalse(config.captureBarrierEvidence)
         assertEquals(5_000L, config.barrierTokenStuckThresholdMs)
         assertEquals(20, config.barrierEvidenceMaxRecords)
+        assertTrue(config.captureBinderEvidence)
+        assertEquals(8, config.binderThreadMaxCount)
+        assertEquals(20, config.binderThreadStackMaxFrames)
     }
 
     /**

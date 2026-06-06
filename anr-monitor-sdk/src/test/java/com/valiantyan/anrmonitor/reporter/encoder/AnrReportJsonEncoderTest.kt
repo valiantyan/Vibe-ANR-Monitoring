@@ -9,6 +9,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrType
 import com.valiantyan.anrmonitor.domain.model.AttributionResult
 import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
+import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
@@ -438,5 +439,65 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"durationMs\":300"))
         assertTrue(json.contains("\"repeatedInfinitePollCount\":2"))
         assertTrue(json.contains("\"alignedWithPendingBarrier\":true"))
+    }
+
+    /**
+     * Binder 疑似证据必须进入 JSON，但字段名保持 suspected，避免误读为强确认。
+     */
+    @Test
+    fun encodeIncludesBinderBlockSuspectedEvidence(): Unit {
+        val report: AnrReport = AnrReport(
+            schemaVersion = 1,
+            snapshot = AnrSnapshot(
+                eventId = "event-1",
+                eventType = AnrEventType.SUSPECT_ANR,
+                appId = "demo",
+                environment = "test",
+                timeUptimeMs = 123L,
+                currentMessage = null,
+                historyMessages = emptyList(),
+                pendingQueue = PendingQueueSnapshot.unavailable(
+                    maxDepth = 200,
+                    failureReason = "reflection failed",
+                ),
+                mainThreadStack = StackTraceSnapshot(
+                    stackId = "main",
+                    threadName = "main",
+                    frames = listOf("android.os.BinderProxy.transactNative(Native Method)"),
+                ),
+                binderBlockSnapshot = BinderBlockSnapshot(
+                    available = true,
+                    suspected = true,
+                    mainThreadInBinder = true,
+                    binderThreadWaitsMain = true,
+                    mainThreadEvidence = listOf("android.os.BinderProxy.transactNative(Native Method)"),
+                    binderThreadEvidence = listOf("com.example.Service.waitMainThread(Service.kt:10)"),
+                    failureReason = null,
+                ),
+            ),
+            attribution = AttributionResult(
+                primaryCode = AnrAttributionCode.BINDER_BLOCK_SUSPECTED,
+                secondaryCodes = emptyList(),
+                confidence = Confidence.MEDIUM,
+                evidenceItems = listOf("main thread blocked in Binder transact"),
+                missingEvidence = emptyList(),
+                actionSuggestions = emptyList(),
+            ),
+            diagnostics = SdkDiagnostics(
+                pendingAvailable = false,
+                reportBuildCostMs = 12L,
+                collectorFailures = emptyList(),
+            ),
+        )
+
+        val json: String = AnrReportJsonEncoder().encode(report = report)
+
+        assertTrue(json.contains("\"binderBlock\""))
+        assertTrue(json.contains("\"suspected\":true"))
+        assertTrue(json.contains("\"mainThreadInBinder\":true"))
+        assertTrue(json.contains("\"binderThreadWaitsMain\":true"))
+        assertTrue(json.contains("\"mainThreadEvidence\":[\"android.os.BinderProxy.transactNative(Native Method)\"]"))
+        assertTrue(json.contains("\"binderThreadEvidence\":[\"com.example.Service.waitMainThread(Service.kt:10)\"]"))
+        assertFalse(json.contains("\"confirmedDeadlock\":true"))
     }
 }

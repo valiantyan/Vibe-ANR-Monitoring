@@ -19,6 +19,7 @@ package com.valiantyan.anrmonitor.domain.model
  * @property environmentSnapshot 系统负载、内存、存储和进程 I/O 环境证据。
  * @property sharedPreferencesSnapshot SharedPreferences 文件健康和写入入口证据。
  * @property barrierEvidenceSnapshot Barrier token 与 nativePollOnce 增强证据。
+ * @property binderBlockSnapshot Binder 和跨进程阻塞疑似证据。
  */
 data class AnrSnapshot(
     val eventId: String,
@@ -42,5 +43,8 @@ data class AnrSnapshot(
     ),
     val barrierEvidenceSnapshot: BarrierEvidenceSnapshot = BarrierEvidenceSnapshot.unavailable(
         reason = "barrier evidence capture not provided",
+    ),
+    val binderBlockSnapshot: BinderBlockSnapshot = BinderBlockSnapshot.unavailable(
+        reason = "binder evidence capture not provided",
     ),
 )

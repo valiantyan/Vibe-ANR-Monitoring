@@ -57,6 +57,7 @@ internal class AnrReportAssembler(
             snapshot.checktimeSummary.failureReason,
             snapshot.sharedPreferencesSnapshot.failureReason,
             snapshot.barrierEvidenceSnapshot.failureReason,
+            snapshot.binderBlockSnapshot.failureReason,
         ) + snapshot.environmentSnapshot.failureReasons
     }
 }

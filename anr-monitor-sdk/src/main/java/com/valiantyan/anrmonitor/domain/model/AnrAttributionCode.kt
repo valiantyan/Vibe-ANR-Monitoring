@@ -35,6 +35,11 @@ enum class AnrAttributionCode {
     SP_APPLY_WAIT,
 
     /**
+     * 主线程疑似阻塞在 Binder/跨进程调用，仍需线下 Trace 复核确认。
+     */
+    BINDER_BLOCK_SUSPECTED,
+
+    /**
      * 证据不足，暂不能给出可信归因。
      */
     UNKNOWN_INSUFFICIENT_EVIDENCE,

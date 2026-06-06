@@ -7,6 +7,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.AttributionResult
 import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
+import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.SharedPreferencesFileStat
@@ -53,6 +54,13 @@ class AttributionAnalyzer(
         if (stormResult != null) {
             return withThreadCpuEvidence(
                 result = stormResult,
+                snapshot = snapshot,
+            )
+        }
+        val binderResult: AttributionResult? = analyzeBinderBlock(snapshot = snapshot.binderBlockSnapshot)
+        if (binderResult != null) {
+            return withThreadCpuEvidence(
+                result = binderResult,
                 snapshot = snapshot,
             )
         }
@@ -194,6 +202,27 @@ class AttributionAnalyzer(
         )
     }
 
+    // 识别 Binder/跨进程阻塞疑似，只输出中等置信度并提示线下复核。
+    private fun analyzeBinderBlock(snapshot: BinderBlockSnapshot): AttributionResult? {
+        if (!snapshot.available || !snapshot.suspected) {
+            return null
+        }
+        return result(
+            code = AnrAttributionCode.BINDER_BLOCK_SUSPECTED,
+            confidence = Confidence.MEDIUM,
+            evidence = binderEvidence(snapshot = snapshot),
+            suggestion = "结合 Perfetto、system trace 或远端进程栈复核 Binder 调用链，端侧只输出疑似。",
+        )
+    }
+
+    // 提取 Binder 疑似证据，字段命名避免把 suspected 误读为 confirmed。
+    private fun binderEvidence(snapshot: BinderBlockSnapshot): List<String> {
+        return listOf(
+            "main thread blocked in Binder transact",
+            "binder thread waits main or lock",
+        ) + snapshot.mainThreadEvidence.take(n = 1) + snapshot.binderThreadEvidence.take(n = 1)
+    }
+
     // 在关键证据不足时返回明确的 unknown，帮助后续评审定位采集短板。
     private fun unknownResult(snapshot: AnrSnapshot): AttributionResult {
         val missingEvidence: MutableList<String> = mutableListOf()
@@ -208,6 +237,9 @@ class AttributionAnalyzer(
         }
         if (!snapshot.barrierEvidenceSnapshot.available) {
             missingEvidence += "barrier evidence unavailable: ${snapshot.barrierEvidenceSnapshot.failureReason}"
+        }
+        if (!snapshot.binderBlockSnapshot.available) {
+            missingEvidence += "binder evidence unavailable: ${snapshot.binderBlockSnapshot.failureReason}"
         }
         return AttributionResult(
             primaryCode = AnrAttributionCode.UNKNOWN_INSUFFICIENT_EVIDENCE,

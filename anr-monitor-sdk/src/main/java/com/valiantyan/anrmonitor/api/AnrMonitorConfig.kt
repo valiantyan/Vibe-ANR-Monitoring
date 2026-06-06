@@ -44,6 +44,9 @@ enum class AnrPrivacyMode {
  * @property captureBarrierEvidence 是否采集 Barrier token 和 [nativePollOnce] 增强证据，默认关闭以控制 hook 风险。
  * @property barrierTokenStuckThresholdMs Barrier token 未移除超过该阈值才输出为卡住证据。
  * @property barrierEvidenceMaxRecords Barrier token 和 [nativePollOnce] 最近证据最大输出数量。
+ * @property captureBinderEvidence 是否采集 Binder 和跨进程阻塞疑似证据。
+ * @property binderThreadMaxCount 单次报告最多读取的 Binder 线程数量。
+ * @property binderThreadStackMaxFrames 单个 Binder 线程最多保留的栈帧数量。
  * @property enableQueuedWorkBypass 是否启用 [android.app.QueuedWork] 绕过能力，默认关闭避免一致性风险。
  * @property queuedWorkBypassAllowedFiles 允许绕过的 SP 文件白名单。
  * @property queuedWorkBypassBlockedFiles 禁止绕过的 SP 文件黑名单。
@@ -77,6 +80,9 @@ data class AnrMonitorConfig(
     val captureBarrierEvidence: Boolean = false,
     val barrierTokenStuckThresholdMs: Long = 5_000L,
     val barrierEvidenceMaxRecords: Int = 20,
+    val captureBinderEvidence: Boolean = true,
+    val binderThreadMaxCount: Int = 8,
+    val binderThreadStackMaxFrames: Int = 20,
     val enableQueuedWorkBypass: Boolean = false,
     val queuedWorkBypassAllowedFiles: Set<String> = emptySet(),
     val queuedWorkBypassBlockedFiles: Set<String> = emptySet(),

@@ -59,6 +59,9 @@ data class AnrReport(
                 barrierEvidenceSnapshot = BarrierEvidenceSnapshot.unavailable(
                     reason = "empty report",
                 ),
+                binderBlockSnapshot = BinderBlockSnapshot.unavailable(
+                    reason = "empty report",
+                ),
             )
             return AnrReport(
                 schemaVersion = 1,

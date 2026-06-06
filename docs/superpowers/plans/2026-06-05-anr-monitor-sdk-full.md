@@ -3807,10 +3807,22 @@ git commit -m "新增 Barrier token 与 nativePollOnce 增强证据"
 
 **文件：**
 - 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/binder/BinderBlockClassifierTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/api/AnrMonitorConfigTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzerTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoderTest.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/BinderBlockSnapshot.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/binder/BinderBlockClassifier.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/binder/BinderThreadStackCollector.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitorConfig.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrAttributionCode.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrSnapshot.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrReport.kt`
 - 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrMonitorRuntime.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrReportAssembler.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt`
 
-- [ ] **步骤 1：编写失败的 Binder 疑似识别测试**
+- [x] **步骤 1：编写失败的 Binder 疑似识别测试**
 
 创建 `BinderBlockClassifierTest.kt`：
 
@@ -3835,7 +3847,7 @@ class BinderBlockClassifierTest {
 }
 ```
 
-- [ ] **步骤 2：新增 Binder 分类器**
+- [x] **步骤 2：新增 Binder 分类器**
 
 创建 `BinderBlockClassifier.kt`：
 
@@ -3854,7 +3866,7 @@ class BinderBlockClassifier {
 }
 ```
 
-- [ ] **步骤 3：运行测试并提交**
+- [x] **步骤 3：运行测试并提交**
 
 运行：
 
@@ -3865,6 +3877,17 @@ git commit -m "新增 Binder 与跨进程阻塞疑似识别"
 ```
 
 预期：测试 PASS，提交成功。
+
+执行记录：
+
+- RED：新增 `BinderBlockClassifierTest`，并扩展 `AnrMonitorConfigTest`、`AttributionAnalyzerTest`、`AnrReportJsonEncoderTest`；定向测试按预期因缺少 `BinderBlockClassifier`、`BinderBlockSnapshot`、`captureBinderEvidence`、`BINDER_BLOCK_SUSPECTED`、`AnrSnapshot.binderBlockSnapshot` 和 `binderBlock` JSON 字段失败。
+- GREEN：新增 `BinderBlockSnapshot`、`BinderBlockClassifier`、`BinderThreadStackCollector`；分类器要求主线程命中 `BinderProxy.transactNative`/`transact` 且 Binder 线程出现 wait/park/lock/mainThread 等等待迹象才输出 `suspected=true`，只有主线程在 Binder 中不会误报。
+- 接线：`AnrMonitorConfig` 增加 `captureBinderEvidence`、`binderThreadMaxCount`、`binderThreadStackMaxFrames`；`AnrMonitorRuntime` 采集主线程栈后读取当前进程 Binder 线程栈并生成 `binderBlockSnapshot`；`AnrSnapshot`、`AnrReportAssembler`、`AttributionAnalyzer` 和 `AnrReportJsonEncoder` 输出 Binder 疑似证据与降级原因。
+- 评审口径：新增 `BINDER_BLOCK_SUSPECTED` 为中等置信度疑似归因，弱于 SP、Barrier 和消息风暴；端侧不输出 `confirmedDeadlock`，跨进程死锁必须结合 Perfetto/system trace 或远端进程栈复核。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.binder.BinderBlockClassifierTest --tests com.valiantyan.anrmonitor.api.AnrMonitorConfigTest --tests com.valiantyan.anrmonitor.domain.analyzer.AttributionAnalyzerTest --tests com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoderTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:compileDebugKotlin` PASS。
+- 验证：`./gradlew :app:compileDebugKotlin` PASS。
 
 ### 任务 18：新增报告治理、压缩重试、隐私和 SDK 自监控
 

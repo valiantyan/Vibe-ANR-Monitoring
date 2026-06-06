@@ -5,6 +5,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrEventType
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
+import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.MessageRecordKind
@@ -283,6 +284,39 @@ class AttributionAnalyzerTest {
         assertEquals(AnrAttributionCode.MESSAGE_STORM, result.primaryCode)
     }
 
+    /**
+     * Binder 跨进程阻塞只能输出疑似归因，且应弱于 SP、Barrier 和消息风暴等更确定证据。
+     */
+    @Test
+    fun analyzeReturnsBinderBlockSuspectedWhenBinderEvidenceMatches(): Unit {
+        val result = AttributionAnalyzer().analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 1L,
+                    wallMs = 6_000L,
+                    cpuMs = 0L,
+                ),
+                history = emptyList(),
+                pending = emptyList(),
+                frames = listOf("android.os.BinderProxy.transactNative(Native Method)"),
+                binderBlockSnapshot = BinderBlockSnapshot(
+                    available = true,
+                    suspected = true,
+                    mainThreadInBinder = true,
+                    binderThreadWaitsMain = true,
+                    mainThreadEvidence = listOf("android.os.BinderProxy.transactNative(Native Method)"),
+                    binderThreadEvidence = listOf("com.example.Service.waitMainThread(Service.kt:10)"),
+                    failureReason = null,
+                ),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.BINDER_BLOCK_SUSPECTED, result.primaryCode)
+        assertEquals(Confidence.MEDIUM, result.confidence)
+        assertTrue(result.evidenceItems.contains("main thread blocked in Binder transact"))
+        assertTrue(result.evidenceItems.contains("binder thread waits main or lock"))
+    }
+
     private fun snapshot(
         current: MessageRecord?,
         history: List<MessageRecord>,
@@ -291,6 +325,9 @@ class AttributionAnalyzerTest {
         threadCpuRecords: List<ThreadCpuRecord> = emptyList(),
         barrierEvidenceSnapshot: BarrierEvidenceSnapshot = BarrierEvidenceSnapshot.unavailable(
             reason = "barrier evidence not provided",
+        ),
+        binderBlockSnapshot: BinderBlockSnapshot = BinderBlockSnapshot.unavailable(
+            reason = "binder evidence not provided",
         ),
     ): AnrSnapshot {
         return AnrSnapshot(
@@ -315,6 +352,7 @@ class AttributionAnalyzerTest {
             ),
             threadCpuRecords = threadCpuRecords,
             barrierEvidenceSnapshot = barrierEvidenceSnapshot,
+            binderBlockSnapshot = binderBlockSnapshot,
         )
     }
 

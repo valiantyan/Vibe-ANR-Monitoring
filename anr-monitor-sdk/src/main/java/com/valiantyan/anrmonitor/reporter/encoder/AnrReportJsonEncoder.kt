@@ -4,6 +4,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrInfoSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
+import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
 import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
@@ -34,6 +35,7 @@ class AnrReportJsonEncoder {
             "\"mainThread\":${mainThreadJson(report = report)}",
             "\"pendingQueue\":${pendingQueueJson(report = report)}",
             "\"barrierEvidence\":${barrierEvidenceJson(report = report)}",
+            "\"binderBlock\":${binderBlockJson(report = report)}",
             "\"threadCpu\":${threadCpuJson(report = report)}",
             "\"checktime\":${checktimeJson(report = report)}",
             "\"environmentSnapshot\":${environmentJson(report = report)}",
@@ -107,6 +109,21 @@ class AnrReportJsonEncoder {
             "\"alignedWithPendingBarrier\":${snapshot.alignedWithPendingBarrier}",
             "\"stuckTokens\":${barrierTokenRecords(records = snapshot.stuckTokens)}",
             "\"nativePollOnceRecords\":${nativePollOnceRecords(records = snapshot.recentNativePollOnceRecords)}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码 Binder 阻塞疑似证据，明确使用 suspected 避免误读为确认死锁。
+    private fun binderBlockJson(report: AnrReport): String {
+        val snapshot: BinderBlockSnapshot = report.snapshot.binderBlockSnapshot
+        val fields: List<String> = listOf(
+            "\"available\":${snapshot.available}",
+            "\"suspected\":${snapshot.suspected}",
+            "\"mainThreadInBinder\":${snapshot.mainThreadInBinder}",
+            "\"binderThreadWaitsMain\":${snapshot.binderThreadWaitsMain}",
+            "\"mainThreadEvidence\":${strings(values = snapshot.mainThreadEvidence)}",
+            "\"binderThreadEvidence\":${strings(values = snapshot.binderThreadEvidence)}",
+            "\"failureReason\":${stringOrNull(value = snapshot.failureReason)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }
