@@ -2958,8 +2958,11 @@ git commit -m "接入 ANR SDK 运行时与示例场景"
 
 **文件：**
 - 创建： `docs-anr/100-ANR监控SDK-阶段一验收记录.md`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzerTest.kt`
+- 修改： `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 
-- [ ] **步骤 1：安装 debug app**
+- [x] **步骤 1：安装 debug app**
 
 运行：
 
@@ -2969,7 +2972,7 @@ git commit -m "接入 ANR SDK 运行时与示例场景"
 
 预期：PASS，设备或模拟器中包含 `com.valiantyan.vibeanrmonitoring`.
 
-- [ ] **步骤 2：清理之前的 demo 报告**
+- [x] **步骤 2：清理之前的 demo 报告**
 
 运行：
 
@@ -2979,7 +2982,7 @@ adb shell run-as com.valiantyan.vibeanrmonitoring rm -rf files/anr-monitor-repor
 
 预期：命令成功退出。如果当前设备构建不支持 `run-as`，在验收记录中说明手动拉取文件需要 debug-capable emulator。
 
-- [ ] **步骤 3：触发当前消息慢场景**
+- [x] **步骤 3：触发当前消息慢场景**
 
 运行：
 
@@ -2991,7 +2994,7 @@ Then tap `Current Slow Message` in the app.
 
 预期：约 3 秒后，Logcat 包含 `suspect ANR captured`，并且 `files/anr-monitor-reports` 下出现 JSON 文件。
 
-- [ ] **步骤 4：拉取并检查本地报告**
+- [x] **步骤 4：拉取并检查本地报告**
 
 运行：
 
@@ -3016,13 +3019,13 @@ adb shell run-as com.valiantyan.vibeanrmonitoring cat "files/anr-monitor-reports
 }
 ```
 
-- [ ] **步骤 5：触发消息风暴场景**
+- [x] **步骤 5：触发消息风暴场景**
 
 Tap `Message Storm`.
 
 预期：生成一份报告。如果主归因为 `MESSAGE_STORM`，则该场景记为 PASS。如果主归因为 `UNKNOWN_INSUFFICIENT_EVIDENCE`，检查 `pendingQueue.messages`，确认消息是否在 Watchdog 快照前已经被消费；如果是，将 `VibeAnrApplication.kt` 中的 `suspectAnrMs` 降到 `1_500L`，重新运行 `./gradlew :app:installDebug`，再重复本步骤。
 
-- [ ] **步骤 6：创建验收记录**
+- [x] **步骤 6：创建验收记录**
 
 创建 `docs-anr/100-ANR监控SDK-阶段一验收记录.md`，使用以下结构，并记录实际运行得到的精确命令输出：
 
@@ -3063,7 +3066,7 @@ Tap `Message Storm`.
 阶段一通过：SDK 可初始化、可采集主线程消息时间线、可触发疑似 ANR 快照、可输出本地 JSON、可给出基础归因和缺失证据。
 ```
 
-- [ ] **步骤 7：提交验收记录**
+- [x] **步骤 7：提交验收记录**
 
 运行：
 
@@ -3073,6 +3076,14 @@ git commit -m "新增 ANR SDK 阶段一验收记录"
 ```
 
 预期：提交成功。
+
+执行记录：
+
+- 已在 `Pixel_9a` AVD 上安装 debug app，包名为 `com.valiantyan.vibeanrmonitoring`。
+- 已创建 `docs-anr/100-ANR监控SDK-阶段一验收记录.md`，记录真实 Gradle、adb、logcat 和关键 JSON 字段输出。
+- 验收中发现当前消息低 CPU 等待型阻塞被误判为 `UNKNOWN_INSUFFICIENT_EVIDENCE`，已补充单测并修复为按 `wallMs >= suspectAnrMs` 识别 `CURRENT_MESSAGE_SLOW`，CPU 比例只影响置信度。
+- 验收中发现 `Message Storm` demo 只投递短任务无法触发 watchdog，已补充单测、调整归因顺序为 SP、Barrier、Message Storm、Current、History，并让 demo 在堆积 pending 消息后阻塞当前点击消息。
+- 最终验证通过：`./gradlew :anr-monitor-sdk:testDebugUnitTest`、`./gradlew :app:assembleDebug`、`./gradlew :app:installDebug`、`Current Slow Message`、`Message Storm`、`SharedPreferences Apply Burst`。
 
 ### 任务 11：新增慢消息堆栈采样
 

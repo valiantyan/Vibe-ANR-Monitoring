@@ -35,6 +35,10 @@ class AttributionAnalyzer(
         if (barrierResult != null) {
             return barrierResult
         }
+        val stormResult: AttributionResult? = analyzeMessageStorm(summary = pendingSummary)
+        if (stormResult != null) {
+            return stormResult
+        }
         val currentResult: AttributionResult? = analyzeCurrentMessage(current = snapshot.currentMessage)
         if (currentResult != null) {
             return currentResult
@@ -42,10 +46,6 @@ class AttributionAnalyzer(
         val historyResult: AttributionResult? = analyzeHistory(history = snapshot.historyMessages)
         if (historyResult != null) {
             return historyResult
-        }
-        val stormResult: AttributionResult? = analyzeMessageStorm(summary = pendingSummary)
-        if (stormResult != null) {
-            return stormResult
         }
         return unknownResult(snapshot = snapshot)
     }
@@ -89,20 +89,18 @@ class AttributionAnalyzer(
         )
     }
 
-    // 识别当前消息本身消耗了 ANR 窗口且 CPU 占比较高的模式。
+    // 识别当前消息本身消耗了 ANR 窗口的模式，CPU 占比只影响置信度。
     private fun analyzeCurrentMessage(current: MessageRecord?): AttributionResult? {
         if (current == null || current.wallMs < thresholds.suspectAnrMs) {
             return null
         }
         val ratio: Double = current.cpuMs.toDouble() / current.wallMs.coerceAtLeast(minimumValue = 1L).toDouble()
-        if (ratio < thresholds.highCpuRatio) {
-            return null
-        }
+        val confidence: Confidence = if (ratio >= thresholds.highCpuRatio) Confidence.MEDIUM else Confidence.LOW
         return result(
             code = AnrAttributionCode.CURRENT_MESSAGE_SLOW,
-            confidence = Confidence.MEDIUM,
+            confidence = confidence,
             evidence = listOf("current message wall=${current.wallMs}ms cpu=${current.cpuMs}ms"),
-            suggestion = "优化当前消息对应业务逻辑，拆分主线程重计算或同步等待。",
+            suggestion = "优化当前消息对应业务逻辑，拆分主线程重计算、同步等待或阻塞 I/O。",
         )
     }
 

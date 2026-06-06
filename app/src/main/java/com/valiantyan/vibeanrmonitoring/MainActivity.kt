@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
                 ignoredValue.toString()
             }
         }
+        Thread.sleep(6_000L)
     }
 
     // 批量触发 SharedPreferences apply，并阻塞主线程以暴露等待链路证据。

@@ -84,6 +84,29 @@ class AttributionAnalyzerTest {
     }
 
     @Test
+    fun analyzeReturnsCurrentSlowWhenCurrentWallIsHighAndCpuIsLow(): Unit {
+        val result = AttributionAnalyzer(
+            thresholds = AttributionThresholds(
+                suspectAnrMs = 3_000L,
+            ),
+        ).analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 1L,
+                    wallMs = 3_326L,
+                    cpuMs = 0L,
+                ),
+                history = emptyList(),
+                pending = emptyList(),
+                frames = listOf("java.lang.Thread.sleep(Native Method)"),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.CURRENT_MESSAGE_SLOW, result.primaryCode)
+        assertEquals(Confidence.LOW, result.confidence)
+    }
+
+    @Test
     fun analyzeReturnsHistorySlowWhenPreviousMessageIsSlowAndCurrentIsShort(): Unit {
         val result = AttributionAnalyzer().analyze(
             snapshot = snapshot(
@@ -128,6 +151,37 @@ class AttributionAnalyzerTest {
                 history = emptyList(),
                 pending = pending,
                 frames = emptyList(),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.MESSAGE_STORM, result.primaryCode)
+    }
+
+    @Test
+    fun analyzeReturnsMessageStormBeforeCurrentSlowWhenPendingHasRepeatedTarget(): Unit {
+        val pending = (0 until 30).map { index ->
+            pending(
+                index = index,
+                isBarrierLike = false,
+                blockedMs = 3_500L,
+                targetClass = "android.os.Handler",
+            )
+        }
+
+        val result = AttributionAnalyzer(
+            thresholds = AttributionThresholds(
+                suspectAnrMs = 3_000L,
+            ),
+        ).analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 1L,
+                    wallMs = 3_300L,
+                    cpuMs = 0L,
+                ),
+                history = emptyList(),
+                pending = pending,
+                frames = listOf("java.lang.Thread.sleep(Native Method)"),
             ),
         )
 
