@@ -3093,7 +3093,7 @@ git commit -m "新增 ANR SDK 阶段一验收记录"
 - 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/MessageRecord.kt`
 - 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrSnapshot.kt`
 
-- [ ] **步骤 1：编写失败的慢消息采样测试**
+- [x] **步骤 1：编写失败的慢消息采样测试**
 
 创建 `SlowMessageStackSamplerTest.kt`：
 
@@ -3123,7 +3123,7 @@ class SlowMessageStackSamplerTest {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -3133,7 +3133,7 @@ class SlowMessageStackSamplerTest {
 
 预期：FAIL，出现未解析引用 `SlowMessageStackSampler`。
 
-- [ ] **步骤 3：新增慢消息采样实现**
+- [x] **步骤 3：新增慢消息采样实现**
 
 创建 `SlowMessageStackSampler.kt`：
 
@@ -3180,7 +3180,7 @@ class SlowMessageStackSampler(
 }
 ```
 
-- [ ] **步骤 4：运行测试并提交**
+- [x] **步骤 4：运行测试并提交**
 
 运行：
 
@@ -3191,6 +3191,14 @@ git commit -m "新增慢消息堆栈采样能力"
 ```
 
 预期：测试 PASS，提交成功。
+
+执行记录：
+
+- 已新增 `SlowMessageStackSamplerTest`，先运行指定测试并确认 RED：`SlowMessageStackSampler` 与 `StackSample` 未解析。
+- 已新增 `SlowMessageStackSampler` 与 `StackSample`，支持按消息 `seq` 开启/结束采样、按栈帧 hash 聚合相同栈、按 `maxSamplesPerMessage` 限制单消息采样次数。
+- 已运行指定测试：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.stack.SlowMessageStackSamplerTest`，结果 PASS。
+- 已运行 SDK 全量单测：`./gradlew :anr-monitor-sdk:testDebugUnitTest`，结果 PASS。
+- `MessageRecord` 已在前置任务包含 `sampleStackIds`，本任务按计划步骤先完成独立采样器；`AnrSnapshot` 暂未新增字段，后续报告整合任务再统一接入采样结果。
 
 ### 任务 12：新增线程 CPU 排名和进程内资源证据
 
