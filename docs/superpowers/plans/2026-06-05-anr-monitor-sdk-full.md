@@ -1655,7 +1655,7 @@ git commit -m "新增 ANR Watchdog 与主线程栈采集"
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/pending/PendingQueueAnalyzer.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/pending/PendingQueueSnapshotter.kt`
 
-- [ ] **步骤 1：编写失败的 Pending 分析器测试**
+- [x] **步骤 1：编写失败的 Pending 分析器测试**
 
 创建 `PendingQueueAnalyzerTest.kt`：
 
@@ -1708,7 +1708,7 @@ class PendingQueueAnalyzerTest {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -1718,7 +1718,7 @@ class PendingQueueAnalyzerTest {
 
 预期：FAIL，出现未解析引用 `PendingQueueAnalyzer` 和 `PendingQueueSummary`.
 
-- [ ] **步骤 3：新增 Pending 分析器和快照器**
+- [x] **步骤 3：新增 Pending 分析器和快照器**
 
 创建 `PendingQueueSummary.kt`：
 
@@ -1849,7 +1849,7 @@ class PendingQueueSnapshotter(
 }
 ```
 
-- [ ] **步骤 4：运行 Pending 测试并编译 SDK**
+- [x] **步骤 4：运行 Pending 测试并编译 SDK**
 
 运行：
 
@@ -1860,7 +1860,7 @@ class PendingQueueSnapshotter(
 
 预期：两个命令都 PASS。
 
-- [ ] **步骤 5：提交 Pending 队列证据**
+- [x] **步骤 5：提交 Pending 队列证据**
 
 运行：
 
