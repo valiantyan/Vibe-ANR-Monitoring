@@ -1432,7 +1432,7 @@ git commit -m "新增主线程 Looper 消息时间线采集"
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/watchdog/AnrWatchdog.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/stack/MainThreadStackCollector.kt`
 
-- [ ] **步骤 1：编写失败的心跳测试**
+- [x] **步骤 1：编写失败的心跳测试**
 
 创建 `HeartbeatStateTest.kt`：
 
@@ -1482,7 +1482,7 @@ class HeartbeatStateTest {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -1492,7 +1492,7 @@ class HeartbeatStateTest {
 
 预期：FAIL，出现未解析引用 `HeartbeatState`.
 
-- [ ] **步骤 3：新增 Watchdog 和栈采集代码**
+- [x] **步骤 3：新增 Watchdog 和栈采集代码**
 
 创建 `HeartbeatState.kt`：
 
@@ -1625,7 +1625,7 @@ class MainThreadStackCollector {
 }
 ```
 
-- [ ] **步骤 4：运行心跳测试并编译 SDK**
+- [x] **步骤 4：运行心跳测试并编译 SDK**
 
 运行：
 
@@ -1636,7 +1636,7 @@ class MainThreadStackCollector {
 
 预期：两个命令都 PASS。
 
-- [ ] **步骤 5：提交 Watchdog 和栈采集器**
+- [x] **步骤 5：提交 Watchdog 和栈采集器**
 
 运行：
 
