@@ -2254,11 +2254,13 @@ git commit -m "新增 ANR 基础归因规则"
 
 **文件：**
 - 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoderTest.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/encoder/JsonEscaperTest.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/local/LocalAnrReportWriterTest.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/JsonEscaper.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/local/LocalAnrReportWriter.kt`
 
-- [ ] **步骤 1：编写失败的 JSON 编码器测试**
+- [x] **步骤 1：编写失败的 JSON 编码器测试**
 
 创建 `AnrReportJsonEncoderTest.kt`：
 
@@ -2325,7 +2327,7 @@ class AnrReportJsonEncoderTest {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -2335,7 +2337,7 @@ class AnrReportJsonEncoderTest {
 
 预期：FAIL，出现未解析引用 `AnrReportJsonEncoder`.
 
-- [ ] **步骤 3：新增 JSON 编码器和本地写入器**
+- [x] **步骤 3：新增 JSON 编码器和本地写入器**
 
 创建 `JsonEscaper.kt`：
 
@@ -2512,7 +2514,7 @@ class LocalAnrReportWriter(
 }
 ```
 
-- [ ] **步骤 4：运行报告测试**
+- [x] **步骤 4：运行报告测试**
 
 运行：
 
