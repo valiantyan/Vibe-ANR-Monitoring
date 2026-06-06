@@ -2540,15 +2540,20 @@ git commit -m "新增 ANR 报告 JSON 编码与本地落盘"
 
 **文件：**
 - 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitor.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/looper/MainLooperTimelineCollector.kt`
+- 确认： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/looper/MainLooperTimelineCollector.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrMonitorRuntime.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrReportAssembler.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/MainThreadCpuClock.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/api/AnrMonitorRuntimeLifecycleTest.kt`
 - 修改： `app/build.gradle.kts`
 - 创建： `app/src/main/java/com/valiantyan/vibeanrmonitoring/VibeAnrApplication.kt`
 - 修改： `app/src/main/AndroidManifest.xml`
 - 修改： `app/src/main/res/layout/activity_main.xml`
 - 修改： `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 
-- [ ] **步骤 1：在运行时接线前先运行编译**
+执行说明：实际实现将报告拼装拆分到 `AnrReportAssembler.kt`，将 CPU 时间源适配拆分到 `MainThreadCpuClock.kt`，并通过 `AnrMonitorRuntimeLifecycleTest.kt` 覆盖 `install/uninstall` 的运行时生命周期。
+
+- [x] **步骤 1：在运行时接线前先运行编译**
 
 运行：
 
@@ -2558,9 +2563,9 @@ git commit -m "新增 ANR 报告 JSON 编码与本地落盘"
 
 预期：PASS。这个结果用于确认现有 app 基线健康。
 
-- [ ] **步骤 2：新增运行时编排**
+- [x] **步骤 2：新增运行时编排**
 
-修改 `MainLooperTimelineCollector.kt`，确保该类暴露任务 4 中已经展示的历史缓冲快照方法，并保持 `CpuClock` 在类内公开。保留任务 4 中的 `currentMessage()` 和 `historyMessages()` 方法不变。
+确认 `MainLooperTimelineCollector.kt` 已暴露任务 4 中展示的历史缓冲快照方法，并保持 `CpuClock` 在类内公开。保留任务 4 中的 `currentMessage()` 和 `historyMessages()` 方法不变。
 
 创建 `AnrMonitorRuntime.kt`：
 
@@ -2753,7 +2758,7 @@ object AnrMonitor {
 }
 ```
 
-- [ ] **步骤 3：接入 demo app 依赖和 Application**
+- [x] **步骤 3：接入 demo app 依赖和 Application**
 
 修改 `app/build.gradle.kts` 的 dependencies 块：
 
@@ -2831,7 +2836,7 @@ class VibeAnrApplication : Application() {
     android:theme="@style/Theme.VibeANRMonitoring">
 ```
 
-- [ ] **步骤 4：新增 demo 按钮和场景动作**
+- [x] **步骤 4：新增 demo 按钮和场景动作**
 
 使用以下完整内容写入 `app/src/main/res/layout/activity_main.xml`:
 
@@ -2913,8 +2918,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun writeSharedPreferencesBurst(): Unit {
         val preferences: SharedPreferences = getSharedPreferences(
-            name = "anr_demo_prefs",
-            mode = MODE_PRIVATE,
+            "anr_demo_prefs",
+            MODE_PRIVATE,
         )
         repeat(times = 500) { index ->
             preferences.edit()
@@ -2926,7 +2931,7 @@ class MainActivity : AppCompatActivity() {
 }
 ```
 
-- [ ] **步骤 5：运行 app 编译**
+- [x] **步骤 5：运行 app 编译**
 
 运行：
 
@@ -2938,7 +2943,7 @@ class MainActivity : AppCompatActivity() {
 
 预期：所有命令都 PASS。
 
-- [ ] **步骤 6：提交运行时和 demo 集成**
+- [x] **步骤 6：提交运行时和 demo 集成**
 
 运行：
 
