@@ -7,6 +7,10 @@ import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.PendingMessage
 import com.valiantyan.anrmonitor.domain.model.ProcessIoSnapshot
+import com.valiantyan.anrmonitor.domain.model.QueuedWorkBypassState
+import com.valiantyan.anrmonitor.domain.model.SharedPreferencesFileStat
+import com.valiantyan.anrmonitor.domain.model.SharedPreferencesOperationRecord
+import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 
 /**
@@ -29,6 +33,7 @@ class AnrReportJsonEncoder {
             "\"threadCpu\":${threadCpuJson(report = report)}",
             "\"checktime\":${checktimeJson(report = report)}",
             "\"environmentSnapshot\":${environmentJson(report = report)}",
+            "\"sharedPreferences\":${sharedPreferencesJson(report = report)}",
             "\"attribution\":${attributionJson(report = report)}",
             "\"sdkDiagnostics\":${diagnosticsJson(report = report)}",
         )
@@ -122,6 +127,20 @@ class AnrReportJsonEncoder {
             "\"model\":${string(environment.model)}",
             "\"availability\":${environmentAvailability(availability = environment.availability)}",
             "\"failureReasons\":${strings(values = environment.failureReasons)}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码 SharedPreferences 专项证据，覆盖文件健康、写入入口和 QueuedWork 治理状态。
+    private fun sharedPreferencesJson(report: AnrReport): String {
+        val snapshot: SharedPreferencesSnapshot = report.snapshot.sharedPreferencesSnapshot
+        val fields: List<String> = listOf(
+            "\"available\":${snapshot.available}",
+            "\"failureReason\":${stringOrNull(value = snapshot.failureReason)}",
+            "\"pendingFinisherCount\":${intOrNull(value = snapshot.pendingFinisherCount)}",
+            "\"topFiles\":${sharedPreferencesFiles(files = snapshot.topFiles)}",
+            "\"recentOperations\":${sharedPreferencesOperations(operations = snapshot.recentOperations)}",
+            "\"queuedWorkBypass\":${queuedWorkBypassJson(state = snapshot.queuedWorkBypass)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }
@@ -231,6 +250,64 @@ class AnrReportJsonEncoder {
             "\"threadName\":${string(record.threadName)}",
             "\"totalCpuMs\":${record.totalCpuMs}",
         )
+    }
+
+    // 编码 SP 文件健康度列表，保留治理所需的文件名、大小、key 数和写入聚合指标。
+    private fun sharedPreferencesFiles(files: List<SharedPreferencesFileStat>): String {
+        return files.joinToString(
+            separator = ",",
+            prefix = "[",
+            postfix = "]",
+        ) { file: SharedPreferencesFileStat -> "{${sharedPreferencesFileFields(file = file).joinToString(separator = ",")}}" }
+    }
+
+    // 生成单个 SP 文件健康字段。
+    private fun sharedPreferencesFileFields(file: SharedPreferencesFileStat): List<String> {
+        return listOf(
+            "\"fileName\":${string(file.fileName)}",
+            "\"sizeBytes\":${file.sizeBytes}",
+            "\"keyCount\":${file.keyCount}",
+            "\"firstLoadCostMs\":${longOrNull(value = file.firstLoadCostMs)}",
+            "\"applyCount\":${file.applyCount}",
+            "\"commitCount\":${file.commitCount}",
+            "\"lastWriteCostMs\":${longOrNull(value = file.lastWriteCostMs)}",
+        )
+    }
+
+    // 编码 SP 最近操作，保留调用栈、线程、耗时和 pending finisher 数量。
+    private fun sharedPreferencesOperations(operations: List<SharedPreferencesOperationRecord>): String {
+        return operations.joinToString(
+            separator = ",",
+            prefix = "[",
+            postfix = "]",
+        ) { operation: SharedPreferencesOperationRecord ->
+            "{${sharedPreferencesOperationFields(operation = operation).joinToString(separator = ",")}}"
+        }
+    }
+
+    // 生成单个 SP 操作字段。
+    private fun sharedPreferencesOperationFields(operation: SharedPreferencesOperationRecord): List<String> {
+        return listOf(
+            "\"fileName\":${string(operation.fileName)}",
+            "\"operationType\":${string(operation.operationType.name)}",
+            "\"costMs\":${operation.costMs}",
+            "\"timestampUptimeMs\":${operation.timestampUptimeMs}",
+            "\"threadName\":${string(operation.threadName)}",
+            "\"stackFrames\":${strings(values = operation.stackFrames)}",
+            "\"success\":${operation.success}",
+            "\"pendingFinisherCount\":${intOrNull(value = operation.pendingFinisherCount)}",
+        )
+    }
+
+    // 编码 QueuedWork 绕过治理状态，默认关闭也要输出以便评审确认风险边界。
+    private fun queuedWorkBypassJson(state: QueuedWorkBypassState): String {
+        val fields: List<String> = listOf(
+            "\"enabled\":${state.enabled}",
+            "\"allowedFiles\":${strings(values = state.allowedFiles.sorted())}",
+            "\"blockedFiles\":${strings(values = state.blockedFiles.sorted())}",
+            "\"rollbackEnabled\":${state.rollbackEnabled}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
     }
 
     // 编码可空内存快照，保持环境字段结构稳定。

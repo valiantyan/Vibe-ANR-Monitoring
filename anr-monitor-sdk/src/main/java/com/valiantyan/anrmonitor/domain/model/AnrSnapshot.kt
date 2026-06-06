@@ -17,6 +17,7 @@ package com.valiantyan.anrmonitor.domain.model
  * @property threadCpuRecords 进程内线程 CPU TopN 证据。
  * @property checktimeSummary Watchdog Checktime 调度延迟证据。
  * @property environmentSnapshot 系统负载、内存、存储和进程 I/O 环境证据。
+ * @property sharedPreferencesSnapshot SharedPreferences 文件健康和写入入口证据。
  */
 data class AnrSnapshot(
     val eventId: String,
@@ -34,5 +35,8 @@ data class AnrSnapshot(
     val checktimeSummary: ChecktimeSummary = ChecktimeSummary.empty(),
     val environmentSnapshot: SystemEnvironmentSnapshot = SystemEnvironmentSnapshot.unavailable(
         reason = "environment capture not provided",
+    ),
+    val sharedPreferencesSnapshot: SharedPreferencesSnapshot = SharedPreferencesSnapshot.unavailable(
+        reason = "sharedPreferences capture not provided",
     ),
 )

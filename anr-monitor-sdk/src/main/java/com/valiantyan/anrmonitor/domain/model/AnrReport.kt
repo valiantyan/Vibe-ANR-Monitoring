@@ -53,6 +53,9 @@ data class AnrReport(
                 environmentSnapshot = SystemEnvironmentSnapshot.unavailable(
                     reason = "empty report",
                 ),
+                sharedPreferencesSnapshot = SharedPreferencesSnapshot.unavailable(
+                    reason = "empty report",
+                ),
             )
             return AnrReport(
                 schemaVersion = 1,

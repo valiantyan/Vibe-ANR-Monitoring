@@ -3536,11 +3536,27 @@ git commit -m "新增系统确认 ANR 与组件阈值模型"
 
 **文件：**
 - 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesHealthScannerTest.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/sharedprefs/MonitoredSharedPreferencesTest.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/sharedprefs/QueuedWorkBypassControllerTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/api/AnrMonitorConfigTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoderTest.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/SharedPreferencesSnapshot.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesHealthScanner.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/MonitoredSharedPreferences.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/MonitoredSharedPreferencesEditor.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesOperationRecorder.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesOperationReporter.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/QueuedWorkBypassController.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitor.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitorConfig.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrSnapshot.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrReport.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrMonitorRuntime.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrReportAssembler.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt`
 
-- [ ] **步骤 1：编写失败的 SP 健康度测试**
+- [x] **步骤 1：编写失败的 SP 健康度测试**
 
 创建 `SharedPreferencesHealthScannerTest.kt`：
 
@@ -3569,7 +3585,7 @@ class SharedPreferencesHealthScannerTest {
 }
 ```
 
-- [ ] **步骤 2：新增 SP 健康度和治理实现**
+- [x] **步骤 2：新增 SP 健康度和治理实现**
 
 创建 `SharedPreferencesHealthScanner.kt`：
 
@@ -3620,7 +3636,7 @@ class QueuedWorkBypassController(
 }
 ```
 
-- [ ] **步骤 3：运行测试并提交**
+- [x] **步骤 3：运行测试并提交**
 
 运行：
 
@@ -3631,6 +3647,18 @@ git commit -m "新增 SharedPreferences 全量监控与治理"
 ```
 
 预期：测试 PASS，提交成功。
+
+执行记录：
+
+- RED：先新增 `SharedPreferencesHealthScannerTest`、`MonitoredSharedPreferencesTest`、`QueuedWorkBypassControllerTest`，并扩展 `AnrMonitorConfigTest`、`AnrReportJsonEncoderTest`；定向测试按预期因缺少 `SharedPreferencesSnapshot`、`MonitoredSharedPreferences`、`QueuedWorkBypassController`、配置字段和 JSON 字段失败。
+- GREEN：新增 SP 领域模型，覆盖文件名、大小、key 数、首次加载耗时、apply/commit 次数、最近写入耗时、调用栈、线程、pending finisher 和 QueuedWork 治理状态。
+- 接线：`AnrMonitor` 新增 `openSharedPreferences`/`monitorSharedPreferences` 包装入口；`AnrMonitorRuntime` 按 `captureSpHealth` 采集 SP 快照；`AnrSnapshot`、`AnrReportJsonEncoder` 和 `SdkDiagnostics` 输出 SP 专项证据与失败原因。
+- 治理边界：`QueuedWorkBypassController` 只做决策，默认关闭；白名单、黑名单、ROM 厂商边界、SDK 版本边界和回滚开关全部参与判断，避免默认改变系统等待语义。
+- 评审口径：主因仍由主线程栈中的 `SharedPreferencesImpl.awaitLoadedLocked`、`QueuedWork.waitToFinish` 或 `writtenToDiskLatch.await` 决定；SP 文件健康和 wrapper 操作记录只增强证据，不替代归因。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.sharedprefs.SharedPreferencesHealthScannerTest --tests com.valiantyan.anrmonitor.collector.sharedprefs.MonitoredSharedPreferencesTest --tests com.valiantyan.anrmonitor.collector.sharedprefs.QueuedWorkBypassControllerTest --tests com.valiantyan.anrmonitor.api.AnrMonitorConfigTest --tests com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoderTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:compileDebugKotlin` PASS。
+- 验证：`./gradlew :app:compileDebugKotlin` PASS。
 
 ### 任务 16：新增 Barrier token 和 nativePollOnce 增强证据
 

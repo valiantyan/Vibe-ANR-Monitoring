@@ -7,6 +7,9 @@ import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.AttributionResult
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
+import com.valiantyan.anrmonitor.domain.model.SharedPreferencesFileStat
+import com.valiantyan.anrmonitor.domain.model.SharedPreferencesOperationRecord
+import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 
 /**
@@ -24,8 +27,7 @@ class AttributionAnalyzer(
      * @return 可直接进入报告编码和上传链路的归因结果。
      */
     fun analyze(snapshot: AnrSnapshot): AttributionResult {
-        val frames: List<String> = snapshot.mainThreadStack.frames
-        val spResult: AttributionResult? = analyzeSharedPreferences(frames = frames)
+        val spResult: AttributionResult? = analyzeSharedPreferences(snapshot = snapshot)
         if (spResult != null) {
             return withThreadCpuEvidence(
                 result = spResult,
@@ -70,13 +72,15 @@ class AttributionAnalyzer(
     }
 
     // 识别 SharedPreferences 加载等待和 apply 落盘等待，二者在主线程栈中证据最直接。
-    private fun analyzeSharedPreferences(frames: List<String>): AttributionResult? {
+    private fun analyzeSharedPreferences(snapshot: AnrSnapshot): AttributionResult? {
+        val frames: List<String> = snapshot.mainThreadStack.frames
         val joinedFrames: String = frames.joinToString(separator = "\n")
         if (joinedFrames.contains(other = "SharedPreferencesImpl.awaitLoadedLocked")) {
             return result(
                 code = AnrAttributionCode.SP_LOAD_WAIT,
                 confidence = Confidence.HIGH,
-                evidence = listOf("main stack contains SharedPreferencesImpl.awaitLoadedLocked"),
+                evidence = listOf("main stack contains SharedPreferencesImpl.awaitLoadedLocked") +
+                    sharedPreferencesEvidence(snapshot = snapshot.sharedPreferencesSnapshot),
                 suggestion = "将首次读取前置到后台线程，拆分过大的 shared_prefs 文件。",
             )
         }
@@ -84,11 +88,29 @@ class AttributionAnalyzer(
             return result(
                 code = AnrAttributionCode.SP_APPLY_WAIT,
                 confidence = Confidence.HIGH,
-                evidence = listOf("main stack contains QueuedWork.waitToFinish or writtenToDiskLatch.await"),
+                evidence = listOf("main stack contains QueuedWork.waitToFinish or writtenToDiskLatch.await") +
+                    sharedPreferencesEvidence(snapshot = snapshot.sharedPreferencesSnapshot),
                 suggestion = "治理生命周期边界前的高频 apply，强一致数据不要跳过等待。",
             )
         }
         return null
+    }
+
+    // 从 SP 专项快照提取文件健康和最近写入证据，只增强证据不改变主因。
+    private fun sharedPreferencesEvidence(snapshot: SharedPreferencesSnapshot): List<String> {
+        if (!snapshot.available) {
+            return listOf("sharedPreferences unavailable: ${snapshot.failureReason}")
+        }
+        val topFile: SharedPreferencesFileStat? = snapshot.topFiles.firstOrNull()
+        val recentOperation: SharedPreferencesOperationRecord? = snapshot.recentOperations.lastOrNull()
+        return listOfNotNull(
+            topFile?.let { stat: SharedPreferencesFileStat ->
+                "sp file ${stat.fileName} size=${stat.sizeBytes} keyCount=${stat.keyCount}"
+            },
+            recentOperation?.let { record: SharedPreferencesOperationRecord ->
+                "sp recent ${record.operationType.name} file=${record.fileName} cost=${record.costMs}ms pendingFinisher=${record.pendingFinisherCount}"
+            },
+        )
     }
 
     // 识别队头同步屏障卡住同步消息的模式，避免把 nativePollOnce 误判成主线程空闲。
@@ -157,6 +179,9 @@ class AttributionAnalyzer(
         }
         if (snapshot.historyMessages.isEmpty()) {
             missingEvidence += "history messages empty"
+        }
+        if (!snapshot.sharedPreferencesSnapshot.available) {
+            missingEvidence += "sharedPreferences unavailable: ${snapshot.sharedPreferencesSnapshot.failureReason}"
         }
         return AttributionResult(
             primaryCode = AnrAttributionCode.UNKNOWN_INSUFFICIENT_EVIDENCE,

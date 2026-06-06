@@ -12,6 +12,9 @@ import com.valiantyan.anrmonitor.collector.environment.EnvironmentSnapshotter
 import com.valiantyan.anrmonitor.collector.looper.MainLooperPrinterInstaller
 import com.valiantyan.anrmonitor.collector.looper.MainLooperTimelineCollector
 import com.valiantyan.anrmonitor.collector.pending.PendingQueueSnapshotter
+import com.valiantyan.anrmonitor.collector.sharedprefs.QueuedWorkBypassPolicy
+import com.valiantyan.anrmonitor.collector.sharedprefs.SharedPreferencesHealthScanner
+import com.valiantyan.anrmonitor.collector.sharedprefs.SharedPreferencesOperationRecorder
 import com.valiantyan.anrmonitor.collector.stack.MainThreadStackCollector
 import com.valiantyan.anrmonitor.collector.threadcpu.ThreadCpuSnapshotter
 import com.valiantyan.anrmonitor.collector.watchdog.AnrWatchdog
@@ -25,6 +28,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
+import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
 import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 import com.valiantyan.anrmonitor.reporter.local.LocalAnrReportWriter
@@ -86,6 +90,16 @@ internal class AnrMonitorRuntime(
 
     // 系统环境采集器，用于补充外部负载、内存、存储和进程 I/O 证据。
     private val environmentSnapshotter: EnvironmentSnapshotter = EnvironmentSnapshotter()
+
+    // SP 包装入口记录器，公开 API 和运行时扫描共用进程内证据。
+    private val sharedPreferencesRecorder: SharedPreferencesOperationRecorder = SharedPreferencesOperationRecorder.global
+
+    // SP 健康度扫描器，用于补齐第 5 篇中的文件大小、key 数和写入成本证据。
+    private val sharedPreferencesHealthScanner: SharedPreferencesHealthScanner = SharedPreferencesHealthScanner.create(
+        context = appContext,
+        operationRecorder = sharedPreferencesRecorder,
+        bypassPolicyProvider = ::queuedWorkBypassPolicy,
+    )
 
     // 系统确认 ANR 信息采集器，用于区分疑似 ANR 和 ActivityManager 确认 ANR。
     private val anrInfoCollector: AnrInfoCollector = AnrInfoCollector.create(context = appContext)
@@ -197,6 +211,7 @@ internal class AnrMonitorRuntime(
             threadCpuRecords = captureThreadCpuRecords(),
             checktimeSummary = captureChecktimeSummary(),
             environmentSnapshot = captureEnvironmentSnapshot(),
+            sharedPreferencesSnapshot = captureSharedPreferencesSnapshot(),
         )
     }
 
@@ -249,6 +264,29 @@ internal class AnrMonitorRuntime(
             )
         }
         return pendingSnapshotter.capture(maxDepth = config.pendingSnapshotMaxDepth)
+    }
+
+    // 根据配置采集 SP 专项证据，禁用时明确表达缺失原因。
+    private fun captureSharedPreferencesSnapshot(): SharedPreferencesSnapshot {
+        if (!config.captureSpHealth) {
+            return SharedPreferencesSnapshot.unavailable(reason = "sharedPreferences capture disabled")
+        }
+        return sharedPreferencesHealthScanner.scan(
+            maxFileCount = config.spTopFileCount,
+            maxOperationCount = config.spRecentOperationCount,
+        )
+    }
+
+    // 将公开配置转换为 QueuedWork 绕过策略，默认关闭且保留白名单、黑名单和回滚边界。
+    private fun queuedWorkBypassPolicy(): QueuedWorkBypassPolicy {
+        return QueuedWorkBypassPolicy(
+            enabled = config.enableQueuedWorkBypass,
+            allowedFiles = config.queuedWorkBypassAllowedFiles,
+            blockedFiles = config.queuedWorkBypassBlockedFiles,
+            allowedManufacturers = config.queuedWorkBypassAllowedManufacturers,
+            blockedManufacturers = config.queuedWorkBypassBlockedManufacturers,
+            rollbackEnabled = config.queuedWorkBypassRollbackEnabled,
+        )
     }
 
     // 上传开关开启时调用宿主扩展点，失败结果转成监控错误回调。

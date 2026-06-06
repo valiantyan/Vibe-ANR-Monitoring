@@ -33,7 +33,15 @@ class AnrMonitorConfigTest {
         assertTrue(config.captureChecktime)
         assertTrue(config.captureSystemEnvironment)
         assertTrue(config.captureThreadCpu)
+        assertTrue(config.captureSpHealth)
+        assertEquals(5, config.spTopFileCount)
+        assertEquals(20, config.spRecentOperationCount)
         assertFalse(config.enableQueuedWorkBypass)
+        assertTrue(config.queuedWorkBypassAllowedFiles.isEmpty())
+        assertTrue(config.queuedWorkBypassBlockedFiles.isEmpty())
+        assertTrue(config.queuedWorkBypassAllowedManufacturers.isEmpty())
+        assertTrue(config.queuedWorkBypassBlockedManufacturers.isEmpty())
+        assertFalse(config.queuedWorkBypassRollbackEnabled)
     }
 
     /**
