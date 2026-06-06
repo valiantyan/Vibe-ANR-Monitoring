@@ -5,10 +5,15 @@ import com.valiantyan.anrmonitor.domain.model.AnrEventType
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.AttributionResult
+import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.Confidence
+import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
+import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
+import com.valiantyan.anrmonitor.domain.model.ProcessIoSnapshot
 import com.valiantyan.anrmonitor.domain.model.SdkDiagnostics
 import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
+import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -118,5 +123,85 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"threadCpu\""))
         assertTrue(json.contains("\"threadName\":\"io-worker\""))
         assertTrue(json.contains("\"totalCpuMs\":100"))
+    }
+
+    /**
+     * Checktime 和系统环境是判断外部负载的重要辅助证据，必须进入 JSON 报告。
+     */
+    @Test
+    fun encodeIncludesChecktimeAndSystemEnvironment(): Unit {
+        val report: AnrReport = AnrReport(
+            schemaVersion = 1,
+            snapshot = AnrSnapshot(
+                eventId = "event-1",
+                eventType = AnrEventType.SUSPECT_ANR,
+                appId = "demo",
+                environment = "test",
+                timeUptimeMs = 123L,
+                currentMessage = null,
+                historyMessages = emptyList(),
+                pendingQueue = PendingQueueSnapshot.unavailable(
+                    maxDepth = 200,
+                    failureReason = "reflection failed",
+                ),
+                mainThreadStack = StackTraceSnapshot(
+                    stackId = "main",
+                    threadName = "main",
+                    frames = emptyList(),
+                ),
+                threadCpuRecords = emptyList(),
+                checktimeSummary = ChecktimeSummary(
+                    maxDelayMs = 900L,
+                    severeDelayCount = 1,
+                    recentDelayMs = listOf(20L, 900L),
+                ),
+                environmentSnapshot = SystemEnvironmentSnapshot(
+                    loadAverage1m = 2.5,
+                    memory = MemorySnapshot(
+                        availableBytes = 512L,
+                        totalBytes = 1_024L,
+                        isLowMemory = false,
+                    ),
+                    availableStorageBytes = 4_096L,
+                    processIo = ProcessIoSnapshot(
+                        readBytes = 10L,
+                        writeBytes = 20L,
+                        cancelledWriteBytes = 0L,
+                    ),
+                    androidVersion = "14",
+                    manufacturer = "Google",
+                    model = "Pixel",
+                    availability = EnvironmentEvidenceAvailability(
+                        cpuLoadAvailable = true,
+                        memoryAvailable = true,
+                        storageAvailable = true,
+                        processIoAvailable = true,
+                    ),
+                    failureReasons = emptyList(),
+                ),
+            ),
+            attribution = AttributionResult(
+                primaryCode = AnrAttributionCode.UNKNOWN_INSUFFICIENT_EVIDENCE,
+                secondaryCodes = emptyList(),
+                confidence = Confidence.UNKNOWN,
+                evidenceItems = emptyList(),
+                missingEvidence = emptyList(),
+                actionSuggestions = emptyList(),
+            ),
+            diagnostics = SdkDiagnostics(
+                pendingAvailable = false,
+                reportBuildCostMs = 12L,
+                collectorFailures = emptyList(),
+            ),
+        )
+
+        val json: String = AnrReportJsonEncoder().encode(report = report)
+
+        assertTrue(json.contains("\"checktime\""))
+        assertTrue(json.contains("\"maxDelayMs\":900"))
+        assertTrue(json.contains("\"environmentSnapshot\""))
+        assertTrue(json.contains("\"loadAverage1m\":2.5"))
+        assertTrue(json.contains("\"processIoAvailable\":true"))
+        assertTrue(json.contains("\"writeBytes\":20"))
     }
 }

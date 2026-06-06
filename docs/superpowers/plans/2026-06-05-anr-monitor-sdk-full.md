@@ -3315,8 +3315,12 @@ git commit -m "新增线程 CPU 排名和资源证据"
 - 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentSnapshotterTest.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/checktime/ChecktimeMonitor.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentSnapshotter.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentDefaultReaders.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/ChecktimeSummary.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/SystemEnvironmentSnapshot.kt`
+- 修改：`AnrSnapshot`、`AnrReportJsonEncoder`、`AnrMonitorRuntime`、`AnrReportAssembler`、`AnrMonitorConfig`、`AnrWatchdog`
 
-- [ ] **步骤 1：编写失败的 Checktime 测试**
+- [x] **步骤 1：编写失败的 Checktime 测试**
 
 创建 `ChecktimeMonitorTest.kt`：
 
@@ -3345,7 +3349,7 @@ class ChecktimeMonitorTest {
 }
 ```
 
-- [ ] **步骤 2：新增 Checktime 和环境实现**
+- [x] **步骤 2：新增 Checktime 和环境实现**
 
 创建 `ChecktimeMonitor.kt`：
 
@@ -3409,7 +3413,7 @@ class EnvironmentSnapshotter(
 }
 ```
 
-- [ ] **步骤 3：运行测试并提交**
+- [x] **步骤 3：运行测试并提交**
 
 运行：
 
@@ -3420,6 +3424,14 @@ git commit -m "新增 Checktime 与系统环境采集"
 ```
 
 预期：测试 PASS，提交成功。
+
+**执行记录（2026-06-06）：**
+- RED：新增 `ChecktimeMonitorTest`、`EnvironmentSnapshotterTest`，并扩展 `AnrMonitorConfigTest`、`AnrReportJsonEncoderTest`；目标测试首次失败，错误为 `ChecktimeMonitor`、环境模型、配置开关和快照字段未定义。
+- GREEN：新增 `ChecktimeMonitor`，新增系统环境采集器及默认 reader，覆盖 load average、内存、存储、进程 I/O、设备信息、证据可得性和失败原因。
+- 接线：`AnrWatchdog` 回调实际循环间隔，`AnrMonitorRuntime` 写入 `checktimeSummary` 和 `environmentSnapshot`，`AnrReportJsonEncoder` 输出 `checktime` 与 `environmentSnapshot`，`AnrReportAssembler` 汇总环境采集失败原因。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.checktime.ChecktimeMonitorTest --tests com.valiantyan.anrmonitor.collector.environment.EnvironmentSnapshotterTest --tests com.valiantyan.anrmonitor.api.AnrMonitorConfigTest --tests com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoderTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
+- 验证：`./gradlew :app:compileDebugKotlin` PASS。
 
 ### 任务 14：新增系统确认 ANR 和组件阈值模型
 

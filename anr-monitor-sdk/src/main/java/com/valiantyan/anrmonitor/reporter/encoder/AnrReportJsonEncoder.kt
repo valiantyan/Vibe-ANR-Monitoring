@@ -1,8 +1,11 @@
 package com.valiantyan.anrmonitor.reporter.encoder
 
 import com.valiantyan.anrmonitor.domain.model.AnrReport
+import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
+import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.PendingMessage
+import com.valiantyan.anrmonitor.domain.model.ProcessIoSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 
 /**
@@ -22,6 +25,8 @@ class AnrReportJsonEncoder {
             "\"mainThread\":${mainThreadJson(report = report)}",
             "\"pendingQueue\":${pendingQueueJson(report = report)}",
             "\"threadCpu\":${threadCpuJson(report = report)}",
+            "\"checktime\":${checktimeJson(report = report)}",
+            "\"environmentSnapshot\":${environmentJson(report = report)}",
             "\"attribution\":${attributionJson(report = report)}",
             "\"sdkDiagnostics\":${diagnosticsJson(report = report)}",
         )
@@ -69,6 +74,36 @@ class AnrReportJsonEncoder {
     private fun threadCpuJson(report: AnrReport): String {
         val fields: List<String> = listOf(
             "\"topThreads\":${threadCpuRecords(records = report.snapshot.threadCpuRecords)}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码 Checktime 调度延迟，帮助判断 Watchdog 和系统调度是否也被拖慢。
+    private fun checktimeJson(report: AnrReport): String {
+        val checktime = report.snapshot.checktimeSummary
+        val fields: List<String> = listOf(
+            "\"available\":${checktime.available}",
+            "\"maxDelayMs\":${checktime.maxDelayMs}",
+            "\"severeDelayCount\":${checktime.severeDelayCount}",
+            "\"recentDelayMs\":${longs(values = checktime.recentDelayMs)}",
+            "\"failureReason\":${stringOrNull(value = checktime.failureReason)}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码系统环境快照，按可得性标记区分空值和采集失败。
+    private fun environmentJson(report: AnrReport): String {
+        val environment = report.snapshot.environmentSnapshot
+        val fields: List<String> = listOf(
+            "\"loadAverage1m\":${doubleOrNull(value = environment.loadAverage1m)}",
+            "\"memory\":${memoryOrNull(snapshot = environment.memory)}",
+            "\"availableStorageBytes\":${longOrNull(value = environment.availableStorageBytes)}",
+            "\"processIo\":${processIoOrNull(snapshot = environment.processIo)}",
+            "\"androidVersion\":${string(environment.androidVersion)}",
+            "\"manufacturer\":${string(environment.manufacturer)}",
+            "\"model\":${string(environment.model)}",
+            "\"availability\":${environmentAvailability(availability = environment.availability)}",
+            "\"failureReasons\":${strings(values = environment.failureReasons)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }
@@ -180,6 +215,52 @@ class AnrReportJsonEncoder {
         )
     }
 
+    // 编码可空内存快照，保持环境字段结构稳定。
+    private fun memoryOrNull(snapshot: MemorySnapshot?): String {
+        if (snapshot == null) {
+            return "null"
+        }
+        val fields: List<String> = listOf(
+            "\"availableBytes\":${snapshot.availableBytes}",
+            "\"totalBytes\":${snapshot.totalBytes}",
+            "\"isLowMemory\":${booleanOrNull(value = snapshot.isLowMemory)}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码可空进程 I/O 快照，权限受限时保持 JSON null。
+    private fun processIoOrNull(snapshot: ProcessIoSnapshot?): String {
+        if (snapshot == null) {
+            return "null"
+        }
+        val fields: List<String> = listOf(
+            "\"readBytes\":${snapshot.readBytes}",
+            "\"writeBytes\":${snapshot.writeBytes}",
+            "\"cancelledWriteBytes\":${snapshot.cancelledWriteBytes}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码环境证据可得性，供服务端和评审区分采集缺失。
+    private fun environmentAvailability(availability: EnvironmentEvidenceAvailability): String {
+        val fields: List<String> = listOf(
+            "\"cpuLoadAvailable\":${availability.cpuLoadAvailable}",
+            "\"memoryAvailable\":${availability.memoryAvailable}",
+            "\"storageAvailable\":${availability.storageAvailable}",
+            "\"processIoAvailable\":${availability.processIoAvailable}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码长整型列表，供 Checktime 最近延迟窗口使用。
+    private fun longs(values: List<Long>): String {
+        return values.joinToString(
+            separator = ",",
+            prefix = "[",
+            postfix = "]",
+        ) { value: Long -> value.toString() }
+    }
+
     // 编码字符串列表，统一处理转义和数组边界。
     private fun strings(values: List<String>): String {
         return values.joinToString(
@@ -202,6 +283,9 @@ class AnrReportJsonEncoder {
 
     // 编码可空长整型，保留当前消息未结束这一语义。
     private fun longOrNull(value: Long?): String = value?.toString() ?: "null"
+
+    // 编码可空浮点值，保留 load average 无法读取这一状态。
+    private fun doubleOrNull(value: Double?): String = value?.toString() ?: "null"
 
     // 编码可空布尔值，反射失败的未知状态不能降级成 false。
     private fun booleanOrNull(value: Boolean?): String = value?.toString() ?: "null"

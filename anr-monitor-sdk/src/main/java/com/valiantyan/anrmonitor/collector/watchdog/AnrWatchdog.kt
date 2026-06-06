@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong
  * @param intervalMs Watchdog 轮询间隔，单位毫秒。
  * @param heartbeatState 心跳状态机。
  * @param mainHandler 主线程 [Handler]，测试或宿主可替换。
+ * @param onChecktimeInterval Watchdog 后台循环的实际间隔回调。
  * @param onSuspectAnr 疑似 ANR 回调。
  */
 class AnrWatchdog(
@@ -20,6 +21,7 @@ class AnrWatchdog(
     private val intervalMs: Long,
     private val heartbeatState: HeartbeatState,
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
+    private val onChecktimeInterval: (Long) -> Unit = {},
     private val onSuspectAnr: () -> Unit,
 ) {
     // Watchdog 运行态，保证 [start] 幂等。
@@ -31,6 +33,9 @@ class AnrWatchdog(
     // 后台检测线程，停止时会被中断以尽快退出 sleep。
     private var thread: Thread? = null
 
+    // 上一次 Watchdog 循环时间，用于计算实际调度间隔。
+    private var lastLoopUptimeMs: Long? = null
+
     /**
      * 启动后台 Watchdog；重复调用不会创建多条检测线程。
      */
@@ -38,6 +43,7 @@ class AnrWatchdog(
         if (!isRunning.compareAndSet(false, true)) {
             return
         }
+        lastLoopUptimeMs = null
         thread = Thread(::loop, WATCHDOG_THREAD_NAME).apply { start() }
     }
 
@@ -46,6 +52,7 @@ class AnrWatchdog(
      */
     fun stop(): Unit {
         isRunning.set(false)
+        lastLoopUptimeMs = null
         thread?.interrupt()
         thread = null
     }
@@ -55,7 +62,9 @@ class AnrWatchdog(
      */
     private fun loop(): Unit {
         while (isRunning.get()) {
-            if (heartbeatState.isTimedOut(nowUptimeMs = clock.uptimeMillis())) {
+            val nowUptimeMs: Long = clock.uptimeMillis()
+            recordChecktimeInterval(nowUptimeMs = nowUptimeMs)
+            if (heartbeatState.isTimedOut(nowUptimeMs = nowUptimeMs)) {
                 onSuspectAnr()
             }
             if (!heartbeatState.hasPending()) {
@@ -63,6 +72,20 @@ class AnrWatchdog(
             }
             sleepInterval()
         }
+    }
+
+    /**
+     * 记录 Watchdog 后台循环的实际间隔，用于识别系统调度异常。
+     *
+     * @param nowUptimeMs 当前 Watchdog 循环时间。
+     */
+    private fun recordChecktimeInterval(nowUptimeMs: Long): Unit {
+        val previousUptimeMs: Long = lastLoopUptimeMs ?: run {
+            lastLoopUptimeMs = nowUptimeMs
+            return
+        }
+        lastLoopUptimeMs = nowUptimeMs
+        onChecktimeInterval((nowUptimeMs - previousUptimeMs).coerceAtLeast(minimumValue = 0L))
     }
 
     /**

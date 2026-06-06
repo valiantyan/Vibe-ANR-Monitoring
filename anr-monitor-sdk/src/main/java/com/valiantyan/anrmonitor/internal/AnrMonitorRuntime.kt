@@ -6,6 +6,8 @@ import com.valiantyan.anrmonitor.api.AnrMonitor
 import com.valiantyan.anrmonitor.api.AnrMonitorConfig
 import com.valiantyan.anrmonitor.api.AnrReportUploader
 import com.valiantyan.anrmonitor.api.UploadResult
+import com.valiantyan.anrmonitor.collector.checktime.ChecktimeMonitor
+import com.valiantyan.anrmonitor.collector.environment.EnvironmentSnapshotter
 import com.valiantyan.anrmonitor.collector.looper.MainLooperPrinterInstaller
 import com.valiantyan.anrmonitor.collector.looper.MainLooperTimelineCollector
 import com.valiantyan.anrmonitor.collector.pending.PendingQueueSnapshotter
@@ -19,7 +21,9 @@ import com.valiantyan.anrmonitor.core.timeline.MessageRingBuffer
 import com.valiantyan.anrmonitor.domain.model.AnrEventType
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
+import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
+import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 import com.valiantyan.anrmonitor.reporter.local.LocalAnrReportWriter
 import java.io.IOException
@@ -72,6 +76,15 @@ internal class AnrMonitorRuntime(
     // 线程 CPU TopN 采集器，用于补充进程内资源证据。
     private val threadCpuSnapshotter: ThreadCpuSnapshotter = ThreadCpuSnapshotter()
 
+    // Checktime 监控器，用于判断 Watchdog 检测线程是否被系统调度拖慢。
+    private val checktimeMonitor: ChecktimeMonitor = ChecktimeMonitor(
+        expectedIntervalMs = config.watchdogIntervalMs,
+        severeDelayMs = config.suspectAnrMs,
+    )
+
+    // 系统环境采集器，用于补充外部负载、内存、存储和进程 I/O 证据。
+    private val environmentSnapshotter: EnvironmentSnapshotter = EnvironmentSnapshotter()
+
     // 完整报告拼装器，统一维护归因和 SDK 自诊断字段。
     private val reportAssembler: AnrReportAssembler = AnrReportAssembler(
         config = config,
@@ -93,6 +106,7 @@ internal class AnrMonitorRuntime(
         clock = clock,
         intervalMs = config.watchdogIntervalMs,
         heartbeatState = HeartbeatState(timeoutMs = config.suspectAnrMs),
+        onChecktimeInterval = ::recordChecktimeInterval,
         onSuspectAnr = ::captureSuspectAnr,
     )
 
@@ -173,7 +187,33 @@ internal class AnrMonitorRuntime(
             pendingQueue = capturePendingQueue(),
             mainThreadStack = stackCollector.capture(),
             threadCpuRecords = captureThreadCpuRecords(),
+            checktimeSummary = captureChecktimeSummary(),
+            environmentSnapshot = captureEnvironmentSnapshot(),
         )
+    }
+
+    // 记录 Watchdog 实际调度间隔；禁用时不累积样本，避免报告输出误导。
+    private fun recordChecktimeInterval(actualIntervalMs: Long): Unit {
+        if (!config.captureChecktime) {
+            return
+        }
+        checktimeMonitor.recordDelay(actualIntervalMs = actualIntervalMs)
+    }
+
+    // 根据配置输出 Checktime 摘要，禁用时保留明确缺失原因。
+    private fun captureChecktimeSummary(): ChecktimeSummary {
+        if (!config.captureChecktime) {
+            return ChecktimeSummary.unavailable(reason = "checktime capture disabled")
+        }
+        return checktimeMonitor.summary()
+    }
+
+    // 根据配置采集系统环境，禁用时保留明确缺失原因。
+    private fun captureEnvironmentSnapshot(): SystemEnvironmentSnapshot {
+        if (!config.captureSystemEnvironment) {
+            return SystemEnvironmentSnapshot.unavailable(reason = "system environment capture disabled")
+        }
+        return environmentSnapshotter.capture()
     }
 
     // 根据配置采集线程 CPU TopN；禁用或读取失败时由采集器降级为空列表。

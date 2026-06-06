@@ -44,8 +44,16 @@ internal class AnrReportAssembler(
             diagnostics = SdkDiagnostics(
                 pendingAvailable = snapshot.pendingQueue.available,
                 reportBuildCostMs = clock.uptimeMillis() - buildStartMs,
-                collectorFailures = listOfNotNull(snapshot.pendingQueue.failureReason),
+                collectorFailures = collectorFailures(snapshot = snapshot),
             ),
         )
+    }
+
+    // 汇总所有 collector 的失败原因，方便 SDK 采集质量监控统一读取。
+    private fun collectorFailures(snapshot: AnrSnapshot): List<String> {
+        return listOfNotNull(
+            snapshot.pendingQueue.failureReason,
+            snapshot.checktimeSummary.failureReason,
+        ) + snapshot.environmentSnapshot.failureReasons
     }
 }

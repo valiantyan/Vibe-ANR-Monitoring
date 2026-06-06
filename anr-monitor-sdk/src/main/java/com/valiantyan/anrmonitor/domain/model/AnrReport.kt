@@ -47,6 +47,10 @@ data class AnrReport(
                     frames = emptyList(),
                 ),
                 threadCpuRecords = emptyList(),
+                checktimeSummary = ChecktimeSummary.empty(),
+                environmentSnapshot = SystemEnvironmentSnapshot.unavailable(
+                    reason = "empty report",
+                ),
             )
             return AnrReport(
                 schemaVersion = 1,
