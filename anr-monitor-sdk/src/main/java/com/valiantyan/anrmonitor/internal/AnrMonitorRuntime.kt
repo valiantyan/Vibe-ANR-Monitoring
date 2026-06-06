@@ -6,6 +6,7 @@ import com.valiantyan.anrmonitor.api.AnrMonitor
 import com.valiantyan.anrmonitor.api.AnrMonitorConfig
 import com.valiantyan.anrmonitor.api.AnrReportUploader
 import com.valiantyan.anrmonitor.api.UploadResult
+import com.valiantyan.anrmonitor.collector.anrinfo.AnrInfoCollector
 import com.valiantyan.anrmonitor.collector.checktime.ChecktimeMonitor
 import com.valiantyan.anrmonitor.collector.environment.EnvironmentSnapshotter
 import com.valiantyan.anrmonitor.collector.looper.MainLooperPrinterInstaller
@@ -19,6 +20,7 @@ import com.valiantyan.anrmonitor.core.clock.AndroidClock
 import com.valiantyan.anrmonitor.core.privacy.ClassNameSanitizer
 import com.valiantyan.anrmonitor.core.timeline.MessageRingBuffer
 import com.valiantyan.anrmonitor.domain.model.AnrEventType
+import com.valiantyan.anrmonitor.domain.model.AnrInfoSnapshot
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
@@ -84,6 +86,9 @@ internal class AnrMonitorRuntime(
 
     // 系统环境采集器，用于补充外部负载、内存、存储和进程 I/O 证据。
     private val environmentSnapshotter: EnvironmentSnapshotter = EnvironmentSnapshotter()
+
+    // 系统确认 ANR 信息采集器，用于区分疑似 ANR 和 ActivityManager 确认 ANR。
+    private val anrInfoCollector: AnrInfoCollector = AnrInfoCollector.create(context = appContext)
 
     // 完整报告拼装器，统一维护归因和 SDK 自诊断字段。
     private val reportAssembler: AnrReportAssembler = AnrReportAssembler(
@@ -176,12 +181,15 @@ internal class AnrMonitorRuntime(
 
     // 构造疑似 ANR 现场快照，Pending 关闭时保留明确缺失原因。
     private fun buildSnapshot(nowUptimeMs: Long): AnrSnapshot {
+        val anrInfo: AnrInfoSnapshot = anrInfoCollector.collect()
         return AnrSnapshot(
             eventId = UUID.randomUUID().toString(),
-            eventType = AnrEventType.SUSPECT_ANR,
+            eventType = eventType(anrInfo = anrInfo),
             appId = config.appId,
             environment = config.environment,
             timeUptimeMs = nowUptimeMs,
+            anrInfo = anrInfo,
+            componentTimeoutMs = config.componentTimeoutMs[anrInfo.anrType],
             currentMessage = timelineCollector.currentMessage(),
             historyMessages = timelineCollector.historyMessages(),
             pendingQueue = capturePendingQueue(),
@@ -190,6 +198,14 @@ internal class AnrMonitorRuntime(
             checktimeSummary = captureChecktimeSummary(),
             environmentSnapshot = captureEnvironmentSnapshot(),
         )
+    }
+
+    // 系统确认状态只改变事件阶段，不参与根因归因。
+    private fun eventType(anrInfo: AnrInfoSnapshot): AnrEventType {
+        if (anrInfo.isConfirmedAnr) {
+            return AnrEventType.CONFIRMED_ANR
+        }
+        return AnrEventType.SUSPECT_ANR
     }
 
     // 记录 Watchdog 实际调度间隔；禁用时不累积样本，避免报告输出误导。

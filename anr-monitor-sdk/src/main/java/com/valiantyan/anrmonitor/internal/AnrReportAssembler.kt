@@ -52,6 +52,7 @@ internal class AnrReportAssembler(
     // 汇总所有 collector 的失败原因，方便 SDK 采集质量监控统一读取。
     private fun collectorFailures(snapshot: AnrSnapshot): List<String> {
         return listOfNotNull(
+            snapshot.anrInfo.failureReason,
             snapshot.pendingQueue.failureReason,
             snapshot.checktimeSummary.failureReason,
         ) + snapshot.environmentSnapshot.failureReasons

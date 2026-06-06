@@ -35,6 +35,8 @@ data class AnrReport(
                 appId = appId,
                 environment = environment,
                 timeUptimeMs = 0L,
+                anrInfo = AnrInfoSnapshot.unconfirmed(),
+                componentTimeoutMs = null,
                 currentMessage = null,
                 historyMessages = emptyList(),
                 pendingQueue = PendingQueueSnapshot.unavailable(

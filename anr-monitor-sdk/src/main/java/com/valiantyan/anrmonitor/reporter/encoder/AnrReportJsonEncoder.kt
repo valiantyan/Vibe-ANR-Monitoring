@@ -1,6 +1,7 @@
 package com.valiantyan.anrmonitor.reporter.encoder
 
 import com.valiantyan.anrmonitor.domain.model.AnrReport
+import com.valiantyan.anrmonitor.domain.model.AnrInfoSnapshot
 import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
 import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
@@ -22,6 +23,7 @@ class AnrReportJsonEncoder {
         val fields: List<String> = listOf(
             "\"schemaVersion\":${report.schemaVersion}",
             "\"event\":${eventJson(report = report)}",
+            "\"systemAnr\":${systemAnrJson(report = report)}",
             "\"mainThread\":${mainThreadJson(report = report)}",
             "\"pendingQueue\":${pendingQueueJson(report = report)}",
             "\"threadCpu\":${threadCpuJson(report = report)}",
@@ -41,6 +43,22 @@ class AnrReportJsonEncoder {
             "\"appId\":${string(report.snapshot.appId)}",
             "\"environment\":${string(report.snapshot.environment)}",
             "\"timeUptimeMs\":${report.snapshot.timeUptimeMs}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码 ActivityManager confirmed ANR 信息；该字段只提供系统证据，不直接替代归因。
+    private fun systemAnrJson(report: AnrReport): String {
+        val anrInfo: AnrInfoSnapshot = report.snapshot.anrInfo
+        val fields: List<String> = listOf(
+            "\"available\":${anrInfo.available}",
+            "\"isConfirmedAnr\":${anrInfo.isConfirmedAnr}",
+            "\"anrType\":${string(anrInfo.anrType.name)}",
+            "\"componentTimeoutMs\":${longOrNull(value = report.snapshot.componentTimeoutMs)}",
+            "\"shortMsg\":${stringOrNull(value = anrInfo.shortMsg)}",
+            "\"longMsg\":${stringOrNull(value = anrInfo.longMsg)}",
+            "\"condition\":${intOrNull(value = anrInfo.condition)}",
+            "\"failureReason\":${stringOrNull(value = anrInfo.failureReason)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }

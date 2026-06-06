@@ -1,5 +1,6 @@
 package com.valiantyan.anrmonitor.api
 
+import com.valiantyan.anrmonitor.domain.model.AnrType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -22,6 +23,13 @@ class AnrMonitorConfigTest {
         assertEquals(120, config.historyBufferSize)
         assertEquals(5_000L, config.suspectAnrMs)
         assertEquals(200, config.pendingSnapshotMaxDepth)
+        assertEquals(5_000L, config.componentTimeoutMs[AnrType.INPUT])
+        assertEquals(10_000L, config.componentTimeoutMs[AnrType.SERVICE])
+        assertEquals(10_000L, config.componentTimeoutMs[AnrType.BROADCAST_FOREGROUND])
+        assertEquals(60_000L, config.componentTimeoutMs[AnrType.BROADCAST_BACKGROUND])
+        assertEquals(10_000L, config.componentTimeoutMs[AnrType.PROVIDER])
+        assertEquals(10_000L, config.componentTimeoutMs[AnrType.ACTIVITY])
+        assertEquals(10_000L, config.componentTimeoutMs[AnrType.FINALIZER])
         assertTrue(config.captureChecktime)
         assertTrue(config.captureSystemEnvironment)
         assertTrue(config.captureThreadCpu)

@@ -1,5 +1,7 @@
 package com.valiantyan.anrmonitor.api
 
+import com.valiantyan.anrmonitor.domain.model.AnrType
+
 /**
  * 控制采集数据的隐私等级，后续类名和栈信息脱敏会按该模式执行。
  */
@@ -31,6 +33,7 @@ enum class AnrPrivacyMode {
  * @property watchdogIntervalMs Watchdog 心跳检查间隔。
  * @property suspectAnrMs 疑似 ANR 触发阈值，默认对齐常见前台 5 秒体验窗口。
  * @property pendingSnapshotMaxDepth Pending 队列反射快照最大深度。
+ * @property componentTimeoutMs 各组件系统 ANR 超时阈值，用于解释 confirmed ANR 类型。
  * @property captureChecktime 是否采集 Watchdog Checktime 调度延迟证据。
  * @property captureSystemEnvironment 是否采集系统负载、内存、存储和进程 I/O 证据。
  * @property captureThreadCpu 是否采集当前进程线程 CPU TopN 证据。
@@ -53,6 +56,7 @@ data class AnrMonitorConfig(
     val watchdogIntervalMs: Long = 1_000L,
     val suspectAnrMs: Long = 5_000L,
     val pendingSnapshotMaxDepth: Int = 200,
+    val componentTimeoutMs: Map<AnrType, Long> = DEFAULT_COMPONENT_TIMEOUT_MS,
     val captureChecktime: Boolean = true,
     val captureSystemEnvironment: Boolean = true,
     val captureThreadCpu: Boolean = true,
@@ -68,4 +72,19 @@ data class AnrMonitorConfig(
         minimumValue = 0.0f,
         maximumValue = 1.0f,
     )
+
+    private companion object {
+        /**
+         * Android 组件 ANR 默认阈值，UNKNOWN 不配置以避免误导。
+         */
+        private val DEFAULT_COMPONENT_TIMEOUT_MS: Map<AnrType, Long> = mapOf(
+            AnrType.INPUT to 5_000L,
+            AnrType.SERVICE to 10_000L,
+            AnrType.BROADCAST_FOREGROUND to 10_000L,
+            AnrType.BROADCAST_BACKGROUND to 60_000L,
+            AnrType.PROVIDER to 10_000L,
+            AnrType.ACTIVITY to 10_000L,
+            AnrType.FINALIZER to 10_000L,
+        )
+    }
 }

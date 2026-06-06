@@ -2,8 +2,10 @@ package com.valiantyan.anrmonitor.reporter.encoder
 
 import com.valiantyan.anrmonitor.domain.model.AnrAttributionCode
 import com.valiantyan.anrmonitor.domain.model.AnrEventType
+import com.valiantyan.anrmonitor.domain.model.AnrInfoSnapshot
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
+import com.valiantyan.anrmonitor.domain.model.AnrType
 import com.valiantyan.anrmonitor.domain.model.AttributionResult
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.Confidence
@@ -203,5 +205,66 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"loadAverage1m\":2.5"))
         assertTrue(json.contains("\"processIoAvailable\":true"))
         assertTrue(json.contains("\"writeBytes\":20"))
+    }
+
+    /**
+     * 系统确认 ANR 和组件阈值必须进入报告，但不能替代真正的归因字段。
+     */
+    @Test
+    fun encodeIncludesSystemAnrInfoAndComponentTimeout(): Unit {
+        val report: AnrReport = AnrReport(
+            schemaVersion = 1,
+            snapshot = AnrSnapshot(
+                eventId = "event-1",
+                eventType = AnrEventType.CONFIRMED_ANR,
+                appId = "demo",
+                environment = "test",
+                timeUptimeMs = 123L,
+                currentMessage = null,
+                historyMessages = emptyList(),
+                pendingQueue = PendingQueueSnapshot.unavailable(
+                    maxDepth = 200,
+                    failureReason = "reflection failed",
+                ),
+                mainThreadStack = StackTraceSnapshot(
+                    stackId = "main",
+                    threadName = "main",
+                    frames = emptyList(),
+                ),
+                anrInfo = AnrInfoSnapshot(
+                    available = true,
+                    isConfirmedAnr = true,
+                    anrType = AnrType.INPUT,
+                    shortMsg = "Input dispatching timed out",
+                    longMsg = "Input dispatching timed out waiting for com.example/.MainActivity",
+                    condition = 2,
+                    failureReason = null,
+                ),
+                componentTimeoutMs = 5_000L,
+            ),
+            attribution = AttributionResult(
+                primaryCode = AnrAttributionCode.UNKNOWN_INSUFFICIENT_EVIDENCE,
+                secondaryCodes = emptyList(),
+                confidence = Confidence.UNKNOWN,
+                evidenceItems = emptyList(),
+                missingEvidence = emptyList(),
+                actionSuggestions = emptyList(),
+            ),
+            diagnostics = SdkDiagnostics(
+                pendingAvailable = false,
+                reportBuildCostMs = 12L,
+                collectorFailures = emptyList(),
+            ),
+        )
+
+        val json: String = AnrReportJsonEncoder().encode(report = report)
+
+        assertTrue(json.contains("\"systemAnr\""))
+        assertTrue(json.contains("\"isConfirmedAnr\":true"))
+        assertTrue(json.contains("\"anrType\":\"INPUT\""))
+        assertTrue(json.contains("\"componentTimeoutMs\":5000"))
+        assertTrue(json.contains("\"condition\":2"))
+        assertTrue(json.contains("\"shortMsg\":\"Input dispatching timed out\""))
+        assertTrue(json.contains("\"primary\":\"UNKNOWN_INSUFFICIENT_EVIDENCE\""))
     }
 }

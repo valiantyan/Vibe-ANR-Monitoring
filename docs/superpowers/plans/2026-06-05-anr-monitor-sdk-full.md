@@ -3437,11 +3437,19 @@ git commit -m "新增 Checktime 与系统环境采集"
 
 **文件：**
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/anrinfo/AnrInfoCollector.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrInfoSnapshot.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrType.kt`
 - 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitorConfig.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrSnapshot.kt`
 - 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrReport.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrMonitorRuntime.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrReportAssembler.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/anrinfo/AnrInfoCollectorTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/api/AnrMonitorConfigTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoderTest.kt`
 
-- [ ] **步骤 1：新增组件阈值配置**
+- [x] **步骤 1：新增组件阈值配置**
 
 在 `AnrMonitorConfig.kt` 中增加字段：
 
@@ -3474,7 +3482,7 @@ enum class AnrType {
 }
 ```
 
-- [ ] **步骤 2：新增系统确认 ANR 采集器**
+- [x] **步骤 2：新增系统确认 ANR 采集器**
 
 创建 `AnrInfoCollector.kt`：
 
@@ -3502,7 +3510,7 @@ class AnrInfoCollector(
 }
 ```
 
-- [ ] **步骤 3：运行编译并提交**
+- [x] **步骤 3：运行编译并提交**
 
 运行：
 
@@ -3513,6 +3521,16 @@ git commit -m "新增系统确认 ANR 与组件阈值模型"
 ```
 
 预期：编译 PASS，提交成功。
+
+**执行记录（2026-06-06）：**
+- RED：新增 `AnrInfoCollectorTest`，扩展 `AnrMonitorConfigTest` 与 `AnrReportJsonEncoderTest`；目标测试首次失败，错误为 `AnrType`、`componentTimeoutMs`、`AnrInfoSnapshot`、`AnrInfoCollector`、`AnrSnapshot.anrInfo`、`AnrSnapshot.componentTimeoutMs` 和 `systemAnr` JSON 字段未定义。
+- GREEN：新增 `AnrType`、`AnrInfoSnapshot` 和 `AnrInfoCollector`，支持 ActivityManager confirmed ANR 读取、Input/Service/Broadcast/Provider/Activity/Finalizer 类型推断、系统接口异常降级和失败原因记录。
+- 接线：`AnrMonitorConfig` 新增组件阈值 map；`AnrMonitorRuntime` 采集 `anrInfo` 并根据系统确认状态设置 `SUSPECT_ANR`/`CONFIRMED_ANR`；`AnrSnapshot` 承载系统确认信息和当前组件阈值；`AnrReportJsonEncoder` 输出 `systemAnr`；`AnrReportAssembler` 汇总 AnrInfo 采集失败原因。
+- 评审口径：`longMsg` 中的组件类型只作为系统确认与阈值证据，不直接替代当前/历史/Pending/栈/资源归因，避免把系统 Reason/Trace 当根因。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.api.AnrMonitorConfigTest --tests com.valiantyan.anrmonitor.collector.anrinfo.AnrInfoCollectorTest --tests com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoderTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:compileDebugKotlin` PASS。
+- 验证：`./gradlew :app:compileDebugKotlin` PASS。
 
 ### 任务 15：新增 SharedPreferences 全量监控和治理能力
 

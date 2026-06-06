@@ -8,6 +8,8 @@ package com.valiantyan.anrmonitor.domain.model
  * @property appId 宿主应用标识。
  * @property environment 运行环境标识。
  * @property timeUptimeMs 采集发生时的 uptime。
+ * @property anrInfo 系统确认 ANR 信息，未确认时仍表达明确状态。
+ * @property componentTimeoutMs 当前 [anrInfo] 类型对应的系统组件阈值。
  * @property currentMessage 当前正在执行的主线程消息。
  * @property historyMessages 疑似 ANR 前的历史消息窗口。
  * @property pendingQueue Pending 队列快照。
@@ -22,6 +24,8 @@ data class AnrSnapshot(
     val appId: String,
     val environment: String,
     val timeUptimeMs: Long,
+    val anrInfo: AnrInfoSnapshot = AnrInfoSnapshot.unconfirmed(),
+    val componentTimeoutMs: Long? = null,
     val currentMessage: MessageRecord?,
     val historyMessages: List<MessageRecord>,
     val pendingQueue: PendingQueueSnapshot,
