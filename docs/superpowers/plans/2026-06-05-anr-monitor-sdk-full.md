@@ -3664,10 +3664,23 @@ git commit -m "新增 SharedPreferences 全量监控与治理"
 
 **文件：**
 - 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/barrier/BarrierTokenTrackerTest.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/nativepoll/NativePollOnceMonitorTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/api/AnrMonitorConfigTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzerTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoderTest.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/BarrierEvidenceSnapshot.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/barrier/BarrierTokenTracker.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/barrier/BarrierEvidenceCollector.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/nativepoll/NativePollOnceMonitor.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitorConfig.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrSnapshot.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrReport.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrMonitorRuntime.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrReportAssembler.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt`
 
-- [ ] **步骤 1：编写失败的 Barrier token 测试**
+- [x] **步骤 1：编写失败的 Barrier token 测试**
 
 创建 `BarrierTokenTrackerTest.kt`：
 
@@ -3693,7 +3706,7 @@ class BarrierTokenTrackerTest {
 }
 ```
 
-- [ ] **步骤 2：新增 Barrier token 和 nativePollOnce 实现**
+- [x] **步骤 2：新增 Barrier token 和 nativePollOnce 实现**
 
 创建 `BarrierTokenTracker.kt`：
 
@@ -3767,7 +3780,7 @@ class NativePollOnceMonitor {
 }
 ```
 
-- [ ] **步骤 3：运行测试并提交**
+- [x] **步骤 3：运行测试并提交**
 
 运行：
 
@@ -3778,6 +3791,17 @@ git commit -m "新增 Barrier token 与 nativePollOnce 增强证据"
 ```
 
 预期：测试 PASS，提交成功。
+
+执行记录：
+
+- RED：先新增 `BarrierTokenTrackerTest`、`NativePollOnceMonitorTest`，并扩展 `AnrMonitorConfigTest`、`AttributionAnalyzerTest`、`AnrReportJsonEncoderTest`；定向测试按预期因缺少 `captureBarrierEvidence`、`BarrierTokenTracker`、`NativePollOnceMonitor`、`BarrierEvidenceSnapshot`、`AnrSnapshot.barrierEvidenceSnapshot` 和 JSON 字段失败。
+- GREEN：新增 `BarrierEvidenceSnapshot`、`BarrierTokenRecord`、`NativePollOnceRecord`，覆盖 Barrier token 插入/移除配对、卡住 token 存活时间、插入栈、`nativePollOnce(timeoutMillis)` 进入/退出时间、持续时间、`timeoutMillis=-1` 无限等待统计和 in-flight 状态。
+- 接线：新增 `BarrierEvidenceCollector` 将 token、`nativePollOnce` 与 Pending 队头 Barrier 对齐；`AnrMonitorConfig` 增加 `captureBarrierEvidence`、`barrierTokenStuckThresholdMs`、`barrierEvidenceMaxRecords`，默认关闭；`AnrMonitorRuntime` 只消费全局 tracker/monitor 记录，不主动改变 Looper 调度；`AnrSnapshot`、`AnrReportAssembler`、`AttributionAnalyzer` 和 `AnrReportJsonEncoder` 输出增强证据与降级原因。
+- 评审口径：`SYNC_BARRIER_STUCK` 主因仍由 Pending 队头 Barrier 和同步消息阻塞决定；Barrier token 与 `nativePollOnce(-1)` 只作为增强证据，不替代 Pending 队列事实，也不能默认启用高风险 hook。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.barrier.BarrierTokenTrackerTest --tests com.valiantyan.anrmonitor.collector.nativepoll.NativePollOnceMonitorTest --tests com.valiantyan.anrmonitor.domain.analyzer.AttributionAnalyzerTest --tests com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoderTest --tests com.valiantyan.anrmonitor.api.AnrMonitorConfigTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:compileDebugKotlin` PASS。
+- 验证：`./gradlew :app:compileDebugKotlin` PASS。
 
 ### 任务 17：新增 Binder 和跨进程阻塞疑似识别
 

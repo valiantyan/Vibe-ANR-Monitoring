@@ -7,10 +7,13 @@ import com.valiantyan.anrmonitor.api.AnrMonitorConfig
 import com.valiantyan.anrmonitor.api.AnrReportUploader
 import com.valiantyan.anrmonitor.api.UploadResult
 import com.valiantyan.anrmonitor.collector.anrinfo.AnrInfoCollector
+import com.valiantyan.anrmonitor.collector.barrier.BarrierEvidenceCollector
+import com.valiantyan.anrmonitor.collector.barrier.BarrierTokenTracker
 import com.valiantyan.anrmonitor.collector.checktime.ChecktimeMonitor
 import com.valiantyan.anrmonitor.collector.environment.EnvironmentSnapshotter
 import com.valiantyan.anrmonitor.collector.looper.MainLooperPrinterInstaller
 import com.valiantyan.anrmonitor.collector.looper.MainLooperTimelineCollector
+import com.valiantyan.anrmonitor.collector.nativepoll.NativePollOnceMonitor
 import com.valiantyan.anrmonitor.collector.pending.PendingQueueSnapshotter
 import com.valiantyan.anrmonitor.collector.sharedprefs.QueuedWorkBypassPolicy
 import com.valiantyan.anrmonitor.collector.sharedprefs.SharedPreferencesHealthScanner
@@ -26,6 +29,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrEventType
 import com.valiantyan.anrmonitor.domain.model.AnrInfoSnapshot
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
+import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
@@ -99,6 +103,18 @@ internal class AnrMonitorRuntime(
         context = appContext,
         operationRecorder = sharedPreferencesRecorder,
         bypassPolicyProvider = ::queuedWorkBypassPolicy,
+    )
+
+    // Barrier token 追踪器，默认只消费已有记录，不主动改变 Looper 行为。
+    private val barrierTokenTracker: BarrierTokenTracker = BarrierTokenTracker.global
+
+    // nativePollOnce 监控器，供灰度 hook 或安全入口记录轮询窗口。
+    private val nativePollOnceMonitor: NativePollOnceMonitor = NativePollOnceMonitor.global
+
+    // Barrier 增强证据聚合器，将高风险入口记录与 Pending 队列对齐。
+    private val barrierEvidenceCollector: BarrierEvidenceCollector = BarrierEvidenceCollector(
+        tokenTracker = barrierTokenTracker,
+        nativePollOnceMonitor = nativePollOnceMonitor,
     )
 
     // 系统确认 ANR 信息采集器，用于区分疑似 ANR 和 ActivityManager 确认 ANR。
@@ -196,6 +212,7 @@ internal class AnrMonitorRuntime(
     // 构造疑似 ANR 现场快照，Pending 关闭时保留明确缺失原因。
     private fun buildSnapshot(nowUptimeMs: Long): AnrSnapshot {
         val anrInfo: AnrInfoSnapshot = anrInfoCollector.collect()
+        val pendingQueue: PendingQueueSnapshot = capturePendingQueue()
         return AnrSnapshot(
             eventId = UUID.randomUUID().toString(),
             eventType = eventType(anrInfo = anrInfo),
@@ -206,12 +223,16 @@ internal class AnrMonitorRuntime(
             componentTimeoutMs = config.componentTimeoutMs[anrInfo.anrType],
             currentMessage = timelineCollector.currentMessage(),
             historyMessages = timelineCollector.historyMessages(),
-            pendingQueue = capturePendingQueue(),
+            pendingQueue = pendingQueue,
             mainThreadStack = stackCollector.capture(),
             threadCpuRecords = captureThreadCpuRecords(),
             checktimeSummary = captureChecktimeSummary(),
             environmentSnapshot = captureEnvironmentSnapshot(),
             sharedPreferencesSnapshot = captureSharedPreferencesSnapshot(),
+            barrierEvidenceSnapshot = captureBarrierEvidenceSnapshot(
+                nowUptimeMs = nowUptimeMs,
+                pendingQueue = pendingQueue,
+            ),
         )
     }
 
@@ -274,6 +295,20 @@ internal class AnrMonitorRuntime(
         return sharedPreferencesHealthScanner.scan(
             maxFileCount = config.spTopFileCount,
             maxOperationCount = config.spRecentOperationCount,
+        )
+    }
+
+    // 根据配置采集 Barrier token 和 nativePollOnce 增强证据，高风险能力默认可降级。
+    private fun captureBarrierEvidenceSnapshot(
+        nowUptimeMs: Long,
+        pendingQueue: PendingQueueSnapshot,
+    ): BarrierEvidenceSnapshot {
+        return barrierEvidenceCollector.collect(
+            enabled = config.captureBarrierEvidence,
+            nowUptimeMs = nowUptimeMs,
+            stuckThresholdMs = config.barrierTokenStuckThresholdMs,
+            maxRecords = config.barrierEvidenceMaxRecords,
+            pendingQueue = pendingQueue,
         )
     }
 

@@ -41,6 +41,9 @@ enum class AnrPrivacyMode {
  * @property captureSpHealth 是否采集 SharedPreferences 健康度证据。
  * @property spTopFileCount SP 健康度最多输出的高风险文件数量。
  * @property spRecentOperationCount SP 包装入口最多输出的最近操作数量。
+ * @property captureBarrierEvidence 是否采集 Barrier token 和 [nativePollOnce] 增强证据，默认关闭以控制 hook 风险。
+ * @property barrierTokenStuckThresholdMs Barrier token 未移除超过该阈值才输出为卡住证据。
+ * @property barrierEvidenceMaxRecords Barrier token 和 [nativePollOnce] 最近证据最大输出数量。
  * @property enableQueuedWorkBypass 是否启用 [android.app.QueuedWork] 绕过能力，默认关闭避免一致性风险。
  * @property queuedWorkBypassAllowedFiles 允许绕过的 SP 文件白名单。
  * @property queuedWorkBypassBlockedFiles 禁止绕过的 SP 文件黑名单。
@@ -71,6 +74,9 @@ data class AnrMonitorConfig(
     val captureSpHealth: Boolean = true,
     val spTopFileCount: Int = 5,
     val spRecentOperationCount: Int = 20,
+    val captureBarrierEvidence: Boolean = false,
+    val barrierTokenStuckThresholdMs: Long = 5_000L,
+    val barrierEvidenceMaxRecords: Int = 20,
     val enableQueuedWorkBypass: Boolean = false,
     val queuedWorkBypassAllowedFiles: Set<String> = emptySet(),
     val queuedWorkBypassBlockedFiles: Set<String> = emptySet(),

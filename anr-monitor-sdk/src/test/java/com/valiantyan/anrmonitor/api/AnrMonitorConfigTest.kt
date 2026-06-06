@@ -42,6 +42,9 @@ class AnrMonitorConfigTest {
         assertTrue(config.queuedWorkBypassAllowedManufacturers.isEmpty())
         assertTrue(config.queuedWorkBypassBlockedManufacturers.isEmpty())
         assertFalse(config.queuedWorkBypassRollbackEnabled)
+        assertFalse(config.captureBarrierEvidence)
+        assertEquals(5_000L, config.barrierTokenStuckThresholdMs)
+        assertEquals(20, config.barrierEvidenceMaxRecords)
     }
 
     /**

@@ -3,9 +3,12 @@ package com.valiantyan.anrmonitor.domain.analyzer
 import com.valiantyan.anrmonitor.domain.model.AnrAttributionCode
 import com.valiantyan.anrmonitor.domain.model.AnrEventType
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
+import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
+import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.MessageRecordKind
+import com.valiantyan.anrmonitor.domain.model.NativePollOnceRecord
 import com.valiantyan.anrmonitor.domain.model.PendingMessage
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
@@ -73,6 +76,43 @@ class AttributionAnalyzerTest {
 
         assertEquals(AnrAttributionCode.SYNC_BARRIER_STUCK, result.primaryCode)
         assertEquals(Confidence.HIGH, result.confidence)
+    }
+
+    /**
+     * Barrier token 和 [nativePollOnce] 只增强证据链，不替代 Pending 队列主因判断。
+     */
+    @Test
+    fun analyzeIncludesBarrierTokenAndNativePollEvidence(): Unit {
+        val result = AttributionAnalyzer().analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 1L,
+                    wallMs = 6_000L,
+                    cpuMs = 10L,
+                ),
+                history = emptyList(),
+                pending = listOf(
+                    pending(
+                        index = 0,
+                        isBarrierLike = true,
+                        blockedMs = 12_000L,
+                        targetClass = null,
+                    ),
+                    pending(
+                        index = 1,
+                        isBarrierLike = false,
+                        blockedMs = 11_000L,
+                        targetClass = "android.os.Handler",
+                    ),
+                ),
+                frames = listOf("android.os.MessageQueue.nativePollOnce(Native Method)"),
+                barrierEvidenceSnapshot = barrierEvidenceSnapshot(),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.SYNC_BARRIER_STUCK, result.primaryCode)
+        assertTrue(result.evidenceItems.contains("barrier stuck token=41 alive=6000ms"))
+        assertTrue(result.evidenceItems.contains("nativePollOnce infiniteWaitCount=2 alignedWithPendingBarrier=true"))
     }
 
     /**
@@ -249,6 +289,9 @@ class AttributionAnalyzerTest {
         pending: List<PendingMessage>,
         frames: List<String>,
         threadCpuRecords: List<ThreadCpuRecord> = emptyList(),
+        barrierEvidenceSnapshot: BarrierEvidenceSnapshot = BarrierEvidenceSnapshot.unavailable(
+            reason = "barrier evidence not provided",
+        ),
     ): AnrSnapshot {
         return AnrSnapshot(
             eventId = "test",
@@ -271,6 +314,34 @@ class AttributionAnalyzerTest {
                 frames = frames,
             ),
             threadCpuRecords = threadCpuRecords,
+            barrierEvidenceSnapshot = barrierEvidenceSnapshot,
+        )
+    }
+
+    // 构造 Barrier 增强证据，保持归因测试只关注 evidence 合并。
+    private fun barrierEvidenceSnapshot(): BarrierEvidenceSnapshot {
+        return BarrierEvidenceSnapshot(
+            available = true,
+            stuckTokens = listOf(
+                BarrierTokenRecord(
+                    token = 41,
+                    postUptimeMs = 4_000L,
+                    removeUptimeMs = null,
+                    aliveMs = 6_000L,
+                    postStack = listOf("postSyncBarrier token=41"),
+                ),
+            ),
+            recentNativePollOnceRecords = listOf(
+                NativePollOnceRecord(
+                    timeoutMillis = -1,
+                    enterUptimeMs = 8_000L,
+                    exitUptimeMs = 8_400L,
+                    durationMs = 400L,
+                ),
+            ),
+            repeatedInfinitePollCount = 2,
+            alignedWithPendingBarrier = true,
+            failureReason = null,
         )
     }
 

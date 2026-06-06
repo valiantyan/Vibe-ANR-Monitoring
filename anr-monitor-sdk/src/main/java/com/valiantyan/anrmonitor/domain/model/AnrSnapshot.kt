@@ -18,6 +18,7 @@ package com.valiantyan.anrmonitor.domain.model
  * @property checktimeSummary Watchdog Checktime 调度延迟证据。
  * @property environmentSnapshot 系统负载、内存、存储和进程 I/O 环境证据。
  * @property sharedPreferencesSnapshot SharedPreferences 文件健康和写入入口证据。
+ * @property barrierEvidenceSnapshot Barrier token 与 nativePollOnce 增强证据。
  */
 data class AnrSnapshot(
     val eventId: String,
@@ -38,5 +39,8 @@ data class AnrSnapshot(
     ),
     val sharedPreferencesSnapshot: SharedPreferencesSnapshot = SharedPreferencesSnapshot.unavailable(
         reason = "sharedPreferences capture not provided",
+    ),
+    val barrierEvidenceSnapshot: BarrierEvidenceSnapshot = BarrierEvidenceSnapshot.unavailable(
+        reason = "barrier evidence capture not provided",
     ),
 )

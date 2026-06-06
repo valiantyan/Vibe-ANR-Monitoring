@@ -7,10 +7,13 @@ import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.AnrType
 import com.valiantyan.anrmonitor.domain.model.AttributionResult
+import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
+import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
 import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
+import com.valiantyan.anrmonitor.domain.model.NativePollOnceRecord
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.ProcessIoSnapshot
 import com.valiantyan.anrmonitor.domain.model.SdkDiagnostics
@@ -360,5 +363,80 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"pendingFinisherCount\":3"))
         assertTrue(json.contains("\"queuedWorkBypass\""))
         assertTrue(json.contains("\"rollbackEnabled\":false"))
+    }
+
+    /**
+     * Barrier token 和 [nativePollOnce] 增强证据必须进入 JSON，作为第 4 篇专项评审入口。
+     */
+    @Test
+    fun encodeIncludesBarrierEvidence(): Unit {
+        val report: AnrReport = AnrReport(
+            schemaVersion = 1,
+            snapshot = AnrSnapshot(
+                eventId = "event-1",
+                eventType = AnrEventType.SUSPECT_ANR,
+                appId = "demo",
+                environment = "test",
+                timeUptimeMs = 123L,
+                currentMessage = null,
+                historyMessages = emptyList(),
+                pendingQueue = PendingQueueSnapshot.unavailable(
+                    maxDepth = 200,
+                    failureReason = "reflection failed",
+                ),
+                mainThreadStack = StackTraceSnapshot(
+                    stackId = "main",
+                    threadName = "main",
+                    frames = listOf("android.os.MessageQueue.nativePollOnce(Native Method)"),
+                ),
+                barrierEvidenceSnapshot = BarrierEvidenceSnapshot(
+                    available = true,
+                    stuckTokens = listOf(
+                        BarrierTokenRecord(
+                            token = 41,
+                            postUptimeMs = 1_000L,
+                            removeUptimeMs = null,
+                            aliveMs = 6_000L,
+                            postStack = listOf("postSyncBarrier token=41"),
+                        ),
+                    ),
+                    recentNativePollOnceRecords = listOf(
+                        NativePollOnceRecord(
+                            timeoutMillis = -1,
+                            enterUptimeMs = 4_000L,
+                            exitUptimeMs = 4_300L,
+                            durationMs = 300L,
+                        ),
+                    ),
+                    repeatedInfinitePollCount = 2,
+                    alignedWithPendingBarrier = true,
+                    failureReason = null,
+                ),
+            ),
+            attribution = AttributionResult(
+                primaryCode = AnrAttributionCode.SYNC_BARRIER_STUCK,
+                secondaryCodes = emptyList(),
+                confidence = Confidence.HIGH,
+                evidenceItems = listOf("pending queue head is Sync Barrier"),
+                missingEvidence = emptyList(),
+                actionSuggestions = emptyList(),
+            ),
+            diagnostics = SdkDiagnostics(
+                pendingAvailable = false,
+                reportBuildCostMs = 12L,
+                collectorFailures = emptyList(),
+            ),
+        )
+
+        val json: String = AnrReportJsonEncoder().encode(report = report)
+
+        assertTrue(json.contains("\"barrierEvidence\""))
+        assertTrue(json.contains("\"token\":41"))
+        assertTrue(json.contains("\"aliveMs\":6000"))
+        assertTrue(json.contains("\"postStack\":[\"postSyncBarrier token=41\"]"))
+        assertTrue(json.contains("\"timeoutMillis\":-1"))
+        assertTrue(json.contains("\"durationMs\":300"))
+        assertTrue(json.contains("\"repeatedInfinitePollCount\":2"))
+        assertTrue(json.contains("\"alignedWithPendingBarrier\":true"))
     }
 }

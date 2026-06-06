@@ -5,6 +5,8 @@ import com.valiantyan.anrmonitor.collector.pending.PendingQueueSummary
 import com.valiantyan.anrmonitor.domain.model.AnrAttributionCode
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.AttributionResult
+import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
+import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.SharedPreferencesFileStat
@@ -37,7 +39,10 @@ class AttributionAnalyzer(
         val pendingSummary: PendingQueueSummary = PendingQueueAnalyzer.analyze(
             messages = snapshot.pendingQueue.messages,
         )
-        val barrierResult: AttributionResult? = analyzeBarrier(summary = pendingSummary)
+        val barrierResult: AttributionResult? = analyzeBarrier(
+            summary = pendingSummary,
+            barrierEvidenceSnapshot = snapshot.barrierEvidenceSnapshot,
+        )
         if (barrierResult != null) {
             return withThreadCpuEvidence(
                 result = barrierResult,
@@ -114,7 +119,10 @@ class AttributionAnalyzer(
     }
 
     // 识别队头同步屏障卡住同步消息的模式，避免把 nativePollOnce 误判成主线程空闲。
-    private fun analyzeBarrier(summary: PendingQueueSummary): AttributionResult? {
+    private fun analyzeBarrier(
+        summary: PendingQueueSummary,
+        barrierEvidenceSnapshot: BarrierEvidenceSnapshot,
+    ): AttributionResult? {
         val firstBlockedMs: Long = summary.firstSynchronousBlockedMs ?: return null
         if (!summary.hasBarrierHead || firstBlockedMs < thresholds.suspectAnrMs) {
             return null
@@ -125,8 +133,23 @@ class AttributionAnalyzer(
             evidence = listOf(
                 "pending queue head is Sync Barrier",
                 "first synchronous message blocked ${firstBlockedMs}ms",
-            ),
+            ) + barrierEvidence(snapshot = barrierEvidenceSnapshot),
             suggestion = "检查 postSyncBarrier/removeSyncBarrier 配对和 UI 调度清理逻辑。",
+        )
+    }
+
+    // 提取 Barrier 增强证据，只辅助审查，不替代 Pending 队列主因。
+    private fun barrierEvidence(snapshot: BarrierEvidenceSnapshot): List<String> {
+        if (!snapshot.available) {
+            return listOf("barrier evidence unavailable: ${snapshot.failureReason}")
+        }
+        val stuckToken: BarrierTokenRecord? = snapshot.stuckTokens.firstOrNull()
+        return listOfNotNull(
+            stuckToken?.let { record: BarrierTokenRecord ->
+                "barrier stuck token=${record.token} alive=${record.aliveMs}ms"
+            },
+            "nativePollOnce infiniteWaitCount=${snapshot.repeatedInfinitePollCount} " +
+                "alignedWithPendingBarrier=${snapshot.alignedWithPendingBarrier}",
         )
     }
 
@@ -182,6 +205,9 @@ class AttributionAnalyzer(
         }
         if (!snapshot.sharedPreferencesSnapshot.available) {
             missingEvidence += "sharedPreferences unavailable: ${snapshot.sharedPreferencesSnapshot.failureReason}"
+        }
+        if (!snapshot.barrierEvidenceSnapshot.available) {
+            missingEvidence += "barrier evidence unavailable: ${snapshot.barrierEvidenceSnapshot.failureReason}"
         }
         return AttributionResult(
             primaryCode = AnrAttributionCode.UNKNOWN_INSUFFICIENT_EVIDENCE,

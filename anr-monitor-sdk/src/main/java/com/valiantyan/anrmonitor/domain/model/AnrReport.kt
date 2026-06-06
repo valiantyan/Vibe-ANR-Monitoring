@@ -56,6 +56,9 @@ data class AnrReport(
                 sharedPreferencesSnapshot = SharedPreferencesSnapshot.unavailable(
                     reason = "empty report",
                 ),
+                barrierEvidenceSnapshot = BarrierEvidenceSnapshot.unavailable(
+                    reason = "empty report",
+                ),
             )
             return AnrReport(
                 schemaVersion = 1,

@@ -2,9 +2,12 @@ package com.valiantyan.anrmonitor.reporter.encoder
 
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrInfoSnapshot
+import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
+import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
 import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
 import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
+import com.valiantyan.anrmonitor.domain.model.NativePollOnceRecord
 import com.valiantyan.anrmonitor.domain.model.PendingMessage
 import com.valiantyan.anrmonitor.domain.model.ProcessIoSnapshot
 import com.valiantyan.anrmonitor.domain.model.QueuedWorkBypassState
@@ -30,6 +33,7 @@ class AnrReportJsonEncoder {
             "\"systemAnr\":${systemAnrJson(report = report)}",
             "\"mainThread\":${mainThreadJson(report = report)}",
             "\"pendingQueue\":${pendingQueueJson(report = report)}",
+            "\"barrierEvidence\":${barrierEvidenceJson(report = report)}",
             "\"threadCpu\":${threadCpuJson(report = report)}",
             "\"checktime\":${checktimeJson(report = report)}",
             "\"environmentSnapshot\":${environmentJson(report = report)}",
@@ -89,6 +93,20 @@ class AnrReportJsonEncoder {
             "\"maxDepth\":${queue.maxDepth}",
             "\"failureReason\":${stringOrNull(value = queue.failureReason)}",
             "\"messages\":${pendingMessages(messages = queue.messages)}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码 Barrier token 和 nativePollOnce 增强证据，便于第 4 篇专项治理复核。
+    private fun barrierEvidenceJson(report: AnrReport): String {
+        val snapshot: BarrierEvidenceSnapshot = report.snapshot.barrierEvidenceSnapshot
+        val fields: List<String> = listOf(
+            "\"available\":${snapshot.available}",
+            "\"failureReason\":${stringOrNull(value = snapshot.failureReason)}",
+            "\"repeatedInfinitePollCount\":${snapshot.repeatedInfinitePollCount}",
+            "\"alignedWithPendingBarrier\":${snapshot.alignedWithPendingBarrier}",
+            "\"stuckTokens\":${barrierTokenRecords(records = snapshot.stuckTokens)}",
+            "\"nativePollOnceRecords\":${nativePollOnceRecords(records = snapshot.recentNativePollOnceRecords)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }
@@ -249,6 +267,47 @@ class AnrReportJsonEncoder {
             "\"tid\":${record.tid}",
             "\"threadName\":${string(record.threadName)}",
             "\"totalCpuMs\":${record.totalCpuMs}",
+        )
+    }
+
+    // 编码卡住的 Barrier token，保留 token、生命周期和插入栈。
+    private fun barrierTokenRecords(records: List<BarrierTokenRecord>): String {
+        return records.joinToString(
+            separator = ",",
+            prefix = "[",
+            postfix = "]",
+        ) { record: BarrierTokenRecord -> "{${barrierTokenFields(record = record).joinToString(separator = ",")}}" }
+    }
+
+    // 生成单个 Barrier token 字段。
+    private fun barrierTokenFields(record: BarrierTokenRecord): List<String> {
+        return listOf(
+            "\"token\":${record.token}",
+            "\"postUptimeMs\":${record.postUptimeMs}",
+            "\"removeUptimeMs\":${longOrNull(value = record.removeUptimeMs)}",
+            "\"aliveMs\":${record.aliveMs}",
+            "\"postStack\":${strings(values = record.postStack)}",
+        )
+    }
+
+    // 编码 nativePollOnce 调用窗口，保留 timeout 和进入退出时间。
+    private fun nativePollOnceRecords(records: List<NativePollOnceRecord>): String {
+        return records.joinToString(
+            separator = ",",
+            prefix = "[",
+            postfix = "]",
+        ) { record: NativePollOnceRecord -> "{${nativePollOnceFields(record = record).joinToString(separator = ",")}}" }
+    }
+
+    // 生成单个 nativePollOnce 字段。
+    private fun nativePollOnceFields(record: NativePollOnceRecord): List<String> {
+        return listOf(
+            "\"timeoutMillis\":${record.timeoutMillis}",
+            "\"enterUptimeMs\":${record.enterUptimeMs}",
+            "\"exitUptimeMs\":${longOrNull(value = record.exitUptimeMs)}",
+            "\"durationMs\":${longOrNull(value = record.durationMs)}",
+            "\"isInfiniteWait\":${record.isInfiniteWait}",
+            "\"isInFlight\":${record.isInFlight}",
         )
     }
 
