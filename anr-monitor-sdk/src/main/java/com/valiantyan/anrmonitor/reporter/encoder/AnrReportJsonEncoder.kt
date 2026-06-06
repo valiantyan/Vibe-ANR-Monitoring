@@ -3,6 +3,7 @@ package com.valiantyan.anrmonitor.reporter.encoder
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.PendingMessage
+import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 
 /**
  * 将 [AnrReport] 编码为本地落盘使用的稳定 JSON 文本。
@@ -20,6 +21,7 @@ class AnrReportJsonEncoder {
             "\"event\":${eventJson(report = report)}",
             "\"mainThread\":${mainThreadJson(report = report)}",
             "\"pendingQueue\":${pendingQueueJson(report = report)}",
+            "\"threadCpu\":${threadCpuJson(report = report)}",
             "\"attribution\":${attributionJson(report = report)}",
             "\"sdkDiagnostics\":${diagnosticsJson(report = report)}",
         )
@@ -59,6 +61,14 @@ class AnrReportJsonEncoder {
             "\"maxDepth\":${queue.maxDepth}",
             "\"failureReason\":${stringOrNull(value = queue.failureReason)}",
             "\"messages\":${pendingMessages(messages = queue.messages)}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码线程 CPU TopN，作为判断进程内资源竞争的辅助证据。
+    private fun threadCpuJson(report: AnrReport): String {
+        val fields: List<String> = listOf(
+            "\"topThreads\":${threadCpuRecords(records = report.snapshot.threadCpuRecords)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }
@@ -149,6 +159,24 @@ class AnrReportJsonEncoder {
             "\"isAsynchronous\":${booleanOrNull(value = message.isAsynchronous)}",
             "\"isBarrierLike\":${message.isBarrierLike}",
             "\"isCriticalComponent\":${message.isCriticalComponent}",
+        )
+    }
+
+    // 编码线程 CPU 记录列表，保持 TopN 顺序。
+    private fun threadCpuRecords(records: List<ThreadCpuRecord>): String {
+        return records.joinToString(
+            separator = ",",
+            prefix = "[",
+            postfix = "]",
+        ) { record: ThreadCpuRecord -> "{${threadCpuFields(record = record).joinToString(separator = ",")}}" }
+    }
+
+    // 生成线程 CPU 字段，只包含进程内线程基础元信息和 CPU 消耗。
+    private fun threadCpuFields(record: ThreadCpuRecord): List<String> {
+        return listOf(
+            "\"tid\":${record.tid}",
+            "\"threadName\":${string(record.threadName)}",
+            "\"totalCpuMs\":${record.totalCpuMs}",
         )
     }
 

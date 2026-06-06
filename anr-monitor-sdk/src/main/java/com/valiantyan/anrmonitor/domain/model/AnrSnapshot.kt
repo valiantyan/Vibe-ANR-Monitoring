@@ -12,6 +12,7 @@ package com.valiantyan.anrmonitor.domain.model
  * @property historyMessages 疑似 ANR 前的历史消息窗口。
  * @property pendingQueue Pending 队列快照。
  * @property mainThreadStack 主线程 Java 栈快照。
+ * @property threadCpuRecords 进程内线程 CPU TopN 证据。
  */
 data class AnrSnapshot(
     val eventId: String,
@@ -23,4 +24,5 @@ data class AnrSnapshot(
     val historyMessages: List<MessageRecord>,
     val pendingQueue: PendingQueueSnapshot,
     val mainThreadStack: StackTraceSnapshot,
+    val threadCpuRecords: List<ThreadCpuRecord> = emptyList(),
 )

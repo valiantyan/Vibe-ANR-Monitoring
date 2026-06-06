@@ -46,6 +46,7 @@ data class AnrReport(
                     threadName = "main",
                     frames = emptyList(),
                 ),
+                threadCpuRecords = emptyList(),
             )
             return AnrReport(
                 schemaVersion = 1,

@@ -10,6 +10,7 @@ import com.valiantyan.anrmonitor.collector.looper.MainLooperPrinterInstaller
 import com.valiantyan.anrmonitor.collector.looper.MainLooperTimelineCollector
 import com.valiantyan.anrmonitor.collector.pending.PendingQueueSnapshotter
 import com.valiantyan.anrmonitor.collector.stack.MainThreadStackCollector
+import com.valiantyan.anrmonitor.collector.threadcpu.ThreadCpuSnapshotter
 import com.valiantyan.anrmonitor.collector.watchdog.AnrWatchdog
 import com.valiantyan.anrmonitor.collector.watchdog.HeartbeatState
 import com.valiantyan.anrmonitor.core.clock.AndroidClock
@@ -19,6 +20,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrEventType
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
+import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 import com.valiantyan.anrmonitor.reporter.local.LocalAnrReportWriter
 import java.io.IOException
 import java.util.UUID
@@ -66,6 +68,9 @@ internal class AnrMonitorRuntime(
 
     // 主线程 Java 栈采集器。
     private val stackCollector: MainThreadStackCollector = MainThreadStackCollector()
+
+    // 线程 CPU TopN 采集器，用于补充进程内资源证据。
+    private val threadCpuSnapshotter: ThreadCpuSnapshotter = ThreadCpuSnapshotter()
 
     // 完整报告拼装器，统一维护归因和 SDK 自诊断字段。
     private val reportAssembler: AnrReportAssembler = AnrReportAssembler(
@@ -167,7 +172,16 @@ internal class AnrMonitorRuntime(
             historyMessages = timelineCollector.historyMessages(),
             pendingQueue = capturePendingQueue(),
             mainThreadStack = stackCollector.capture(),
+            threadCpuRecords = captureThreadCpuRecords(),
         )
+    }
+
+    // 根据配置采集线程 CPU TopN；禁用或读取失败时由采集器降级为空列表。
+    private fun captureThreadCpuRecords(): List<ThreadCpuRecord> {
+        if (!config.captureThreadCpu) {
+            return emptyList()
+        }
+        return threadCpuSnapshotter.captureTopThreads(maxCount = DEFAULT_THREAD_CPU_MAX_COUNT)
     }
 
     // 根据配置采集 Pending 队列，禁用时返回不可用快照供报告说明。
@@ -190,5 +204,12 @@ internal class AnrMonitorRuntime(
         if (result is UploadResult.Failure) {
             listener.onMonitorError(error = IllegalStateException(result.reason))
         }
+    }
+
+    private companion object {
+        /**
+         * 单次报告最多保留的线程 CPU 记录数，避免报告被线程数量放大。
+         */
+        private const val DEFAULT_THREAD_CPU_MAX_COUNT: Int = 5
     }
 }

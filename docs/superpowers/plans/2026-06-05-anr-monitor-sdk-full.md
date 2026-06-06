@@ -3208,7 +3208,7 @@ git commit -m "新增慢消息堆栈采样能力"
 - 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrSnapshot.kt`
 - 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt`
 
-- [ ] **步骤 1：编写失败的线程 CPU 排名测试**
+- [x] **步骤 1：编写失败的线程 CPU 排名测试**
 
 创建 `ThreadCpuSnapshotterTest.kt`：
 
@@ -3238,7 +3238,7 @@ class ThreadCpuSnapshotterTest {
 }
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 运行：
 
@@ -3248,7 +3248,7 @@ class ThreadCpuSnapshotterTest {
 
 预期：FAIL，出现未解析引用 `ThreadCpuSnapshotter`。
 
-- [ ] **步骤 3：新增线程 CPU 采集实现**
+- [x] **步骤 3：新增线程 CPU 采集实现**
 
 创建 `ThreadCpuSnapshotter.kt`：
 
@@ -3286,7 +3286,7 @@ class ThreadCpuSnapshotter(
 }
 ```
 
-- [ ] **步骤 4：运行测试并提交**
+- [x] **步骤 4：运行测试并提交**
 
 运行：
 
@@ -3297,6 +3297,16 @@ git commit -m "新增线程 CPU 排名和资源证据"
 ```
 
 预期：测试 PASS，提交成功。
+
+执行记录：
+
+- 已新增 `ThreadCpuSnapshotterTest`，先运行指定测试并确认 RED：`ThreadCpuSnapshotter`、`ThreadCpuStat`、`ThreadCpuRecord` 和 `AnrSnapshot.threadCpuRecords` 未解析。
+- 已新增 `ThreadCpuSnapshotter` 与 `ThreadCpuStat`，支持注入 stat reader 做稳定测试；生产默认读取 `/proc/self/task/<tid>/stat`，按 user + system CPU 毫秒降序输出 TopN，读取失败降级为空列表。
+- 已新增领域模型 `ThreadCpuRecord`，并将 `AnrSnapshot.threadCpuRecords` 接入运行时快照；`AnrMonitorConfig.captureThreadCpu` 默认开启，运行时单次报告最多保留 5 条线程 CPU 记录。
+- 已将线程 CPU 记录输出到 JSON 的 `threadCpu.topThreads`，并在 `AttributionAnalyzer` 中追加最高 CPU 线程 evidence，不改变既有主因优先级。
+- 已运行 RED/GREEN 指定测试：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.threadcpu.ThreadCpuSnapshotterTest --tests com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoderTest --tests com.valiantyan.anrmonitor.domain.analyzer.AttributionAnalyzerTest`，结果 PASS。
+- 已运行 SDK 全量单测：`./gradlew :anr-monitor-sdk:testDebugUnitTest`，结果 PASS。
+- 已运行 Demo 编译验证：`./gradlew :app:compileDebugKotlin`，结果 PASS。
 
 ### 任务 13：新增 Checktime 和系统环境采集
 

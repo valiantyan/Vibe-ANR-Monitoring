@@ -7,6 +7,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.AttributionResult
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
+import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 
 /**
  * 基础 ANR 归因分析器，按证据确定性从高到低选择主因。
@@ -26,28 +27,46 @@ class AttributionAnalyzer(
         val frames: List<String> = snapshot.mainThreadStack.frames
         val spResult: AttributionResult? = analyzeSharedPreferences(frames = frames)
         if (spResult != null) {
-            return spResult
+            return withThreadCpuEvidence(
+                result = spResult,
+                snapshot = snapshot,
+            )
         }
         val pendingSummary: PendingQueueSummary = PendingQueueAnalyzer.analyze(
             messages = snapshot.pendingQueue.messages,
         )
         val barrierResult: AttributionResult? = analyzeBarrier(summary = pendingSummary)
         if (barrierResult != null) {
-            return barrierResult
+            return withThreadCpuEvidence(
+                result = barrierResult,
+                snapshot = snapshot,
+            )
         }
         val stormResult: AttributionResult? = analyzeMessageStorm(summary = pendingSummary)
         if (stormResult != null) {
-            return stormResult
+            return withThreadCpuEvidence(
+                result = stormResult,
+                snapshot = snapshot,
+            )
         }
         val currentResult: AttributionResult? = analyzeCurrentMessage(current = snapshot.currentMessage)
         if (currentResult != null) {
-            return currentResult
+            return withThreadCpuEvidence(
+                result = currentResult,
+                snapshot = snapshot,
+            )
         }
         val historyResult: AttributionResult? = analyzeHistory(history = snapshot.historyMessages)
         if (historyResult != null) {
-            return historyResult
+            return withThreadCpuEvidence(
+                result = historyResult,
+                snapshot = snapshot,
+            )
         }
-        return unknownResult(snapshot = snapshot)
+        return withThreadCpuEvidence(
+            result = unknownResult(snapshot = snapshot),
+            snapshot = snapshot,
+        )
     }
 
     // 识别 SharedPreferences 加载等待和 apply 落盘等待，二者在主线程栈中证据最直接。
@@ -146,6 +165,17 @@ class AttributionAnalyzer(
             evidenceItems = emptyList(),
             missingEvidence = missingEvidence,
             actionSuggestions = listOf("补齐 Pending、历史消息或主线程栈后重新评估。"),
+        )
+    }
+
+    // 将线程 CPU TopN 作为辅助证据追加到归因结果，不改变主因判断优先级。
+    private fun withThreadCpuEvidence(
+        result: AttributionResult,
+        snapshot: AnrSnapshot,
+    ): AttributionResult {
+        val topThread: ThreadCpuRecord = snapshot.threadCpuRecords.firstOrNull() ?: return result
+        return result.copy(
+            evidenceItems = result.evidenceItems + "top thread ${topThread.threadName} cpu=${topThread.totalCpuMs}ms",
         )
     }
 

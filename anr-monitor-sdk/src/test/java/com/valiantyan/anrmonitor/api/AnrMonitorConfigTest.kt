@@ -22,6 +22,7 @@ class AnrMonitorConfigTest {
         assertEquals(120, config.historyBufferSize)
         assertEquals(5_000L, config.suspectAnrMs)
         assertEquals(200, config.pendingSnapshotMaxDepth)
+        assertTrue(config.captureThreadCpu)
         assertFalse(config.enableQueuedWorkBypass)
     }
 

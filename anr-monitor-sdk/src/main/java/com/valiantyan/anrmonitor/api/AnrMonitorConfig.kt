@@ -31,6 +31,7 @@ enum class AnrPrivacyMode {
  * @property watchdogIntervalMs Watchdog 心跳检查间隔。
  * @property suspectAnrMs 疑似 ANR 触发阈值，默认对齐常见前台 5 秒体验窗口。
  * @property pendingSnapshotMaxDepth Pending 队列反射快照最大深度。
+ * @property captureThreadCpu 是否采集当前进程线程 CPU TopN 证据。
  * @property capturePendingQueue 是否采集 Pending 队列证据。
  * @property captureSpHealth 是否采集 SharedPreferences 健康度证据。
  * @property enableQueuedWorkBypass 是否启用 [android.app.QueuedWork] 绕过能力，默认关闭避免一致性风险。
@@ -50,6 +51,7 @@ data class AnrMonitorConfig(
     val watchdogIntervalMs: Long = 1_000L,
     val suspectAnrMs: Long = 5_000L,
     val pendingSnapshotMaxDepth: Int = 200,
+    val captureThreadCpu: Boolean = true,
     val capturePendingQueue: Boolean = true,
     val captureSpHealth: Boolean = true,
     val enableQueuedWorkBypass: Boolean = false,
