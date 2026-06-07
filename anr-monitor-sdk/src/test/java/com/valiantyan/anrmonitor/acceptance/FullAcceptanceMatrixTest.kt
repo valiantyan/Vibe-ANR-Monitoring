@@ -71,6 +71,53 @@ class FullAcceptanceMatrixTest {
         }
     }
 
+    /**
+     * 服务端消费协议必须把端侧字段、服务端派生维度和 01 到 05 的设计来源连起来。
+     */
+    @Test
+    fun serverConsumptionProtocolCoversContractAndDesignTraceability(): Unit {
+        val rootDir: File = findProjectRoot()
+        val protocolFile: File = rootDir.resolve("docs-anr/102-ANR监控SDK服务端消费协议.md")
+        val planFile: File = rootDir.resolve("docs/superpowers/plans/2026-06-05-anr-monitor-sdk-full.md")
+        assertTrue("缺少服务端消费协议: ${protocolFile.path}", protocolFile.exists())
+        val protocolText: String = protocolFile.readText()
+        val planText: String = planFile.readText()
+        val requiredTerms: List<String> = listOf(
+            "端侧归因码",
+            "CURRENT_MESSAGE_SLOW",
+            "HISTORY_MESSAGE_SLOW",
+            "MESSAGE_STORM",
+            "SYNC_BARRIER_STUCK",
+            "SP_LOAD_WAIT",
+            "SP_APPLY_WAIT",
+            "BINDER_BLOCK_SUSPECTED",
+            "UNKNOWN_INSUFFICIENT_EVIDENCE",
+            "服务端派生维度",
+            "PROCESS_IO_PRESSURE",
+            "EXTERNAL_SYSTEM_LOAD",
+            "Barrier token",
+            "SP 文件名",
+            "Pending target/callback hash",
+            "结论卡片",
+            "证据链",
+            "时间线",
+            "专项卡片",
+            "缺失证据",
+            "治理建议",
+            "第一篇",
+            "第二篇",
+            "第三篇",
+            "第四篇",
+            "第五篇",
+        )
+        requiredTerms.forEach { requiredTerm: String ->
+            assertContains(protocolText, requiredTerm)
+        }
+        assertContains(planText, "- [x] **步骤 1：创建服务端消费协议**")
+        assertContains(planText, "- [x] **步骤 2：最终扫描计划覆盖**")
+        assertContains(planText, "- [x] **步骤 3：提交服务端协议和计划修订**")
+    }
+
     // 从 Gradle 测试工作目录向上查找项目根目录，避免依赖固定执行目录。
     private fun findProjectRoot(): File {
         val userDir: String = requireNotNull(System.getProperty("user.dir"))

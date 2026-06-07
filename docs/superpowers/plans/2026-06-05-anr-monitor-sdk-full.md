@@ -4113,8 +4113,9 @@ git commit -m "新增 ANR SDK 全量场景验收"
 **文件：**
 - 创建： `docs-anr/102-ANR监控SDK服务端消费协议.md`
 - 修改： `docs/superpowers/plans/2026-06-05-anr-monitor-sdk-full.md`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/acceptance/FullAcceptanceMatrixTest.kt`
 
-- [ ] **步骤 1：创建服务端消费协议**
+- [x] **步骤 1：创建服务端消费协议**
 
 创建 `docs-anr/102-ANR监控SDK服务端消费协议.md`：
 
@@ -4123,7 +4124,8 @@ git commit -m "新增 ANR SDK 全量场景验收"
 
 ## 聚类维度
 
-- 归因码：`CURRENT_MESSAGE_SLOW`、`HISTORY_MESSAGE_SLOW`、`MESSAGE_STORM`、`PROCESS_IO_PRESSURE`、`EXTERNAL_SYSTEM_LOAD`、`BINDER_BLOCK_SUSPECTED`、`SYNC_BARRIER_STUCK`、`SP_LOAD_WAIT`、`SP_APPLY_WAIT`
+- 端侧归因码：`CURRENT_MESSAGE_SLOW`、`HISTORY_MESSAGE_SLOW`、`MESSAGE_STORM`、`BINDER_BLOCK_SUSPECTED`、`SYNC_BARRIER_STUCK`、`SP_LOAD_WAIT`、`SP_APPLY_WAIT`、`UNKNOWN_INSUFFICIENT_EVIDENCE`
+- 服务端派生维度：`PROCESS_IO_PRESSURE`、`EXTERNAL_SYSTEM_LOAD`、`BUSINESS_OWNER_HINT`
 - ANR 类型：Input、Service、Broadcast、Provider、Activity、Finalizer
 - 当前栈 hash、历史慢消息栈 hash、Pending target/callback hash
 - Barrier token、SP 文件名、设备/ROM/Android 版本、App 版本、页面、进程名
@@ -4134,11 +4136,11 @@ git commit -m "新增 ANR SDK 全量场景验收"
 2. 证据链：系统 Reason、当前 Trace、当前消息、历史消息、Pending、线程 CPU、Checktime、SP/Barrier/Binder。
 3. 时间线：过去、当前、Pending 三段联动。
 4. 专项卡片：SP、Barrier、Binder、环境负载。
-5. 缺失证据：collector 失败、权限限制、ROM 限制。
+5. 缺失证据：collector 失败、权限限制、ROM 限制、隐私模式裁剪。
 6. 治理建议：owner hint、版本分布、设备分布、回滚建议。
 ```
 
-- [ ] **步骤 2：最终扫描计划覆盖**
+- [x] **步骤 2：最终扫描计划覆盖**
 
 运行：
 
@@ -4148,7 +4150,7 @@ rg -n "单阶段 P[0]|P[1]/P[2].*不[纳]入|能力可[以]省略" docs/superpow
 
 预期：无结果。若有结果，必须改为“阶段一到阶段四分阶段覆盖，全量能力均在本计划内”。
 
-- [ ] **步骤 3：提交服务端协议和计划修订**
+- [x] **步骤 3：提交服务端协议和计划修订**
 
 运行：
 
@@ -4158,6 +4160,14 @@ git commit -m "完善 ANR SDK 全量实施计划和服务端协议"
 ```
 
 预期：提交成功。
+
+**执行记录（2026-06-07）：**
+- 计划审查：任务 20 原模板把 `PROCESS_IO_PRESSURE` 和 `EXTERNAL_SYSTEM_LOAD` 放在“归因码”中；当前 SDK 端侧枚举没有这两个值，因此本次修订为“端侧归因码 + 服务端派生维度”，避免服务端按不存在的端侧字段消费。
+- RED：新增 `FullAcceptanceMatrixTest.serverConsumptionProtocolCoversContractAndDesignTraceability`，运行 `./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.acceptance.FullAcceptanceMatrixTest` 失败，原因是 `docs-anr/102-ANR监控SDK服务端消费协议.md` 缺失，失败符合预期。
+- GREEN：新增 `docs-anr/102-ANR监控SDK服务端消费协议.md`，覆盖协议边界、JSON 字段映射、聚类维度、报告页面、隐私权限、01 到 05 全量设计追溯和验收口径。
+- 覆盖扫描：`rg -n "单阶段 P[0]|P[1]/P[2].*不[纳]入|能力可[以]省略" docs/superpowers/plans/2026-06-05-anr-monitor-sdk-full.md` 无结果，说明计划没有重新出现阶段裁剪口径。
+- 验证：定向 `FullAcceptanceMatrixTest` PASS。
+- 验证：最终 `./gradlew :anr-monitor-sdk:testDebugUnitTest`、`./gradlew :anr-monitor-sdk:compileDebugKotlin`、`./gradlew :app:assembleDebug` 均 PASS。
 
 ## 最终验证命令
 
