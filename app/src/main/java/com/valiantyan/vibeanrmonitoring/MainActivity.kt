@@ -8,14 +8,14 @@ import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 
 /**
- * ANR SDK 示例入口，提供阶段一验收所需的主线程慢消息、消息风暴和 SP apply 场景。
+ * ANR SDK 示例入口，提供全量验收所需的主线程慢消息、消息风暴、SP apply 和等待类场景。
  */
 class MainActivity : AppCompatActivity() {
     // 主线程 Handler，用于构造大量 pending message 的验收场景。
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
 
     /**
-     * 初始化三个 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
+     * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
     override fun onCreate(savedInstanceState: Bundle?): Unit {
         super.onCreate(savedInstanceState)
@@ -28,6 +28,12 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.spApplyButton).setOnClickListener {
             writeSharedPreferencesBurst()
+        }
+        findViewById<Button>(R.id.currentBusyButton).setOnClickListener {
+            runBusyLoop()
+        }
+        findViewById<Button>(R.id.binderLikeButton).setOnClickListener {
+            waitBinderLikeLock()
         }
     }
 
@@ -59,5 +65,23 @@ class MainActivity : AppCompatActivity() {
                 .apply()
         }
         Thread.sleep(4_000L)
+    }
+
+    // 主线程持续忙等，用于验收当前消息慢且 CPU 占用较高的场景。
+    private fun runBusyLoop(): Unit {
+        val endAt: Long = System.currentTimeMillis() + 6_000L
+        var ignoredValue: Double = 0.0
+        while (System.currentTimeMillis() < endAt) {
+            ignoredValue += Math.sqrt(42.0)
+        }
+        ignoredValue.toString()
+    }
+
+    // 模拟同步跨进程调用中的等待窗口，用于手动观察等待类主线程栈证据。
+    private fun waitBinderLikeLock(): Unit {
+        val lock: Any = Any()
+        synchronized(lock) {
+            Thread.sleep(6_000L)
+        }
     }
 }

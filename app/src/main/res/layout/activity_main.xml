@@ -25,4 +25,18 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="SharedPreferences Apply Burst" />
+
+    <Button
+        android:id="@+id/currentBusyButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Current Busy Loop" />
+
+    <Button
+        android:id="@+id/binderLikeButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Binder Like Wait" />
 </LinearLayout>

@@ -4016,10 +4016,11 @@ git commit -m "新增报告治理与 SDK 自监控"
 
 **文件：**
 - 创建： `docs-anr/101-ANR监控SDK全量验收记录.md`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/acceptance/FullAcceptanceMatrixTest.kt`
 - 修改： `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 - 修改： `app/src/main/res/layout/activity_main.xml`
 
-- [ ] **步骤 1：补充 demo 场景入口**
+- [x] **步骤 1：补充 demo 场景入口**
 
 在 `activity_main.xml` 中追加按钮：
 
@@ -4050,14 +4051,14 @@ private fun runBusyLoop(): Unit {
 }
 
 private fun waitBinderLikeLock(): Unit {
-    val lock = Object()
+    val lock: Any = Any()
     synchronized(lock) {
         Thread.sleep(6_000L)
     }
 }
 ```
 
-- [ ] **步骤 2：创建全量验收记录**
+- [x] **步骤 2：创建全量验收记录**
 
 创建 `docs-anr/101-ANR监控SDK全量验收记录.md`：
 
@@ -4086,7 +4087,7 @@ private fun waitBinderLikeLock(): Unit {
 全量 SDK 能力覆盖 01 到 05 文档的核心输入，阶段一到阶段四仅表示交付顺序，不表示范围裁剪。
 ```
 
-- [ ] **步骤 3：运行全量构建并提交**
+- [x] **步骤 3：运行全量构建并提交**
 
 运行：
 
@@ -4098,6 +4099,14 @@ git commit -m "新增 ANR SDK 全量场景验收"
 ```
 
 预期：测试和构建 PASS，提交成功。
+
+**执行记录（2026-06-07）：**
+- 计划审查：原任务只要求新增两个 demo 按钮和简版验收记录；为避免全量覆盖口径退化，先新增 `FullAcceptanceMatrixTest` 作为静态守护测试，检查 demo 入口、Activity 接线、全量验收文档、性能预算和构建命令。
+- RED：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.acceptance.FullAcceptanceMatrixTest` 失败，原因分别是 `docs-anr/101-ANR监控SDK全量验收记录.md` 缺失，以及 `currentBusyButton` / `binderLikeButton` 入口缺失，失败符合预期。
+- GREEN：`activity_main.xml` 新增 `Current Busy Loop` 与 `Binder Like Wait` 按钮；`MainActivity.kt` 新增 `runBusyLoop()` 和 `waitBinderLikeLock()`，其中锁对象使用 Kotlin `Any` 避免 `java.lang.Object` 编译告警；新增 `docs-anr/101-ANR监控SDK全量验收记录.md`，记录 01 到 05 全量能力矩阵、demo 入口、性能预算、隐私与风险验收。
+- 验证：定向 `FullAcceptanceMatrixTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
+- 验证：`./gradlew :app:assembleDebug` PASS。
 
 ### 任务 20：新增服务端消费协议和全量设计追溯
 
