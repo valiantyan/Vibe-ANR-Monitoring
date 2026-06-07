@@ -500,4 +500,61 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"binderThreadEvidence\":[\"com.example.Service.waitMainThread(Service.kt:10)\"]"))
         assertFalse(json.contains("\"confirmedDeadlock\":true"))
     }
+
+    /**
+     * SDK 自诊断需要输出隐私模式、缺失证据数量和自监指标，方便评审报告质量。
+     */
+    @Test
+    fun encodeIncludesSdkSelfMetricsAndPrivacyDiagnostics(): Unit {
+        val report: AnrReport = AnrReport(
+            schemaVersion = 1,
+            snapshot = AnrSnapshot(
+                eventId = "event-1",
+                eventType = AnrEventType.SUSPECT_ANR,
+                appId = "demo",
+                environment = "test",
+                timeUptimeMs = 123L,
+                currentMessage = null,
+                historyMessages = emptyList(),
+                pendingQueue = PendingQueueSnapshot.unavailable(
+                    maxDepth = 200,
+                    failureReason = "reflection failed",
+                ),
+                mainThreadStack = StackTraceSnapshot(
+                    stackId = "main",
+                    threadName = "main",
+                    frames = emptyList(),
+                ),
+            ),
+            attribution = AttributionResult(
+                primaryCode = AnrAttributionCode.UNKNOWN_INSUFFICIENT_EVIDENCE,
+                secondaryCodes = emptyList(),
+                confidence = Confidence.UNKNOWN,
+                evidenceItems = emptyList(),
+                missingEvidence = listOf("pending queue unavailable", "system trace unavailable"),
+                actionSuggestions = emptyList(),
+            ),
+            diagnostics = SdkDiagnostics(
+                pendingAvailable = false,
+                reportBuildCostMs = 12L,
+                collectorFailures = listOf("reflection failed"),
+                privacyMode = "STRICT",
+                missingEvidenceCount = 2,
+                selfMetrics = mapOf(
+                    "report_queue_enqueued" to 1L,
+                    "report_queue_failure" to 2L,
+                ),
+            ),
+        )
+
+        val json: String = AnrReportJsonEncoder().encode(report = report)
+
+        assertTrue(json.contains("\"sdkDiagnostics\""))
+        assertTrue(json.contains("\"privacyMode\":\"STRICT\""))
+        assertTrue(json.contains("\"missingEvidenceCount\":2"))
+        assertTrue(json.contains("\"selfMetrics\""))
+        assertTrue(json.contains("\"name\":\"report_queue_enqueued\""))
+        assertTrue(json.contains("\"count\":1"))
+        assertFalse(json.contains("system trace raw content"))
+    }
 }

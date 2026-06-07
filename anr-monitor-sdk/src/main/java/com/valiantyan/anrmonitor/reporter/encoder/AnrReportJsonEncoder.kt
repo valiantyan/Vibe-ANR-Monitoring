@@ -201,6 +201,9 @@ class AnrReportJsonEncoder {
             "\"pendingAvailable\":${diagnostics.pendingAvailable}",
             "\"reportBuildCostMs\":${diagnostics.reportBuildCostMs}",
             "\"collectorFailures\":${strings(values = diagnostics.collectorFailures)}",
+            "\"privacyMode\":${stringOrNull(value = diagnostics.privacyMode)}",
+            "\"missingEvidenceCount\":${diagnostics.missingEvidenceCount}",
+            "\"selfMetrics\":${selfMetrics(metrics = diagnostics.selfMetrics)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }
@@ -421,6 +424,19 @@ class AnrReportJsonEncoder {
             "\"processIoAvailable\":${availability.processIoAvailable}",
         )
         return "{${fields.joinToString(separator = ",")}}"
+    }
+
+    // 编码 SDK 自监计数指标，按名称排序保证报告 diff 稳定。
+    private fun selfMetrics(metrics: Map<String, Long>): String {
+        return metrics.entries
+            .sortedBy { entry: Map.Entry<String, Long> -> entry.key }
+            .joinToString(
+                separator = ",",
+                prefix = "[",
+                postfix = "]",
+            ) { entry: Map.Entry<String, Long> ->
+                "{\"name\":${string(value = entry.key)},\"count\":${entry.value}}"
+            }
     }
 
     // 编码长整型列表，供 Checktime 最近延迟窗口使用。

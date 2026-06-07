@@ -39,7 +39,12 @@ import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
 import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
 import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
+import com.valiantyan.anrmonitor.internal.diagnostics.SdkSelfMonitor
+import com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoder
 import com.valiantyan.anrmonitor.reporter.local.LocalAnrReportWriter
+import com.valiantyan.anrmonitor.reporter.retry.ReportEnqueueResult
+import com.valiantyan.anrmonitor.reporter.retry.ReportRetentionPolicy
+import com.valiantyan.anrmonitor.reporter.retry.ReportRetryQueue
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -63,6 +68,9 @@ internal class AnrMonitorRuntime(
 
     // Android uptime 时间源，统一支撑 collector 和报告成本统计。
     private val clock: AndroidClock = AndroidClock()
+
+    // SDK 自监控器，统一记录报告写入、治理和上传队列健康度。
+    private val sdkSelfMonitor: SdkSelfMonitor = SdkSelfMonitor()
 
     // 类名脱敏器，保证 collector 阶段就只输出安全类名。
     private val sanitizer: ClassNameSanitizer = ClassNameSanitizer(privacyMode = config.privacyMode)
@@ -134,10 +142,35 @@ internal class AnrMonitorRuntime(
     private val reportAssembler: AnrReportAssembler = AnrReportAssembler(
         config = config,
         clock = clock,
+        selfMonitor = sdkSelfMonitor,
     )
 
-    // 本地报告写入器，阶段一先保证报告可落盘排查。
-    private val localWriter: LocalAnrReportWriter = LocalAnrReportWriter(context = appContext)
+    // JSON 编码器由本地写入和上传重试队列共用，避免报告出口 schema 分叉。
+    private val reportEncoder: AnrReportJsonEncoder = AnrReportJsonEncoder()
+
+    // 本地报告保留策略，防止大量疑似事件导致 app 私有目录无限增长。
+    private val reportRetentionPolicy: ReportRetentionPolicy = ReportRetentionPolicy(
+        maxFileCount = config.reportRetentionMaxFileCount,
+        maxTotalBytes = config.reportRetentionMaxTotalBytes,
+        maxAgeMs = config.reportRetentionMaxAgeMs,
+    )
+
+    // 本地报告写入器，写入后会按保留策略清理历史报告。
+    private val localWriter: LocalAnrReportWriter = LocalAnrReportWriter(
+        context = appContext,
+        encoder = reportEncoder,
+        retentionPolicy = reportRetentionPolicy,
+        selfMonitor = sdkSelfMonitor,
+    )
+
+    // 报告上传重试队列，上传开关开启时负责采样、限频和 gzip payload。
+    private val reportRetryQueue: ReportRetryQueue = ReportRetryQueue(
+        sampleRate = config.normalizedSampleRate,
+        minEnqueueIntervalMs = config.reportUploadMinIntervalMs,
+        initialRetryDelayMs = config.reportRetryInitialDelayMs,
+        maxRetryDelayMs = config.reportRetryMaxDelayMs,
+        selfMonitor = sdkSelfMonitor,
+    )
 
     // 运行态开关，保证 start/stop 幂等。
     private val isRunning: AtomicBoolean = AtomicBoolean(false)
@@ -356,7 +389,21 @@ internal class AnrMonitorRuntime(
         if (!config.uploadEnabled) {
             return
         }
+        val fileName: String = "${report.snapshot.eventId}.json.gz"
+        val enqueueResult: ReportEnqueueResult = reportRetryQueue.enqueue(
+            fileName = fileName,
+            payloadText = reportEncoder.encode(report = report),
+            nowUptimeMs = clock.uptimeMillis(),
+        )
+        if (enqueueResult is ReportEnqueueResult.Skipped) {
+            return
+        }
         val result: UploadResult = uploader.upload(report = report)
+        reportRetryQueue.recordUploadResult(
+            fileName = fileName,
+            result = result,
+            nowUptimeMs = clock.uptimeMillis(),
+        )
         if (result is UploadResult.Failure) {
             listener.onMonitorError(error = IllegalStateException(result.reason))
         }

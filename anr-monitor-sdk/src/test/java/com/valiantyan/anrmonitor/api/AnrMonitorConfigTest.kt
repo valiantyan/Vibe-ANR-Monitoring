@@ -48,6 +48,12 @@ class AnrMonitorConfigTest {
         assertTrue(config.captureBinderEvidence)
         assertEquals(8, config.binderThreadMaxCount)
         assertEquals(20, config.binderThreadStackMaxFrames)
+        assertEquals(30, config.reportRetentionMaxFileCount)
+        assertEquals(10L * 1024L * 1024L, config.reportRetentionMaxTotalBytes)
+        assertEquals(7L * 24L * 60L * 60L * 1_000L, config.reportRetentionMaxAgeMs)
+        assertEquals(60_000L, config.reportUploadMinIntervalMs)
+        assertEquals(1_000L, config.reportRetryInitialDelayMs)
+        assertEquals(60_000L, config.reportRetryMaxDelayMs)
     }
 
     /**

@@ -3893,11 +3893,22 @@ git commit -m "新增 Binder 与跨进程阻塞疑似识别"
 
 **文件：**
 - 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/retry/ReportRetentionPolicyTest.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/retry/ReportRetryQueueTest.kt`
+- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/internal/diagnostics/SdkSelfMonitorTest.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/retry/ReportRetentionPolicy.kt`
+- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/retry/ReportQueueModels.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/retry/ReportRetryQueue.kt`
 - 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/diagnostics/SdkSelfMonitor.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitorConfig.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/SdkDiagnostics.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrMonitorRuntime.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrReportAssembler.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt`
+- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/local/LocalAnrReportWriter.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/api/AnrMonitorConfigTest.kt`
+- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoderTest.kt`
 
-- [ ] **步骤 1：编写失败的报告保留策略测试**
+- [x] **步骤 1：编写失败的报告保留策略测试**
 
 创建 `ReportRetentionPolicyTest.kt`：
 
@@ -3927,7 +3938,7 @@ class ReportRetentionPolicyTest {
 }
 ```
 
-- [ ] **步骤 2：新增报告治理实现**
+- [x] **步骤 2：新增报告治理实现**
 
 创建 `ReportRetentionPolicy.kt`：
 
@@ -3978,7 +3989,7 @@ class SdkSelfMonitor {
 }
 ```
 
-- [ ] **步骤 3：运行测试并提交**
+- [x] **步骤 3：运行测试并提交**
 
 运行：
 
@@ -3989,6 +4000,17 @@ git commit -m "新增报告治理与 SDK 自监控"
 ```
 
 预期：测试 PASS，提交成功。
+
+**执行记录（2026-06-07）：**
+- 计划审查：原计划样例只覆盖最大文件数和简单计数器；按文档复审要求补齐报告数量、总大小、保留时长、gzip 压缩、重试退避、采样、限频、隐私模式、缺失证据数量和 SDK 自监指标。
+- RED：先新增 `ReportRetentionPolicyTest`、`ReportRetryQueueTest`、`SdkSelfMonitorTest`，并扩展 `AnrReportJsonEncoderTest`、`AnrMonitorConfigTest`；定向测试因新增类型和字段缺失失败，失败符合预期。
+- GREEN：新增 `ReportRetentionPolicy`、`ReportQueueModels`、`ReportRetryQueue`、`SdkSelfMonitor`；扩展 `AnrMonitorConfig` 的本地报告治理和上传重试预算；`LocalAnrReportWriter` 写入后执行保留策略；`AnrMonitorRuntime` 接入共享 JSON 编码器、重试队列和自监；`SdkDiagnostics` 与 JSON 输出隐私模式、缺失证据数量和自监计数。
+- 结构复核：`ReportRetryQueue.kt` 首版超过 200 行后已拆分 `ReportQueueModels.kt`，重构后主文件 177 行。
+- 验证：定向 `:anr-monitor-sdk:testDebugUnitTest --tests ...ReportRetentionPolicyTest --tests ...ReportRetryQueueTest --tests ...SdkSelfMonitorTest --tests ...AnrReportJsonEncoderTest --tests ...AnrMonitorConfigTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
+- 验证：`./gradlew :anr-monitor-sdk:compileDebugKotlin` PASS。
+- 验证：`./gradlew :app:assembleDebug` PASS。
+- 验证：`git diff --check` PASS。
 
 ### 任务 19：新增全量场景测试矩阵和性能验收
 

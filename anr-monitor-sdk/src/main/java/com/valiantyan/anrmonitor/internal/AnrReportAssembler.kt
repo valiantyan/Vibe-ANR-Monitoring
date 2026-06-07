@@ -6,7 +6,9 @@ import com.valiantyan.anrmonitor.domain.analyzer.AttributionAnalyzer
 import com.valiantyan.anrmonitor.domain.analyzer.AttributionThresholds
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
+import com.valiantyan.anrmonitor.domain.model.AttributionResult
 import com.valiantyan.anrmonitor.domain.model.SdkDiagnostics
+import com.valiantyan.anrmonitor.internal.diagnostics.SdkSelfMonitor
 
 /**
  * 运行时报告拼装器，负责把现场快照转换为完整可落盘报告。
@@ -17,6 +19,7 @@ import com.valiantyan.anrmonitor.domain.model.SdkDiagnostics
 internal class AnrReportAssembler(
     config: AnrMonitorConfig,
     private val clock: Clock,
+    private val selfMonitor: SdkSelfMonitor? = null,
 ) {
     // 基础归因分析器，阈值来自宿主配置。
     private val analyzer: AttributionAnalyzer = AttributionAnalyzer(
@@ -25,6 +28,9 @@ internal class AnrReportAssembler(
             suspectAnrMs = config.suspectAnrMs,
         ),
     )
+
+    // 隐私模式记录到诊断字段，便于报告评审确认当前脱敏策略。
+    private val privacyModeName: String = config.privacyMode.name
 
     /**
      * 拼装完整报告并记录本次报告构建成本。
@@ -37,14 +43,23 @@ internal class AnrReportAssembler(
         snapshot: AnrSnapshot,
         buildStartMs: Long,
     ): AnrReport {
+        val attribution: AttributionResult = analyzer.analyze(snapshot = snapshot)
+        val reportBuildCostMs: Long = clock.uptimeMillis() - buildStartMs
+        selfMonitor?.recordCost(
+            name = "report_build_cost_ms",
+            costMs = reportBuildCostMs,
+        )
         return AnrReport(
             schemaVersion = 1,
             snapshot = snapshot,
-            attribution = analyzer.analyze(snapshot = snapshot),
+            attribution = attribution,
             diagnostics = SdkDiagnostics(
                 pendingAvailable = snapshot.pendingQueue.available,
-                reportBuildCostMs = clock.uptimeMillis() - buildStartMs,
+                reportBuildCostMs = reportBuildCostMs,
                 collectorFailures = collectorFailures(snapshot = snapshot),
+                privacyMode = privacyModeName,
+                missingEvidenceCount = attribution.missingEvidence.size,
+                selfMetrics = selfMonitor?.snapshotCounters().orEmpty(),
             ),
         )
     }

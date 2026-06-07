@@ -47,6 +47,12 @@ enum class AnrPrivacyMode {
  * @property captureBinderEvidence 是否采集 Binder 和跨进程阻塞疑似证据。
  * @property binderThreadMaxCount 单次报告最多读取的 Binder 线程数量。
  * @property binderThreadStackMaxFrames 单个 Binder 线程最多保留的栈帧数量。
+ * @property reportRetentionMaxFileCount 本地最多保留的报告数量。
+ * @property reportRetentionMaxTotalBytes 本地报告最多占用的总字节数。
+ * @property reportRetentionMaxAgeMs 本地报告最长保留时长。
+ * @property reportUploadMinIntervalMs 两次上报入队之间的最小间隔。
+ * @property reportRetryInitialDelayMs 上报失败后的首次重试延迟。
+ * @property reportRetryMaxDelayMs 上报失败后的最大重试延迟。
  * @property enableQueuedWorkBypass 是否启用 [android.app.QueuedWork] 绕过能力，默认关闭避免一致性风险。
  * @property queuedWorkBypassAllowedFiles 允许绕过的 SP 文件白名单。
  * @property queuedWorkBypassBlockedFiles 禁止绕过的 SP 文件黑名单。
@@ -83,6 +89,12 @@ data class AnrMonitorConfig(
     val captureBinderEvidence: Boolean = true,
     val binderThreadMaxCount: Int = 8,
     val binderThreadStackMaxFrames: Int = 20,
+    val reportRetentionMaxFileCount: Int = 30,
+    val reportRetentionMaxTotalBytes: Long = 10L * 1024L * 1024L,
+    val reportRetentionMaxAgeMs: Long = 7L * 24L * 60L * 60L * 1_000L,
+    val reportUploadMinIntervalMs: Long = 60_000L,
+    val reportRetryInitialDelayMs: Long = 1_000L,
+    val reportRetryMaxDelayMs: Long = 60_000L,
     val enableQueuedWorkBypass: Boolean = false,
     val queuedWorkBypassAllowedFiles: Set<String> = emptySet(),
     val queuedWorkBypassBlockedFiles: Set<String> = emptySet(),
