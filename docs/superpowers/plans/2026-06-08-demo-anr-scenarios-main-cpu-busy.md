@@ -317,7 +317,7 @@ git commit -m "接入主线程CPU忙等按钮"
 **Files:**
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 
-- [ ] **Step 1: Add current busy scenario instructions**
+- [x] **Step 1: Add current busy scenario instructions**
 
 In `docs-anr/103-ANR监控SDK使用说明.md`, add this subsection after the existing `### 当前消息慢场景` subsection:
 
@@ -345,7 +345,7 @@ In `docs-anr/103-ANR监控SDK使用说明.md`, add this subsection after the exi
 ```
 ````
 
-- [ ] **Step 2: 检查文档格式**
+- [x] **Step 2: 检查文档格式**
 
 Run:
 
@@ -355,7 +355,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md

@@ -679,6 +679,28 @@ Demo 页面按钮：
 本次报告是 Demo 当前慢消息场景触发的疑似 ANR。当前主线程消息执行时间超过 3000ms，主线程栈包含 CurrentSlowInputScenario.run，说明按钮点击消息被业务代码主动阻塞。Barrier 和 Binder 证据不构成本次主因，因此根因是主线程当前消息执行耗时过长。
 ```
 
+### 当前消息忙等场景
+
+这个场景用于验证“主线程不是在等待，而是在持续消耗 CPU”的当前消息慢问题。用户点击按钮后，按钮点击消息会在主线程执行 6 秒 busy loop。
+
+操作步骤：
+
+1. 安装并打开 debug Demo App。
+2. 点击“当前消息忙等”。
+3. 等待 logcat 出现 `suspect ANR captured` 和 `ANR report written`。
+4. 拉取最新 JSON 报告。
+5. 先看 `attribution.primary`，预期为 `CURRENT_MESSAGE_SLOW`。
+6. 再看 `mainThread.current.wallMs`，预期大于 `3000`。
+7. 再看 `mainThread.current.cpuMs`，它应明显高于 `当前消息慢` 的 sleep 场景。
+8. 再看 `threadCpu.topThreads`，预期主线程在 CPU 排名中更靠前。
+9. 最后看 `mainThread.stackFrames`，预期包含 `MainThreadCpuBusyScenario.run` 或 `DefaultCpuBusyAction.burn`。
+
+新人分析结论可以这样写：
+
+```text
+本次报告是 Demo 当前消息忙等场景触发的疑似 ANR。当前主线程消息执行时间超过 3000ms，同时当前消息 CPU 耗时和线程 CPU 证据都偏高，主线程栈包含 MainThreadCpuBusyScenario.run 或 DefaultCpuBusyAction.burn。Barrier 和 Binder 证据不构成本次主因，因此根因是点击回调在主线程持续计算，导致输入事件无法及时处理。
+```
+
 验证 `Sync Barrier 泄漏 ANR` 时，点击按钮后主线程会被故意卡住。为了触发系统 Input ANR，可以在按钮点击后继续点击屏幕；为了复核 SDK 报告，优先看以下字段：
 
 ```text
