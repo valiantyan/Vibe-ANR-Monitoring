@@ -212,7 +212,7 @@ git commit -m "实现主线程CPU忙等Demo场景"
 **Files:**
 - Modify: `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 
-- [ ] **Step 1: Add MainThreadCpuBusyScenario import**
+- [x] **Step 1: Add MainThreadCpuBusyScenario import**
 
 Modify `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt` imports from:
 
@@ -227,7 +227,7 @@ import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 ```
 
-- [ ] **Step 2: Add scenario field**
+- [x] **Step 2: Add scenario field**
 
 In `MainActivity`, add this property immediately after `currentSlowInputScenario`:
 
@@ -251,7 +251,7 @@ The surrounding code should become:
     }
 ```
 
-- [ ] **Step 3: Wire currentBusyButton**
+- [x] **Step 3: Wire currentBusyButton**
 
 In `MainActivity.onCreate`, replace:
 
@@ -269,7 +269,7 @@ with:
         }
 ```
 
-- [ ] **Step 4: Remove anonymous busy loop method**
+- [x] **Step 4: Remove anonymous busy loop method**
 
 Delete this method from `MainActivity`:
 
@@ -285,7 +285,7 @@ Delete this method from `MainActivity`:
     }
 ```
 
-- [ ] **Step 5: Run focused app tests**
+- [x] **Step 5: Run focused app tests**
 
 Run:
 
@@ -295,7 +295,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 6: Run app compile check**
+- [x] **Step 6: Run app compile check**
 
 Run:
 
@@ -305,7 +305,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt
