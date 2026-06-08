@@ -375,7 +375,7 @@ git commit -m "实现当前慢消息 Demo 场景"
 **Files:**
 - Modify: `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 
-- [ ] **Step 1: Modify MainActivity**
+- [x] **Step 1: Modify MainActivity**
 
 Replace the full content of `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt` with:
 
@@ -463,7 +463,7 @@ class MainActivity : AppCompatActivity() {
 }
 ```
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run:
 
@@ -473,7 +473,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 3: Run app compile check**
+- [x] **Step 3: Run app compile check**
 
 Run:
 
@@ -483,7 +483,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt

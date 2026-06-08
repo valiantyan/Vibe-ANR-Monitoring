@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
 
 /**
  * ANR SDK 示例入口，提供全量验收所需的主线程慢消息、消息风暴、忙等和等待类场景。
@@ -12,6 +13,9 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
     // 主线程 Handler，用于构造大量 pending message 的验收场景。
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
+
+    // 当前慢消息场景，用独立类承载根因入口，便于 JSON 栈中直接定位。
+    private val currentSlowInputScenario: CurrentSlowInputScenario = CurrentSlowInputScenario()
 
     // Sync Barrier 泄漏场景，单独封装反射和 token 记录逻辑。
     private val syncBarrierLeakScenario: SyncBarrierLeakScenario by lazy {
@@ -25,7 +29,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         findViewById<Button>(R.id.currentSlowButton).setOnClickListener {
-            blockMainThread()
+            currentSlowInputScenario.run()
         }
         findViewById<Button>(R.id.messageStormButton).setOnClickListener {
             postMessageStorm()
@@ -41,14 +45,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // 故意阻塞主线程，用于验证 Watchdog 疑似 ANR 捕获链路。
-    private fun blockMainThread(): Unit {
-        Thread.sleep(6_000L)
-    }
-
     // 快速投递大量主线程消息，用于验证 pending 队列和历史消息窗口。
     private fun postMessageStorm(): Unit {
-        repeat(times = 2_000) { index ->
+        repeat(times = 2_000) { index: Int ->
             mainHandler.post {
                 val ignoredValue: Int = index * index
                 ignoredValue.toString()
