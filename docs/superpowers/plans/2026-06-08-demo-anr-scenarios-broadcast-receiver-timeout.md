@@ -604,7 +604,7 @@ git commit -m "补充 BroadcastReceiver 超时验证说明"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Update scenario overview row**
+- [x] **Step 1: Update scenario overview row**
 
 In `docs-anr/105-Demo-ANR场景实现计划.md`, replace the BroadcastReceiver row:
 
@@ -618,7 +618,7 @@ with:
 | 6 | BroadcastReceiver 超时 | 点击“BroadcastReceiver 超时”后发送显式应用内广播，Receiver 主线程阻塞 12 秒 | Broadcast 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `BroadcastTimeoutReceiver.onReceive`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 ```
 
-- [ ] **Step 2: Add sixth batch section**
+- [x] **Step 2: Add sixth batch section**
 
 Add this section after the fourth batch section and before “后续批次顺序”:
 
@@ -653,7 +653,7 @@ Add this section after the fourth batch section and before “后续批次顺序
 - [ ] 如果系统确认 ANR，JSON 中 `systemAnr.anrType` 为 `BROADCAST_FOREGROUND` 或 `BROADCAST_BACKGROUND`。
 ```
 
-- [ ] **Step 3: Update remaining roadmap sentence**
+- [x] **Step 3: Update remaining roadmap sentence**
 
 Replace:
 
@@ -667,7 +667,7 @@ with:
 后续按锁等待、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。
 ```
 
-- [ ] **Step 4: Check doc formatting**
+- [x] **Step 4: Check doc formatting**
 
 Run:
 
@@ -677,7 +677,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md

@@ -18,7 +18,7 @@
 | 3 | 消息风暴 | 点击“消息风暴”后投递大量同类主线程消息 | `MESSAGE_STORM` | `attribution.evidence`、`pendingQueue.messages` 重复 `MessageStormHandler` / `StormRunnable`、`MessageStormScenario.run` | 已验收 |
 | 4 | Sync Barrier 泄漏 / nativePollOnce | 点击按钮反射插入 Sync Barrier 且故意不移除 | `SYNC_BARRIER_STUCK` | `pendingQueue.messages[0].isBarrierLike=true`、`barrierEvidence.alignedWithPendingBarrier=true`、`nativePollOnceRecords` | 已验收 |
 | 5 | 主线程锁等待 | 子线程持锁，主线程等待锁 | 当前慢消息加等待栈证据 | `mainThread.stackFrames` 中锁等待业务帧 | 待实现 |
-| 6 | BroadcastReceiver 超时 | 发送显式广播，Receiver 阻塞 | Broadcast 组件超时 | `systemAnr.anrType`、Receiver 相关 ActivityThread 消息 | 待实现 |
+| 6 | BroadcastReceiver 超时 | 点击“BroadcastReceiver 超时”后发送显式应用内广播，Receiver 主线程阻塞 12 秒 | Broadcast 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `BroadcastTimeoutReceiver.onReceive`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 7 | Service 超时 | 启动阻塞 Service | Service 组件超时 | `systemAnr.anrType`、Service 相关 ActivityThread 消息 | 待实现 |
 | 8 | ContentProvider 阻塞 | 查询阻塞 Provider | Provider 组件阻塞 | Provider 调用栈和系统组件证据 | 待实现 |
 | 9 | Binder 跨进程阻塞 | 主进程调用远端阻塞服务 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected`、主线程 Binder 栈 | 待实现 |
@@ -249,6 +249,35 @@ barrierEvidence.stuckTokens = []
 - [x] JSON 中 `barrierEvidence.alignedWithPendingBarrier=true`。
 - [x] JSON 中 `barrierEvidence.stuckTokens[].postStack` 能定位到 `SyncBarrierLeakScenario.run`。
 
+## 第六批次：BroadcastReceiver 超时
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“BroadcastReceiver 超时”。
+4. 等待 12 秒左右，直到日志出现 `suspect ANR captured`、`confirmed ANR report` 或 `ANR report written`。
+5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `mainThread.stackFrames`，预期包含 `BroadcastTimeoutReceiver.onReceive`，这是业务根因入口。再看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。如果系统已经确认 ANR，再看 `systemAnr.anrType`，预期为 `BROADCAST_FOREGROUND` 或 `BROADCAST_BACKGROUND`；`componentTimeoutMs` 应与前台 10 秒或后台 60 秒广播阈值匹配。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `binderBlock.suspected` 不应该为 true。
+- 如果只看到 `systemAnr.anrType=BROADCAST_*`，但主线程栈不包含 `BroadcastTimeoutReceiver.onReceive`，需要继续对照 `history` 和 `stackSamples`，不能只凭系统组件类型下业务根因结论。
+
+### 验收记录
+
+- [ ] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenarioTest` 通过。
+- [ ] `./gradlew :app:compileDebugKotlin :app:mergeDebugResources` 通过。
+- [ ] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
+- [ ] 真机或模拟器点击“BroadcastReceiver 超时”后生成 JSON。
+- [ ] JSON 中 `mainThread.stackFrames` 能定位到 `BroadcastTimeoutReceiver.onReceive`。
+- [ ] 如果系统确认 ANR，JSON 中 `systemAnr.anrType` 为 `BROADCAST_FOREGROUND` 或 `BROADCAST_BACKGROUND`。
+
 ## 后续批次顺序
 
-后续按锁等待、Broadcast、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
+后续按锁等待、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
