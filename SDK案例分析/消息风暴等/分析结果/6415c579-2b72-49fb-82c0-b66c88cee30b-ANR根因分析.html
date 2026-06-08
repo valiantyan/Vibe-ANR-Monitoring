@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>6415c579 ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      line-height: 1.3;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    h2 {
+      margin-top: 28px;
+      font-size: 22px;
+      border-left: 4px solid var(--primary);
+      padding-left: 10px;
+    }
+
+    h3 {
+      margin-top: 22px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f9;
+      color: #24334d;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    ul {
+      padding-left: 22px;
+    }
+
+    .subtitle {
+      color: #d6e4ff;
+      max-width: 920px;
+      margin-top: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06);
+    }
+
+    .result {
+      border-left: 5px solid var(--danger);
+    }
+
+    .evidence {
+      border-left: 5px solid var(--primary);
+    }
+
+    .exclude {
+      border-left: 5px solid var(--ok);
+    }
+
+    .warn {
+      border-left: 5px solid var(--warn);
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .badge-danger {
+      background: #fee4e2;
+      color: var(--danger);
+    }
+
+    .badge-warn {
+      background: #fff4d6;
+      color: var(--warn);
+    }
+
+    .badge-ok {
+      background: #dcfae6;
+      color: var(--ok);
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 14px 0;
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .step-number {
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .quote {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：消息风暴</h1>
+    <p class="subtitle">分析对象：<code>6415c579-2b72-49fb-82c0-b66c88cee30b.json</code>。本次报告的重点是确认主线程是否被大量重复消息淹没，并判断这些重复消息是否才是输入响应变慢的真正原因。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>最终结论</h2>
+        <p><span class="badge badge-danger">根因</span>点击“消息风暴”后，Demo 向主线程队列一次性投递了大量相同任务，导致队列中堆积 80 条 <code>MessageStormHandler / StormRunnable</code> 消息。主线程当前点击消息尚未结束，后续输入、动画和 Watchdog 消息被延迟处理，因此触发疑似 ANR。</p>
+      </div>
+      <div class="card evidence">
+        <h2>最关键证据</h2>
+        <p><code>attribution.primary = MESSAGE_STORM</code></p>
+        <p><code>attribution.evidence</code> 中出现 <code>pending repeated target count=80</code>。</p>
+        <p><code>pendingQueue.messages</code> 中同类 <code>MessageStormScenario$MessageStormHandler</code> 和 <code>MessageStormScenario$StormRunnable</code> 共 80 条。</p>
+      </div>
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p>本次不是 Sync Barrier 泄漏：<code>barrierEvidence.stuckTokens = []</code>。</p>
+        <p>本次不是 Binder 卡死：<code>binderBlock.suspected = false</code>。</p>
+        <p>本次没有系统级确认 ANR：<code>systemAnr.isConfirmedAnr = false</code>，适合作为 SDK 疑似 ANR 现场分析。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>一页看懂</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>问题</th>
+            <th>本次 JSON 中的答案</th>
+            <th>怎么理解</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>这是不是系统已经弹框确认的 ANR？</td>
+            <td><code>systemAnr.isConfirmedAnr = false</code></td>
+            <td>不是系统最终 ANR 文件，而是 SDK 在卡顿窗口中捕获的疑似 ANR 现场。</td>
+          </tr>
+          <tr>
+            <td>SDK 认为主因是什么？</td>
+            <td><code>attribution.primary = MESSAGE_STORM</code></td>
+            <td>SDK 判断主线程消息队列中存在大量重复消息，优先按消息风暴排查。</td>
+          </tr>
+          <tr>
+            <td>重复消息有多少？</td>
+            <td><code>pending repeated target count=80</code></td>
+            <td>同一种 Handler / Runnable 重复出现 80 次，已经足够造成队列拥塞。</td>
+          </tr>
+          <tr>
+            <td>当前主线程在处理什么？</td>
+            <td><code>View$PerformClick</code>，<code>wallMs = 3488</code></td>
+            <td>用户点击回调执行期间，后续消息开始堆积，点击消息已经持续约 3.5 秒。</td>
+          </tr>
+          <tr>
+            <td>队列最久被阻塞多久？</td>
+            <td><code>pendingQueue.messages[0].blockedMs = 3471</code></td>
+            <td>队列里已有消息等待了约 3.47 秒，说明主线程响应已经明显变慢。</td>
+          </tr>
+          <tr>
+            <td>是否有 Barrier 卡住同步消息？</td>
+            <td><code>stuckTokens = []</code>，<code>alignedWithPendingBarrier = false</code></td>
+            <td>没有未移除的 Sync Barrier 证据，不按 Barrier 泄漏处理。</td>
+          </tr>
+          <tr>
+            <td>是否像 Binder 等待？</td>
+            <td><code>binderBlock.suspected = false</code></td>
+            <td>主线程没有落在 Binder 调用阻塞证据上，Binder 不是本次主因。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>一步一步定位根因</h2>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>先看报告身份</h3>
+          <p>打开 <code>event</code> 节点，确认本次事件 ID 是 <code>6415c579-2b72-49fb-82c0-b66c88cee30b</code>，事件类型是 <code>SUSPECT_ANR</code>，环境是 <code>debug</code>。</p>
+          <p>这说明它是 SDK 主动捕获的疑似 ANR 现场，不是系统最终确认后的完整 ANR 结论。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>再看 SDK 给出的优先方向</h3>
+          <p>打开 <code>attribution</code> 节点，最重要的是这三项：</p>
+          <pre>{
+  "primary": "MESSAGE_STORM",
+  "confidence": "MEDIUM",
+  "evidence": [
+    "pending repeated target count=80",
+    "top thread RenderThread cpu=1150ms"
+  ]
+}</pre>
+          <p><code>primary</code> 已经指向消息风暴；<code>confidence = MEDIUM</code> 表示证据足够形成排查结论，但仍建议结合 Pending 队列具体内容验证。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>确认主线程当前卡在哪条消息上</h3>
+          <p>打开 <code>mainThread.current</code>，看到当前消息是一次点击分发：</p>
+          <table>
+            <tbody>
+              <tr>
+                <th>字段</th>
+                <th>值</th>
+              </tr>
+              <tr>
+                <td><code>targetClass</code></td>
+                <td><code>android.view.ViewRootImpl$ViewRootHandler</code></td>
+              </tr>
+              <tr>
+                <td><code>callbackClass</code></td>
+                <td><code>android.view.View$PerformClick@f06dfb7</code></td>
+              </tr>
+              <tr>
+                <td><code>wallMs</code></td>
+                <td><code>3488</code> ms</td>
+              </tr>
+              <tr>
+                <td><code>cpuMs</code></td>
+                <td><code>0</code> ms</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>这一步只能说明“点击消息执行时间过长”。它还不能单独证明根因，因为慢可能来自点击回调内部阻塞，也可能来自点击时投递了大量后续消息。下一步必须看 Pending 队列。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>打开 Pending 队列找重复消息</h3>
+          <p><code>pendingQueue.available = true</code>，说明 SDK 成功抓到了主线程消息队列。队列中总共有 <code>85</code> 条消息，其中同类 Demo 消息占 <code>80</code> 条。</p>
+          <table>
+            <thead>
+              <tr>
+                <th>重复消息</th>
+                <th>数量</th>
+                <th>含义</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>MessageStormScenario$MessageStormHandler</code> + <code>MessageStormScenario$StormRunnable</code></td>
+                <td><code>80</code></td>
+                <td>同一个场景向主线程连续投递大量同类 Runnable，形成消息风暴。</td>
+              </tr>
+              <tr>
+                <td><code>RenderNodeAnimator</code></td>
+                <td><code>2</code></td>
+                <td>动画相关消息也被排在后面等待，但数量少，不是主因。</td>
+              </tr>
+              <tr>
+                <td><code>View$UnsetPressedState</code></td>
+                <td><code>1</code></td>
+                <td>按钮按压态恢复消息已经等待约 3.47 秒，说明 UI 响应被拖慢。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>这里是根因判断的核心：不是某条系统消息自己特别慢，而是业务侧在一次点击后把大量重复任务塞进主线程队列，导致后续消息排队等待。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <h3>用 blockedMs 判断影响范围</h3>
+          <p>Pending 队列第一条消息 <code>blockedMs = 3471</code>，同类风暴消息的 <code>blockedMs</code> 也集中在约 <code>3468</code> ms。</p>
+          <p>这表示这些消息早该执行，却因为主线程当前消息没有结束而持续等待。用户体感上会表现为点击后界面无响应、按压态迟迟不恢复、动画和后续输入延迟。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div>
+          <h3>排除 Barrier、Binder、系统资源等干扰项</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>排查项</th>
+                <th>JSON 证据</th>
+                <th>结论</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Sync Barrier 泄漏</td>
+                <td><code>stuckTokens = []</code>，<code>nativePollOnceRecords = []</code></td>
+                <td>没有 Barrier 卡住同步消息的证据。</td>
+              </tr>
+              <tr>
+                <td>Binder 阻塞</td>
+                <td><code>suspected = false</code>，<code>mainThreadInBinder = false</code></td>
+                <td>没有主线程 Binder 等待或 Binder 线程反等主线程的证据。</td>
+              </tr>
+              <tr>
+                <td>系统调度抖动</td>
+                <td><code>checktime.maxDelayMs = 2</code>，<code>severeDelayCount = 0</code></td>
+                <td>SDK 自身检测线程没有明显调度延迟，问题更偏向应用主线程队列。</td>
+              </tr>
+              <tr>
+                <td>低内存或存储问题</td>
+                <td>可用内存约 <code>3.66GB</code>，可用存储约 <code>183GB</code></td>
+                <td>没有明显低内存或存储耗尽信号。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>根因链路</h2>
+      <div class="quote">
+        <p>用户点击“消息风暴”按钮后，点击回调进入 <code>View$PerformClick</code>。该回调触发 Demo 场景向主线程队列投递 80 条 <code>MessageStormScenario$StormRunnable</code>。采集时，当前点击消息已经执行约 3488 ms，队列中已有消息等待约 3471 ms。Pending 队列重复目标数量达到 80，且 Barrier、Binder、系统调度和资源证据均不支持其他主因。因此，本次 ANR 根因是主线程消息风暴。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>修复方案</h2>
+      <h3>1. 不要无限或批量向主线程投递重复任务</h3>
+      <p>如果某个 UI 更新、状态刷新、埋点 flush 或列表刷新可能被频繁触发，先判断队列中是否已经存在同类任务。已有任务未执行时，不再重复投递。</p>
+      <pre>if (!hasPendingRefresh) {
+  hasPendingRefresh = true
+  mainHandler.post {
+    hasPendingRefresh = false
+    refreshUi()
+  }
+}</pre>
+
+      <h3>2. 对高频触发入口做防抖或节流</h3>
+      <p>点击、搜索输入、滑动监听、传感器回调、生命周期连发等入口，不能每次都直接 <code>Handler.post</code>。需要把短时间内的重复触发合并成一次。</p>
+      <pre>mainHandler.removeCallbacks(refreshRunnable)
+mainHandler.postDelayed(refreshRunnable, 300)</pre>
+
+      <h3>3. 把可拆分的重任务移出主线程</h3>
+      <p>主线程只做最终 UI 提交。数据计算、批量遍历、IO、解析、排序、压缩等工作放到后台线程，完成后只投递一次 UI 更新。</p>
+
+      <h3>4. 页面销毁或场景切换时清理旧消息</h3>
+      <p>Activity / Fragment 销毁、列表数据源切换、任务取消时，要清理已经无效的 callbacks 或 messages，避免旧任务继续排队占用主线程。</p>
+      <pre>override fun onDestroy() {
+  mainHandler.removeCallbacksAndMessages(ownerToken)
+  super.onDestroy()
+}</pre>
+
+      <h3>5. 对真实业务增加队列治理指标</h3>
+      <p>建议在 SDK 或业务侧补充同类消息数量、单入口投递次数、去重命中率、队列清理次数等指标。线上看到 <code>MESSAGE_STORM</code> 后，可以快速定位是哪一个业务入口在重复投递。</p>
+    </section>
+
+    <section>
+      <h2>复查清单</h2>
+      <ul>
+        <li>再次复现后，<code>attribution.primary</code> 不应继续稳定出现 <code>MESSAGE_STORM</code>。</li>
+        <li><code>pendingQueue.messages</code> 中同类业务 Handler / Runnable 数量应明显下降，最好保持个位数。</li>
+        <li><code>mainThread.current.wallMs</code> 应低于输入事件疑似 ANR 阈值。</li>
+        <li><code>barrierEvidence</code> 和 <code>binderBlock</code> 继续无异常，避免修复过程中引入新的阻塞类型。</li>
+        <li>真实业务修复后，要确认 UI 状态仍然正确，不能因为去重或防抖漏掉最后一次用户操作。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>可以直接写进问题单的结论</h2>
+      <pre>根因：点击“消息风暴”后，业务代码向主线程队列重复投递 80 条 MessageStormScenario$StormRunnable，导致主线程消息队列拥塞。采集时当前 View$PerformClick 已执行约 3488 ms，队列中消息最长等待约 3471 ms。Barrier、Binder、系统调度和资源证据均未显示为主因，因此本次 ANR 归因为主线程消息风暴。
+
+修复建议：对该入口的 Handler.post / sendMessage 增加去重、防抖或节流；页面销毁或任务取消时清理无效 callbacks；重计算或批处理移到后台线程，主线程只保留一次最终 UI 更新。</pre>
+    </section>
+
+    <p class="muted">生成时间：2026-06-08。源文件：<code>SDK案例分析/消息风暴等/JSON/6415c579-2b72-49fb-82c0-b66c88cee30b.json</code>。</p>
+  </main>
+</body>
+</html>
