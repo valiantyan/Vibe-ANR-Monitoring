@@ -9,4 +9,5 @@
     <string name="demo_binder_like_lock">Binder 模拟等待</string>
     <string name="demo_sync_barrier_leak">Sync Barrier 泄漏 ANR</string>
     <string name="demo_broadcast_timeout">BroadcastReceiver 超时</string>
+    <string name="demo_service_timeout">Service 超时</string>
 </resources>

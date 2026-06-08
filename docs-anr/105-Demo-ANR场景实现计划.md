@@ -19,7 +19,7 @@
 | 4 | Sync Barrier 泄漏 / nativePollOnce | 点击按钮反射插入 Sync Barrier 且故意不移除 | `SYNC_BARRIER_STUCK` | `pendingQueue.messages[0].isBarrierLike=true`、`barrierEvidence.alignedWithPendingBarrier=true`、`nativePollOnceRecords` | 已验收 |
 | 5 | 主线程锁等待 | 子线程持锁，主线程等待锁 | 当前慢消息加等待栈证据 | `mainThread.stackFrames` 中锁等待业务帧 | 待实现 |
 | 6 | BroadcastReceiver 超时 | 点击“BroadcastReceiver 超时”后发送显式应用内广播，Receiver 主线程阻塞 12 秒 | Broadcast 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `BroadcastTimeoutReceiver.onReceive`、`mainThread.current.wallMs` | 已实现，待手动验收 |
-| 7 | Service 超时 | 启动阻塞 Service | Service 组件超时 | `systemAnr.anrType`、Service 相关 ActivityThread 消息 | 待实现 |
+| 7 | Service 超时 | 点击“Service 超时”后启动显式应用内 Service，`onStartCommand()` 主线程阻塞 25 秒 | Service 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 8 | ContentProvider 阻塞 | 查询阻塞 Provider | Provider 组件阻塞 | Provider 调用栈和系统组件证据 | 待实现 |
 | 9 | Binder 跨进程阻塞 | 主进程调用远端阻塞服务 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected`、主线程 Binder 栈 | 待实现 |
 | 10 | 主线程 IO/数据库阻塞 | 主线程执行慢 IO 或慢查询 | `CURRENT_MESSAGE_SLOW` | IO/DB 业务栈、当前消息耗时 | 待实现 |
@@ -323,6 +323,89 @@ barrierEvidence.stuckTokens = []
 
 验收结论：BroadcastReceiver 超时场景验收通过。SDK 能捕获疑似 ANR，JSON 能把系统广播组件状态和业务 Receiver 阻塞入口分开表达。本次系统尚未确认 ANR，因此 `systemAnr.anrType=UNKNOWN`、`componentTimeoutMs=null` 属于可接受结果；业务根因可以明确写为“`BroadcastTimeoutReceiver.onReceive` 在主线程执行耗时阻塞，导致 ActivityThread Receiver 消息执行超过疑似 ANR 阈值”。
 
+## 第七批次：Service 超时
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“Service 超时”。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+5. 如果要验证系统确认 Service ANR，继续等待 20 秒以上并查看系统 ANR traces。
+6. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `event.eventType`，确认 SDK 已经生成疑似或确认报告。再看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。接着看 `mainThread.current.targetClass`，通常应包含 `ActivityThread$H`，说明阻塞发生在系统组件调度消息内。最后看 `mainThread.stackFrames`，应能看到 `ServiceTimeoutService.onStartCommand` 和 `ServiceTimeoutBlocker.block`，说明业务根因入口是 Service 生命周期回调。
+
+如果 `systemAnr.isConfirmedAnr=true` 且 `systemAnr.anrType=SERVICE`，说明系统也确认了 Service 组件超时。如果 `systemAnr.isConfirmedAnr=false`，仍可先根据 SDK 疑似 ANR 报告定位业务根因，因为 SDK 阈值比系统 Service 超时阈值更早触发。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `binderBlock.suspected` 不应该为 true。
+- 如果主线程栈只看到按钮点击入口而没有 `ServiceTimeoutService.onStartCommand`，优先检查是否点错按钮，或 Service 是否没有在 Manifest 中注册成功。
+
+### 首次验收记录
+
+验收时间：2026-06-08 19:52 CST
+
+验收设备：`emulator-5554`
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 logcat -c
+adb -s emulator-5554 shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity
+adb -s emulator-5554 shell uiautomator dump /sdcard/window.xml
+adb -s emulator-5554 shell input tap 540 1716
+adb -s emulator-5554 logcat -d -s VibeAnrApplication
+adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/5fbba9e4-cdbd-466a-aa03-dc22ec1ddf19.json
+```
+
+关键日志：
+
+```text
+W VibeAnrApplication: suspect ANR captured: 5fbba9e4-cdbd-466a-aa03-dc22ec1ddf19
+W VibeAnrApplication: ANR report written: 5fbba9e4-cdbd-466a-aa03-dc22ec1ddf19
+```
+
+关键 JSON 字段：
+
+```text
+event.eventType = SUSPECT_ANR
+attribution.primary = CURRENT_MESSAGE_SLOW
+attribution.confidence = LOW
+systemAnr.isConfirmedAnr = false
+systemAnr.anrType = UNKNOWN
+systemAnr.componentTimeoutMs = null
+mainThread.current.what = 115
+mainThread.current.wallMs = 3198
+mainThread.current.cpuMs = 0
+mainThread.current.targetClass = android.app.ActivityThread$H
+mainThread.stackFrames contains ServiceTimeoutService.onStartCommand
+mainThread.stackFrames contains ServiceTimeoutBlocker.block
+pendingQueue.available = true
+barrierEvidence.stuckTokens = []
+binderBlock.suspected = false
+```
+
+验收清单：
+
+- [x] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
+- [x] 真机或模拟器点击“Service 超时”后生成 JSON。
+- [x] JSON 中 `mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`。
+- [x] JSON 中 `mainThread.current.wallMs >= 3000`。
+- [x] Barrier 和 Binder 证据均不是本次主因。
+- [ ] 如果系统已确认 ANR，`systemAnr.anrType=SERVICE`。
+
+本次采样先命中 SDK 疑似 ANR 阈值，系统尚未确认 Service ANR；业务根因仍可由 `ServiceTimeoutService.onStartCommand` 和当前消息耗时确定。
+
+验收结论：Service 超时场景验收通过。SDK 能捕获疑似 ANR，JSON 能把系统 Service 组件调度和业务 Service 阻塞入口分开表达；根因可以明确写为“`ServiceTimeoutService.onStartCommand` 在主线程执行耗时阻塞，导致 Service 生命周期回调无法及时返回”。
+
 ## 后续批次顺序
 
-后续按锁等待、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
+后续按锁等待、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。

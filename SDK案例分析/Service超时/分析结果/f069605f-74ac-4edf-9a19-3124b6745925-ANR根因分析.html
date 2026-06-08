@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>f069605f ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      line-height: 1.3;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    h2 {
+      margin-top: 28px;
+      font-size: 22px;
+      border-left: 4px solid var(--primary);
+      padding-left: 10px;
+    }
+
+    h3 {
+      margin-top: 22px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f9;
+      color: #24334d;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    ul {
+      padding-left: 22px;
+    }
+
+    .subtitle {
+      color: #d6e4ff;
+      max-width: 960px;
+      margin-top: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06);
+    }
+
+    .result {
+      border-left: 5px solid var(--danger);
+    }
+
+    .evidence {
+      border-left: 5px solid var(--primary);
+    }
+
+    .exclude {
+      border-left: 5px solid var(--ok);
+    }
+
+    .warn {
+      border-left: 5px solid var(--warn);
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .badge-danger {
+      background: #fee4e2;
+      color: var(--danger);
+    }
+
+    .badge-warn {
+      background: #fff4d6;
+      color: var(--warn);
+    }
+
+    .badge-ok {
+      background: #dcfae6;
+      color: var(--ok);
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 14px 0;
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .step-number {
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .quote {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：Service 超时</h1>
+    <p class="subtitle">分析对象：<code>f069605f-74ac-4edf-9a19-3124b6745925.json</code>。这份报告的重点是：不能只看 <code>attribution.primary</code>，要用主线程当前消息和主线程栈复核 SDK 摘要。本次最可信的业务根因是 <code>ServiceTimeoutService.onStartCommand()</code> 在主线程执行阻塞。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>最终结论</h2>
+        <p><span class="badge badge-danger">根因</span>应用内显式 Service 被启动后，<code>ServiceTimeoutService.onStartCommand()</code> 在主线程执行阻塞逻辑，内部调用 <code>Thread.sleep()</code>，导致 <code>ActivityThread</code> 的 Service 分发消息长时间无法结束。</p>
+        <p>直接阻塞位置是 <code>ServiceTimeoutBlocker$ThreadSleepBlockingAction.block(ServiceTimeoutBlocker.kt:27)</code>，业务入口是 <code>ServiceTimeoutService.onStartCommand(ServiceTimeoutService.kt:33)</code>。</p>
+      </div>
+
+      <div class="card evidence">
+        <h2>最关键证据</h2>
+        <p><span class="badge badge-warn">当前消息</span><code>mainThread.current.targetClass = android.app.ActivityThread$H</code>，<code>what = 115</code>，并且 <code>isCriticalComponent = true</code>。</p>
+        <p><span class="badge badge-warn">耗时</span><code>mainThread.current.wallMs = 3375ms</code>，超过 Demo 的疑似 ANR 阈值。</p>
+        <p><span class="badge badge-warn">主线程栈</span>栈中明确出现 <code>ServiceTimeoutService.onStartCommand</code>、<code>ServiceTimeoutBlocker.block</code> 和 <code>Thread.sleep</code>。</p>
+      </div>
+
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p><span class="badge badge-ok">非 Binder</span><code>binderBlock.suspected = false</code></p>
+        <p><span class="badge badge-ok">非 CPU 忙等</span><code>mainThread.current.cpuMs = 0</code>，主线程更像睡眠或等待，不是持续计算。</p>
+        <p><span class="badge badge-ok">非已确认系统 ANR</span><code>systemAnr.isConfirmedAnr = false</code>，这是一份 SDK 提前抓到的疑似 ANR 现场。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>目录</h2>
+      <table>
+        <tr>
+          <th>阅读顺序</th>
+          <th>JSON 节点</th>
+          <th>本次要回答的问题</th>
+        </tr>
+        <tr>
+          <td>1</td>
+          <td><code>event</code></td>
+          <td>这份报告是谁、什么时候生成的，属于疑似 ANR 还是系统确认 ANR。</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><code>systemAnr</code></td>
+          <td>系统有没有确认 Service ANR。</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><code>attribution</code></td>
+          <td>SDK 初始摘要是什么，是否需要复核。</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><code>mainThread.current</code>、<code>mainThread.stackFrames</code></td>
+          <td>主线程当时正在处理哪类消息，业务栈卡在哪里。</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><code>pendingQueue</code>、<code>barrierEvidence</code></td>
+          <td>队列里的 Barrier 是否真的是本次根因。</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td><code>binderBlock</code>、<code>threadCpu</code>、<code>checktime</code></td>
+          <td>排除 Binder、CPU 竞争和系统调度干扰。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>1. 先确认报告类型</h2>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>值</th>
+          <th>怎么理解</th>
+        </tr>
+        <tr>
+          <td><code>event.eventId</code></td>
+          <td><code>f069605f-74ac-4edf-9a19-3124b6745925</code></td>
+          <td>本次报告唯一 ID，后续查文件、查日志都用它。</td>
+        </tr>
+        <tr>
+          <td><code>event.eventType</code></td>
+          <td><code>SUSPECT_ANR</code></td>
+          <td>SDK 提前抓到疑似 ANR，不等同于系统已经弹 ANR 对话框。</td>
+        </tr>
+        <tr>
+          <td><code>event.appId</code></td>
+          <td><code>vibe-anr-demo</code></td>
+          <td>来自 Demo App。</td>
+        </tr>
+        <tr>
+          <td><code>event.environment</code></td>
+          <td><code>debug</code></td>
+          <td>调试环境，阈值通常比线上更容易触发，适合复现场景。</td>
+        </tr>
+      </table>
+      <p>第一步结论：这是一份 Demo 环境下的疑似 ANR 报告。不能因为系统还没确认就忽略它，疑似阶段的主线程栈往往更接近真实阻塞现场。</p>
+    </section>
+
+    <section>
+      <h2>2. 看系统是否确认 Service ANR</h2>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>值</th>
+          <th>怎么理解</th>
+        </tr>
+        <tr>
+          <td><code>systemAnr.available</code></td>
+          <td><code>true</code></td>
+          <td>系统 ANR 信息采集能力可用。</td>
+        </tr>
+        <tr>
+          <td><code>systemAnr.isConfirmedAnr</code></td>
+          <td><code>false</code></td>
+          <td>采集时系统还没有确认 ANR。</td>
+        </tr>
+        <tr>
+          <td><code>systemAnr.anrType</code></td>
+          <td><code>UNKNOWN</code></td>
+          <td>没有拿到系统侧的 <code>SERVICE</code> 类型。</td>
+        </tr>
+        <tr>
+          <td><code>systemAnr.componentTimeoutMs</code></td>
+          <td><code>null</code></td>
+          <td>没有系统组件阈值信息。</td>
+        </tr>
+      </table>
+      <p>第二步结论：这份 JSON 不能证明“系统已经确认 Service ANR”。它证明的是：SDK 在系统确认前抓到了 Service 生命周期回调阻塞现场。分析根因时要继续看 <code>mainThread</code>。</p>
+    </section>
+
+    <section>
+      <h2>3. 看 SDK 摘要，但不要停在摘要</h2>
+      <div class="card warn">
+        <h3>本次有一个摘要误导点</h3>
+        <p><code>attribution.primary = SYNC_BARRIER_STUCK</code>，置信度是 <code>HIGH</code>。如果只看这一行，容易写成“Sync Barrier 泄漏导致 ANR”。但这份报告里的主线程栈明确在 Service 的 <code>onStartCommand()</code> 中睡眠，Barrier 专项证据又不完整，所以不能把 Barrier 当成本次业务根因。</p>
+      </div>
+
+      <table>
+        <tr>
+          <th>摘要字段</th>
+          <th>值</th>
+          <th>复核结论</th>
+        </tr>
+        <tr>
+          <td><code>attribution.primary</code></td>
+          <td><code>SYNC_BARRIER_STUCK</code></td>
+          <td>需要下钻复核。它来自 Pending 队头像 Barrier，但还不能覆盖主线程栈证据。</td>
+        </tr>
+        <tr>
+          <td><code>attribution.evidence[0]</code></td>
+          <td><code>pending queue head is Sync Barrier</code></td>
+          <td>说明队头消息形态像 Barrier，是一个需要检查的信号。</td>
+        </tr>
+        <tr>
+          <td><code>attribution.evidence[2]</code></td>
+          <td><code>nativePollOnce infiniteWaitCount=0 alignedWithPendingBarrier=false</code></td>
+          <td>这里反而说明 nativePollOnce 与 Barrier 没有对齐，削弱 Barrier 根因。</td>
+        </tr>
+        <tr>
+          <td><code>attribution.suggestions</code></td>
+          <td>检查 Sync Barrier 配对</td>
+          <td>本次不应作为第一修复方向；应优先修复 Service 主线程阻塞。</td>
+        </tr>
+      </table>
+      <p>第三步结论：SDK 摘要给了一个需要复核的方向，但主线程栈和 Barrier 细节不支持把 Barrier 写成最终根因。本次分析必须以主线程现场为准。</p>
+    </section>
+
+    <section>
+      <h2>4. 看主线程当前消息</h2>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>值</th>
+          <th>怎么理解</th>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.kind</code></td>
+          <td><code>CURRENT</code></td>
+          <td>采集时主线程确实有一条正在 dispatch 且尚未结束的消息。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.targetClass</code></td>
+          <td><code>android.app.ActivityThread$H</code></td>
+          <td>这是 Android 主线程处理应用组件生命周期和组件消息的 Handler。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.what</code></td>
+          <td><code>115</code></td>
+          <td>结合栈里的 <code>ActivityThread.handleServiceArgs</code>，可以判断当前正在处理 Service 启动参数分发。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.isCriticalComponent</code></td>
+          <td><code>true</code></td>
+          <td>这是关键组件消息，长时间不结束可能触发组件超时。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.wallMs</code></td>
+          <td><code>3375ms</code></td>
+          <td>当前消息已经执行 3.3 秒，超过 Demo 的疑似 ANR 阈值。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.cpuMs</code></td>
+          <td><code>0ms</code></td>
+          <td>主线程不是在持续计算，而是在睡眠或等待。</td>
+        </tr>
+      </table>
+      <p>第四步结论：问题发生在一条 <code>ActivityThread$H</code> 关键组件消息里，当前消息已经超时，且不是 CPU 忙等。</p>
+    </section>
+
+    <section>
+      <h2>5. 看主线程栈，定位业务根因</h2>
+      <p>主线程栈是本次最有价值的证据。读栈时从上往下看：顶部是当前卡住的位置，往下能看到是谁调用到这里。</p>
+      <pre><code>java.lang.Thread.sleep(Native Method)
+java.lang.Thread.sleep(Thread.java:450)
+java.lang.Thread.sleep(Thread.java:355)
+com.valiantyan.vibeanrmonitoring.scenario.ServiceTimeoutBlocker$ThreadSleepBlockingAction.block(ServiceTimeoutBlocker.kt:27)
+com.valiantyan.vibeanrmonitoring.scenario.ServiceTimeoutBlocker.block(ServiceTimeoutBlocker.kt:17)
+com.valiantyan.vibeanrmonitoring.ServiceTimeoutService.onStartCommand(ServiceTimeoutService.kt:33)
+android.app.ActivityThread.handleServiceArgs(ActivityThread.java:4840)
+android.app.ActivityThread$H.handleMessage(ActivityThread.java:2249)
+android.os.Handler.dispatchMessage(Handler.java:106)
+android.os.Looper.loopOnce(Looper.java:233)</code></pre>
+
+      <table>
+        <tr>
+          <th>栈帧</th>
+          <th>说明</th>
+        </tr>
+        <tr>
+          <td><code>Thread.sleep</code></td>
+          <td>主线程当前正在睡眠等待，直接导致消息无法结束。</td>
+        </tr>
+        <tr>
+          <td><code>ServiceTimeoutBlocker.block</code></td>
+          <td>Demo 场景中的阻塞器，说明这是主动构造的 Service 阻塞。</td>
+        </tr>
+        <tr>
+          <td><code>ServiceTimeoutService.onStartCommand</code></td>
+          <td>业务根因入口。Service 的 <code>onStartCommand()</code> 在主线程执行了耗时逻辑。</td>
+        </tr>
+        <tr>
+          <td><code>ActivityThread.handleServiceArgs</code></td>
+          <td>系统正在把启动参数分发给应用内 Service。</td>
+        </tr>
+      </table>
+      <p>第五步结论：根因已经可以落到代码位置。阻塞不是发生在普通点击回调，也不是后台线程，而是发生在 Service 的 <code>onStartCommand()</code> 主线程路径里。</p>
+    </section>
+
+    <section>
+      <h2>6. 复核 Pending 队列和 Barrier 干扰项</h2>
+      <p>这份报告里 <code>pendingQueue.messages[0]</code> 看起来像 Sync Barrier，所以必须单独解释，否则新人很容易被 <code>attribution.primary</code> 带偏。</p>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>值</th>
+          <th>怎么理解</th>
+        </tr>
+        <tr>
+          <td><code>pendingQueue.messages[0].isBarrierLike</code></td>
+          <td><code>true</code></td>
+          <td>队头消息形态像 Barrier，这是 SDK 摘要判断 Barrier 的来源。</td>
+        </tr>
+        <tr>
+          <td><code>pendingQueue.messages[0].blockedMs</code></td>
+          <td><code>3369ms</code></td>
+          <td>它已经过期 3.3 秒未执行，但这和当前 Service 阻塞时间高度重叠。</td>
+        </tr>
+        <tr>
+          <td><code>pendingQueue.messages[1].targetClass</code></td>
+          <td><code>android.view.GestureDetector$GestureHandler</code></td>
+          <td>队列里已经有输入手势相关消息被拖住，但它是后果，不是根因。</td>
+        </tr>
+        <tr>
+          <td><code>barrierEvidence.stuckTokens</code></td>
+          <td><code>[]</code></td>
+          <td>没有观察到未移除的 Barrier token。</td>
+        </tr>
+        <tr>
+          <td><code>barrierEvidence.alignedWithPendingBarrier</code></td>
+          <td><code>false</code></td>
+          <td>Barrier 证据没有和 Pending 队头对齐。</td>
+        </tr>
+        <tr>
+          <td><code>barrierEvidence.nativePollOnceRecords</code></td>
+          <td><code>[]</code></td>
+          <td>没有 nativePollOnce 无限等待记录。</td>
+        </tr>
+      </table>
+      <div class="quote">
+        <strong>判断口径：</strong>只有“主线程栈停在 <code>nativePollOnce</code> + 队头 Barrier + stuck token 未移除 + Barrier 与 nativePollOnce 对齐”同时成立时，才适合把 Sync Barrier 写成主因。本次主线程栈不在 <code>nativePollOnce</code>，而是在 <code>Thread.sleep -> ServiceTimeoutService.onStartCommand</code>，所以 Barrier 只能作为现场中的干扰信号。
+      </div>
+    </section>
+
+    <section>
+      <h2>7. 排除 Binder、CPU 和系统调度</h2>
+      <table>
+        <tr>
+          <th>节点</th>
+          <th>关键值</th>
+          <th>结论</th>
+        </tr>
+        <tr>
+          <td><code>binderBlock</code></td>
+          <td><code>suspected=false</code>、<code>mainThreadInBinder=false</code></td>
+          <td>没有证据表明主线程卡在 Binder 或跨进程调用。</td>
+        </tr>
+        <tr>
+          <td><code>threadCpu</code></td>
+          <td>Top 线程是 <code>RenderThread</code>，CPU 约 <code>1150ms</code></td>
+          <td>存在渲染线程 CPU 消耗，但主线程 <code>cpuMs=0</code>，不能解释 Service 生命周期回调卡住。</td>
+        </tr>
+        <tr>
+          <td><code>checktime</code></td>
+          <td><code>maxDelayMs=2</code>、<code>severeDelayCount=0</code></td>
+          <td>Watchdog 自身调度没有明显延迟，本次采集时间可信。</td>
+        </tr>
+        <tr>
+          <td><code>environmentSnapshot</code></td>
+          <td>可用内存约 3.5GB，存储可用约 183GB</td>
+          <td>没有低内存、存储不足等外部环境异常证据。</td>
+        </tr>
+      </table>
+      <p>第七步结论：Binder、CPU 竞争、Watchdog 调度和设备资源都不是本次优先根因。最直接的证据仍然是 Service 生命周期回调中的主线程睡眠。</p>
+    </section>
+
+    <section>
+      <h2>8. 给新人看的完整推理链</h2>
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <strong>先看报告类型：</strong><code>eventType=SUSPECT_ANR</code>，说明这是 SDK 提前抓到的疑似 ANR，不是系统已经确认的最终 ANR。
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <strong>再看系统确认：</strong><code>systemAnr.isConfirmedAnr=false</code>，所以不要写“系统已确认 Service ANR”，只能写“SDK 捕获到疑似 ANR 现场”。
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <strong>复核 SDK 摘要：</strong><code>attribution.primary=SYNC_BARRIER_STUCK</code> 是一个提示，但它必须被主线程栈验证。本次验证后发现它不是最终根因。
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <strong>看当前消息：</strong><code>ActivityThread$H what=115</code> 表示主线程正在处理系统组件消息；结合栈可知是 Service 参数分发。
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <strong>看主线程栈：</strong>栈顶是 <code>Thread.sleep</code>，业务入口是 <code>ServiceTimeoutService.onStartCommand</code>。这一步已经能定位到具体代码。
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">6</div>
+        <div>
+          <strong>排除干扰项：</strong><code>barrierEvidence.stuckTokens=[]</code>、<code>binderBlock.suspected=false</code>、<code>cpuMs=0</code>，说明不要把锅甩给 Barrier、Binder 或 CPU 忙等。
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>9. 修复方案</h2>
+      <h3>直接修复</h3>
+      <ul>
+        <li>不要在 <code>Service.onStartCommand()</code>、<code>onCreate()</code>、<code>onBind()</code> 等 Service 生命周期回调里执行 <code>Thread.sleep()</code>、同步网络请求、同步磁盘 I/O、长锁等待或大计算。</li>
+        <li><code>onStartCommand()</code> 只做参数校验、任务入队和快速返回。耗时任务放到后台线程、协程 <code>Dispatchers.IO</code>、<code>Executor</code>、<code>WorkManager</code> 或 <code>JobScheduler</code>。</li>
+        <li>如果必须前台长期运行，使用前台服务并尽快调用 <code>startForeground()</code>，但这不代表可以在主线程做耗时任务。</li>
+      </ul>
+
+      <h3>代码层检查清单</h3>
+      <table>
+        <tr>
+          <th>检查点</th>
+          <th>应该怎么改</th>
+        </tr>
+        <tr>
+          <td><code>onStartCommand()</code> 里有睡眠、等待、同步 I/O</td>
+          <td>移动到后台执行，只保留轻量调度逻辑。</td>
+        </tr>
+        <tr>
+          <td>主线程等待后台任务结果，例如 <code>Future.get()</code>、<code>CountDownLatch.await()</code></td>
+          <td>改成异步回调或状态流转，不要阻塞主线程等结果。</td>
+        </tr>
+        <tr>
+          <td>Service 和 Activity/Receiver 之间有锁互等</td>
+          <td>缩小锁范围，避免主线程进入长时间同步块。</td>
+        </tr>
+        <tr>
+          <td>任务需要系统保障执行</td>
+          <td>优先评估 <code>WorkManager</code> 或 <code>JobScheduler</code>，不要靠 Service 主线程硬扛。</td>
+        </tr>
+      </table>
+
+      <h3>修复后如何验证</h3>
+      <ul>
+        <li>再次点击 Demo 的“Service 超时”或业务中的对应入口，确认不会继续生成同类疑似 ANR 报告。</li>
+        <li>如果仍生成 JSON，重点看 <code>mainThread.stackFrames</code> 是否还出现 <code>ServiceTimeoutService.onStartCommand</code> 或业务 Service 的生命周期方法。</li>
+        <li>确认 <code>mainThread.current.wallMs</code> 不再持续超过阈值，Pending 队列中组件关键消息不再长时间堆积。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>10. 可以直接写进问题单的结论</h2>
+      <div class="quote">
+        <p><strong>根因：</strong>Service 启动后，主线程在 <code>ServiceTimeoutService.onStartCommand()</code> 中执行阻塞逻辑，调用链为 <code>ServiceTimeoutService.onStartCommand -> ServiceTimeoutBlocker.block -> Thread.sleep</code>。该 Service 生命周期消息由 <code>ActivityThread$H</code> 分发，采集时已执行 <code>3375ms</code> 且尚未结束，导致主线程无法继续处理后续消息。</p>
+        <p><strong>排除：</strong>虽然 Pending 队头存在疑似 Sync Barrier，但 <code>barrierEvidence.stuckTokens=[]</code>、<code>alignedWithPendingBarrier=false</code>、<code>nativePollOnceRecords=[]</code>，且主线程栈不在 <code>nativePollOnce</code>，所以 Barrier 不是本次主因。<code>binderBlock.suspected=false</code>，主线程 <code>cpuMs=0</code>，也不支持 Binder 阻塞或 CPU 忙等。</p>
+        <p><strong>修复：</strong>将 Service 生命周期回调中的耗时逻辑移到后台线程或任务调度框架中，<code>onStartCommand()</code> 只做轻量入队并快速返回。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>11. 本次 JSON 关键字段速查</h2>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>值</th>
+          <th>作用</th>
+        </tr>
+        <tr>
+          <td><code>event.eventId</code></td>
+          <td><code>f069605f-74ac-4edf-9a19-3124b6745925</code></td>
+          <td>报告唯一 ID。</td>
+        </tr>
+        <tr>
+          <td><code>event.eventType</code></td>
+          <td><code>SUSPECT_ANR</code></td>
+          <td>SDK 疑似 ANR。</td>
+        </tr>
+        <tr>
+          <td><code>systemAnr.isConfirmedAnr</code></td>
+          <td><code>false</code></td>
+          <td>系统尚未确认。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.what</code></td>
+          <td><code>115</code></td>
+          <td>Service 参数分发相关的 <code>ActivityThread$H</code> 消息。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.wallMs</code></td>
+          <td><code>3375</code></td>
+          <td>当前消息已运行时长。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.cpuMs</code></td>
+          <td><code>0</code></td>
+          <td>不是 CPU 忙等。</td>
+        </tr>
+        <tr>
+          <td><code>mainThread.stackFrames</code></td>
+          <td><code>Thread.sleep -> ServiceTimeoutService.onStartCommand</code></td>
+          <td>定位根因代码入口。</td>
+        </tr>
+        <tr>
+          <td><code>barrierEvidence.stuckTokens</code></td>
+          <td><code>[]</code></td>
+          <td>没有 Barrier token 泄漏证据。</td>
+        </tr>
+        <tr>
+          <td><code>binderBlock.suspected</code></td>
+          <td><code>false</code></td>
+          <td>不支持 Binder 阻塞。</td>
+        </tr>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

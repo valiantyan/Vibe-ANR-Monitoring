@@ -46,4 +46,11 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="@string/demo_broadcast_timeout" />
+
+    <Button
+        android:id="@+id/serviceTimeoutButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/demo_service_timeout" />
 </LinearLayout>

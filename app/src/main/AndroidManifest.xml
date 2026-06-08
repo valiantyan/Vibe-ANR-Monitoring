@@ -25,6 +25,10 @@
             android:name=".BarrierLeakService"
             android:exported="false" />
 
+        <service
+            android:name=".ServiceTimeoutService"
+            android:exported="false" />
+
         <receiver
             android:name=".BroadcastTimeoutReceiver"
             android:exported="false">

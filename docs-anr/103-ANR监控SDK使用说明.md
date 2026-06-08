@@ -651,6 +651,7 @@ Demo 页面按钮：
 | `Binder 模拟等待` | 模拟等待类窗口 | 主线程等待栈、Binder suspected 相关复核入口 |
 | `Sync Barrier 泄漏 ANR` | 反射插入 Sync Barrier 并故意不移除 | `SYNC_BARRIER_STUCK`、队头 `isBarrierLike=true`、`stuckTokens` token 对齐 |
 | `BroadcastReceiver 超时` | 发送显式应用内广播，Receiver 主线程阻塞 12 秒 | `systemAnr.anrType=BROADCAST_*`、`BroadcastTimeoutReceiver.onReceive`、当前消息耗时 |
+| `Service 超时` | 启动显式应用内 Service，`onStartCommand()` 主线程阻塞 25 秒 | `mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`、`systemAnr.anrType=SERVICE` 或 Service 相关 ActivityThread 消息 |
 
 验证步骤：
 
@@ -840,6 +841,50 @@ binderBlock.suspected = false
 - 必须异步处理时使用 `goAsync()` 获取 `PendingResult`，把耗时工作切到后台线程，并确保所有分支都会调用 `finish()`。
 - 前台广播按 10 秒预算看待，实际业务应远低于该阈值，建议把主线程 Receiver 执行控制在数百毫秒内。
 - 如果广播只是应用内事件，优先考虑更明确的进程内事件分发或后台任务，不要用 Receiver 承载复杂业务。
+
+### Service 超时场景
+
+这个场景用于验证：如果 Service 生命周期回调在主线程执行耗时逻辑，SDK 是否能把根因定位到具体 Service，而不是只看到系统组件超时。
+
+操作步骤：
+
+1. 安装 Debug 包并打开 Demo App。
+2. 点击“Service 超时”。
+3. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+4. 如果想等待系统确认 Service ANR，可以继续等待到 20 秒以上；不同系统版本可能会直接弹 ANR 对话框，也可能只留下系统 traces。
+5. 从设备拉取最新 JSON：
+
+```bash
+adb shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.JSON > service-timeout.json
+```
+
+重点看这些字段：
+
+| 字段 | 期望现象 | 含义 |
+| --- | --- | --- |
+| `event.eventType` | `SUSPECT_ANR` 或 `CONFIRMED_ANR` | SDK 已经捕获到 ANR 现场 |
+| `mainThread.current.wallMs` | 大于 `3000`，如果等待更久可能超过 `20000` | 主线程当前消息执行时间过长 |
+| `mainThread.current.targetClass` | 通常包含 `android.app.ActivityThread$H` | 当前阻塞发生在系统组件调度消息内 |
+| `mainThread.stackFrames` | 包含 `ServiceTimeoutService.onStartCommand` 和 `ServiceTimeoutBlocker.block` | 业务根因入口是 Service 生命周期回调中阻塞 |
+| `systemAnr.anrType` | 如果系统已确认，期望为 `SERVICE` | 系统侧确认这是 Service 组件超时 |
+| `barrierEvidence.stuckTokens` | 空数组或不是主因 | 排除 Sync Barrier 泄漏 |
+| `binderBlock.suspected` | `false` | 排除 Binder / 跨进程阻塞 |
+
+判断结论模板：
+
+```text
+本次 ANR 是 Service 生命周期执行超时。系统侧证据是 systemAnr.anrType 命中 SERVICE，或者主线程当前消息为 ActivityThread Service 组件调度；业务根因证据是主线程栈包含 ServiceTimeoutService.onStartCommand，当前消息执行时间超过阈值。Barrier 和 Binder 证据不构成本次主因，因此根因是 Service 在主线程生命周期回调中执行了耗时阻塞逻辑。
+```
+
+如果 `systemAnr.isConfirmedAnr=false`，不要直接否定这份报告。Debug 配置下 SDK 会在 3 秒左右先生成疑似 ANR，而系统 Service 超时确认通常更晚。此时先按 `mainThread.stackFrames` 和 `mainThread.current` 定位业务根因，再结合系统 traces 或后续确认报告复核组件类型。
+
+修复方向：
+
+- 不要在 `onCreate()`、`onStartCommand()`、`onBind()`、`onDestroy()` 中执行长时间阻塞、同步 IO、同步网络、锁等待或大计算。
+- Service 收到启动请求后只做参数校验、状态切换和任务分发，把耗时工作交给后台线程、协程、WorkManager、JobScheduler 或前台服务中的后台执行链路。
+- 如果必须等待后台任务结果，应改成异步回调或状态通知，不要让主线程等待 `Future.get()`、`CountDownLatch.await()`、`Thread.sleep()` 或长时间 synchronized 锁。
+- 修复后重新点击“Service 超时”按钮验证：`mainThread.stackFrames` 不应再出现业务 Service 阻塞栈，`mainThread.current.wallMs` 应低于疑似 ANR 阈值。
 
 ## 9. 线上接入清单
 

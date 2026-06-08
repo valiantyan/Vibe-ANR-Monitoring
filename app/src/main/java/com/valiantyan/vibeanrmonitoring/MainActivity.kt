@@ -7,6 +7,7 @@ import com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenario
 import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
+import com.valiantyan.vibeanrmonitoring.scenario.ServiceTimeoutScenario
 import com.valiantyan.vibeanrmonitoring.scenario.SyncBarrierLeakScenario
 
 /**
@@ -32,6 +33,11 @@ class MainActivity : AppCompatActivity() {
         BroadcastTimeoutScenario(context = this)
     }
 
+    // Service 超时场景，按钮只负责启动 Service，真正阻塞入口在 Service。
+    private val serviceTimeoutScenario: ServiceTimeoutScenario by lazy {
+        ServiceTimeoutScenario(context = this)
+    }
+
     /**
      * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
@@ -55,6 +61,9 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.broadcastTimeoutButton).setOnClickListener {
             broadcastTimeoutScenario.run()
+        }
+        findViewById<Button>(R.id.serviceTimeoutButton).setOnClickListener {
+            serviceTimeoutScenario.run()
         }
     }
 
