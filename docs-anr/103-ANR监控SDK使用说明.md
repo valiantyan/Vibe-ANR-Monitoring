@@ -209,6 +209,262 @@ adb shell run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/
 adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<eventId>.json > anr-report.json
 ```
 
+### 6.1 JSON 报告目录
+
+ANR 报告可以按“一本书”来读。不要把它看成一大坨字段，而是先看目录，知道每一章负责回答什么问题：
+
+```text
+anr-report.json
+├── schemaVersion          报告协议版本
+├── event                  封面：这份报告是谁、何时、在哪个环境生成的
+├── attribution            摘要：SDK 对本次问题的主因判断、置信度和建议
+├── systemAnr              系统结论：Android 系统是否也确认了 ANR
+├── mainThread             主线程现场：当前消息、历史消息、主线程栈、慢消息采样
+│   ├── current            当前正在执行但还没结束的主线程消息
+│   ├── history            最近已经执行完的主线程消息
+│   ├── stackFrames        疑似 ANR 时刻的主线程栈
+│   └── stackSamples       慢消息期间多次采样到的栈
+├── pendingQueue           排队现场：主线程后面还堵着哪些消息
+│   └── messages           Pending 消息列表，按队列顺序排列
+├── barrierEvidence        Barrier 专项：同步屏障和 nativePollOnce 证据
+├── binderBlock            Binder 专项：跨进程等待或 Binder 阻塞疑似证据
+├── threadCpu              CPU 专项：进程内线程 CPU 排名
+├── checktime              Watchdog 自检：监控线程是否也被系统调度拖慢
+├── environmentSnapshot    外部环境：内存、存储、I/O、设备、ROM 信息
+└── sdkDiagnostics         SDK 自检：采集失败、构建耗时、隐私模式、自身指标
+```
+
+每一章的阅读价值如下：
+
+| 报告章节 | 它回答的问题 | 新人阅读方式 |
+| --- | --- | --- |
+| `event` | 这份报告的 ID、环境、发生时间是什么 | 用来和日志、用户反馈、服务端记录对齐 |
+| `attribution` | SDK 认为主因是什么，可信度如何 | 第一眼先看这里，但不要只看这里下结论 |
+| `systemAnr` | 系统是否真正弹过/记录过 ANR | `true` 按系统 ANR 处理，`false` 按疑似 ANR 或严重卡顿治理 |
+| `mainThread` | 主线程当时正在执行什么、卡在哪里 | 最关键章节，定位业务代码入口主要靠它 |
+| `pendingQueue` | 主线程后面排了多少消息，是否大量重复或被 Barrier 挡住 | 用来判断消息风暴、队列堆积、Barrier 风险 |
+| `barrierEvidence` | 是否存在同步屏障残留证据 | 只有证据可用且与 Pending 队列对齐时才适合判断 Barrier |
+| `binderBlock` | 是否疑似 Binder 或跨进程等待 | 为跨进程问题提供方向，不单独等同于根因 |
+| `threadCpu` | 哪些线程 CPU 占用高 | 区分等待类卡顿和 CPU 忙等/竞争 |
+| `checktime` | Watchdog 自己是否被系统拖慢 | 如果这里异常，说明报告结论需要更谨慎 |
+| `environmentSnapshot` | 当时设备资源是否异常 | 用来排除低内存、存储不足、I/O 异常等外部因素 |
+| `sdkDiagnostics` | SDK 哪些证据没采到、报告构建是否正常 | 用来解释为什么某些字段为空或不可用 |
+
+字段词典如下。这里解释的是“人工定位时需要理解的含义”，不是服务端协议的完整约束；服务端字段消费口径以 [102-ANR监控SDK服务端消费协议.md](./102-ANR监控SDK服务端消费协议.md) 为准。
+
+通用约定：
+
+| 字段形态 | 含义 |
+| --- | --- |
+| `available=false` | 这个采集器本次没有拿到有效证据，通常要结合 `failureReason` 看原因 |
+| `failureReason` | 采集失败或能力关闭原因；不为空时，不能用该节点反向证明问题不存在 |
+| `null` | 字段本次没有值，可能是未采集、未命中、系统未提供或当前阶段不适用 |
+| `*UptimeMs` | 设备启动后的相对时间，不是北京时间；适合比较同一份报告内的先后关系 |
+| `wallMs` | 墙钟耗时，也就是人感知到的等待时间 |
+| `cpuMs` | CPU 执行耗时；和 `wallMs` 对比可区分“等待阻塞”和“CPU 忙等” |
+
+`schemaVersion`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `schemaVersion` | JSON 报告协议版本 | 服务端或人工工具按版本解析；当前为 `1` |
+
+`event`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `eventId` | 本次报告唯一 ID | 用来和日志、上传记录、用户反馈对齐 |
+| `eventType` | 事件阶段，常见为 `SUSPECT_ANR` 或 `CONFIRMED_ANR` | 区分 SDK 疑似现场和系统确认 ANR |
+| `appId` | 接入方配置的应用标识 | 多业务、多 app 聚合时用于筛选 |
+| `environment` | 接入方配置的环境，例如 debug、gray、prod | 判断是否来自测试、灰度或线上 |
+| `timeUptimeMs` | 报告生成时的设备 uptime | 与主线程消息时间、Pending 时间做相对比较 |
+
+`systemAnr`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `available` | 系统 ANR 信息是否可用 | 不可用时只能按 SDK 疑似现场分析 |
+| `isConfirmedAnr` | Android 系统是否确认 ANR | `true` 优先按系统 ANR 处理；`false` 仍可能是严重卡顿 |
+| `anrType` | 系统组件类型，例如 `INPUT`、`SERVICE`、`BROADCAST_FOREGROUND`、`UNKNOWN` | 辅助判断对应系统阈值和业务入口 |
+| `componentTimeoutMs` | 组件对应超时阈值 | 用来解释为什么系统在该时间点确认 ANR |
+| `shortMsg` / `longMsg` | ActivityManager 的 ANR 文案 | 与系统日志、Bugreport 对齐 |
+| `condition` | 系统错误状态码 | 高级排查字段，一般结合系统日志看 |
+| `failureReason` | 系统信息采集失败原因 | 说明为什么系统 ANR 字段不可用 |
+
+`attribution`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `primary` | SDK 归因主因 | 第一眼先看，但必须结合主线程栈和辅助证据复核 |
+| `secondary` | SDK 归因辅因列表 | 说明除主因外还命中了哪些风险 |
+| `confidence` | 归因置信度：`HIGH`、`MEDIUM`、`LOW`、`UNKNOWN` | 置信度低时，结论要写“疑似”，不能写死 |
+| `evidence` | 支持归因的证据摘要 | 可直接放进问题分析结论 |
+| `missingEvidence` | 缺失的关键证据 | 说明为什么结论不够强，指导下一步补采 |
+| `suggestions` | SDK 给出的治理建议 | 作为修复方向参考，不替代业务代码分析 |
+
+`mainThread`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `stackId` | 当前主线程栈 ID | 和 `sampleStackIds`、`stackSamples` 做关联 |
+| `threadName` | 主线程线程名 | 正常一般是 `main`，可用于确认采样对象 |
+| `current` | 当前正在执行、尚未结束的主线程消息 | 当前消息慢的核心证据 |
+| `history` | 最近已经执行完成的主线程消息列表 | 用于判断历史慢消息，避免只看当前 Trace |
+| `stackFrames` | 疑似 ANR 时刻主线程 Java 栈 | 找第一个业务栈帧，定位代码入口 |
+| `stackSamples` | 慢消息期间采样到的栈集合 | 多次命中同一业务栈时，可信度更高 |
+
+`mainThread.current` 和 `mainThread.history[]` 中的消息属性：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `seq` | 主线程消息序号 | 对齐当前消息和历史消息顺序 |
+| `kind` | 消息类型，通常是 `CURRENT` 或 `HISTORY` | 区分当前未结束消息和已完成消息 |
+| `messageType` | 消息来源类型，例如 Looper dispatch | 了解消息来自哪条采集链路 |
+| `what` | Android `Message.what` | Handler 消息分类线索 |
+| `targetClass` | 处理该消息的 Handler 类 | 判断消息投递给系统还是业务 Handler |
+| `callbackClass` | Runnable、点击事件或回调类名 | 判断是否是点击、业务 Runnable、动画或帧消息 |
+| `isCriticalComponent` | 是否命中关键组件标记 | 系统/关键链路消息可优先关注 |
+| `startUptimeMs` / `endUptimeMs` | 消息开始和结束 uptime | 计算消息执行窗口；当前消息未结束时 `endUptimeMs=null` |
+| `wallMs` | 消息墙钟耗时 | 判断是否慢消息或疑似 ANR |
+| `cpuMs` | 消息 CPU 耗时 | 低 CPU 偏等待阻塞，高 CPU 偏忙等/重计算 |
+| `count` | 聚合计数 | 用于重复消息或聚合记录解释 |
+| `sampleStackIds` | 关联到 `stackSamples` 的栈 ID | 回查慢消息期间采样到的具体栈 |
+
+`mainThread.stackSamples[]`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `stackId` | 栈样本 ID | 与消息里的 `sampleStackIds` 对齐 |
+| `frames` | 该次采样的栈帧 | 多次出现的业务栈通常更值得优先排查 |
+| `hitCount` | 该栈样本命中次数 | 命中次数越多，说明主线程越稳定地卡在该位置 |
+
+`pendingQueue`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `available` | Pending 队列是否采集成功 | `false` 时不能判断消息风暴或 Barrier |
+| `truncated` | 队列是否被截断 | `true` 表示只采了前 `maxDepth` 条，数量判断要保守 |
+| `maxDepth` | 本次最多采集多少条 Pending 消息 | 解释为什么报告里只看到固定数量消息 |
+| `failureReason` | Pending 队列采集失败原因 | 常见原因是反射受限、ROM 差异或配置关闭 |
+| `messages` | 待执行消息列表，按队列顺序排列 | 判断队列头部阻塞、重复投递、同步屏障 |
+
+`pendingQueue.messages[]`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `index` | 消息在 Pending 队列中的位置 | 越靠前越先被主线程处理 |
+| `whenUptimeMs` | 消息计划执行时间 | 与当前 uptime 比较可判断已经延迟多久 |
+| `delayMs` | 距计划执行时间的差值 | 负数通常表示已经过期但仍未执行 |
+| `blockedMs` | 消息已被阻塞的时长 | 越高说明队列越久没有推进 |
+| `what` / `arg1` / `arg2` | Android Message 基础参数 | 辅助识别 Handler 消息类型 |
+| `targetClass` | 目标 Handler 类名 | 大量相同 target 可能是重复投递 |
+| `callbackClass` | Runnable 或回调类名 | 大量相同 callback 是消息风暴的重要线索 |
+| `objClass` | `Message.obj` 的类名，只输出类名不输出内容 | 保护隐私，同时保留类型线索 |
+| `isAsynchronous` | 是否异步消息 | Barrier 场景下异步消息可能绕过同步屏障 |
+| `isBarrierLike` | 是否像同步屏障消息 | 出现在队列头附近时，要结合 `barrierEvidence` |
+| `isCriticalComponent` | 是否关键组件消息 | 关键组件被堵时优先级更高 |
+
+`barrierEvidence`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `available` | Barrier 增强证据是否可用 | 默认可能关闭；不可用时不能直接判断 Barrier |
+| `failureReason` | Barrier 证据不可用原因 | 区分配置关闭、反射失败或无证据 |
+| `repeatedInfinitePollCount` | 连续无限等待 nativePollOnce 的次数 | 多次出现时说明 Looper 可能长时间无同步消息推进 |
+| `alignedWithPendingBarrier` | Barrier 证据是否与 Pending 队列头部屏障对齐 | 判断 Barrier 卡住时最关键的复核字段 |
+| `stuckTokens` | 疑似长时间未移除的 Barrier token | 找 token 生命周期和插入栈 |
+| `nativePollOnceRecords` | 最近 nativePollOnce 轮询记录 | 判断 Looper 是否在无限等待或仍在等待中 |
+
+`barrierEvidence.stuckTokens[]`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `token` | Barrier token | 标识具体同步屏障 |
+| `postUptimeMs` / `removeUptimeMs` | token 插入和移除时间 | `removeUptimeMs=null` 可能表示仍未移除 |
+| `aliveMs` | token 存活时长 | 超过阈值时支持 Barrier 残留判断 |
+| `postStack` | 插入 Barrier 时的调用栈 | 找是谁插入了屏障 |
+
+`barrierEvidence.nativePollOnceRecords[]`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `timeoutMillis` | nativePollOnce 等待超时参数 | 小于 0 代表无限等待 |
+| `enterUptimeMs` / `exitUptimeMs` | 进入和退出 nativePollOnce 的时间 | `exitUptimeMs=null` 表示采样时仍在等待 |
+| `durationMs` | 本次等待持续时间 | 持续时间长时支持 Looper 假死判断 |
+| `isInfiniteWait` | 是否无限等待 | Barrier 假死场景的重要线索 |
+| `isInFlight` | 是否仍在等待中 | 判断当前现场是否还卡在 nativePollOnce |
+
+`binderBlock`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `available` | Binder 证据是否可用 | 不可用时不能判断跨进程等待 |
+| `suspected` | 是否疑似 Binder 阻塞 | 只是疑似，需要结合栈和对端证据确认 |
+| `mainThreadInBinder` | 主线程栈是否命中 Binder 调用 | 主线程可能在等待跨进程返回 |
+| `binderThreadWaitsMain` | Binder 线程是否出现等待主线程迹象 | 支持进程内互等或跨线程等待判断 |
+| `mainThreadEvidence` | 主线程相关证据摘要 | 可写入问题结论 |
+| `binderThreadEvidence` | Binder 线程相关证据摘要 | 辅助排查服务端或对端进程 |
+| `failureReason` | Binder 证据采集失败原因 | 说明为什么本次没有 Binder 结论 |
+
+`threadCpu`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `topThreads` | 进程内 CPU 排名前几的线程 | 判断是否存在主线程忙等、业务线程抢 CPU、RenderThread 压力 |
+
+`threadCpu.topThreads[]`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `tid` | Linux 线程 ID | 和系统 trace、logcat 线程号对齐 |
+| `threadName` | 线程名 | 判断是 main、RenderThread、Binder 还是业务线程 |
+| `totalCpuMs` | 线程累计 CPU 时间 | 越高说明该线程在窗口内越忙 |
+
+`checktime`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `available` | Watchdog 调度延迟数据是否可用 | 不可用时少一类系统压力解释 |
+| `maxDelayMs` | 最近窗口最大调度延迟 | 很高时说明监控线程本身也可能被系统压力影响 |
+| `severeDelayCount` | 严重调度延迟次数 | 多次严重延迟时，业务归因要更谨慎 |
+| `recentDelayMs` | 最近调度延迟序列 | 看系统压力是否持续存在 |
+| `failureReason` | Checktime 采集失败原因 | 解释该节点不可用 |
+
+`environmentSnapshot`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `loadAverage1m` | 1 分钟系统负载 | 读不到时通常为 `null`，不要当成 0 |
+| `memory.availableBytes` / `totalBytes` | 可用内存和总内存 | 排查低内存压力 |
+| `memory.isLowMemory` | 系统是否低内存 | `true` 时要谨慎判断业务根因 |
+| `availableStorageBytes` | 可用存储空间 | 排查存储不足导致的 I/O 卡顿 |
+| `processIo.readBytes` / `writeBytes` | 进程读写字节数 | 辅助判断是否有 I/O 压力 |
+| `processIo.cancelledWriteBytes` | 被取消的写入字节数 | 辅助观察异常 I/O 行为 |
+| `androidVersion` / `manufacturer` / `model` | 系统版本、厂商、机型 | 对齐 ROM 兼容性和设备维度 |
+| `availability` | CPU、内存、存储、进程 I/O 各类证据是否可用 | 区分“没问题”和“没采到” |
+| `failureReasons` | 环境证据采集失败原因列表 | 解释为什么负载、内存或 I/O 字段为空 |
+
+`sdkDiagnostics`：
+
+| 属性 | 含义 | 分析价值 |
+| --- | --- | --- |
+| `pendingAvailable` | SDK 自检认为 Pending 队列是否可用 | 与 `pendingQueue.available` 交叉验证 |
+| `reportBuildCostMs` | 构建报告耗时 | 评估 SDK 自身成本 |
+| `collectorFailures` | 各采集器失败原因列表 | 判断报告证据是否完整 |
+| `privacyMode` | 当前隐私模式 | 解释栈、类名、字段是否被脱敏 |
+| `missingEvidenceCount` | 缺失证据数量 | 数量越多，归因越需要保守 |
+| `selfMetrics` | SDK 自身计数指标 | 观察本地写入、上传、构建等运行状态 |
+
+读报告的推荐顺序：
+
+```text
+先读摘要 attribution
+再读系统结论 systemAnr
+重点读主线程现场 mainThread
+然后看排队现场 pendingQueue
+最后用 Barrier / Binder / CPU / 环境 / SDK 自检做复核
+```
+
 新人第一次拿到 JSON 时，把它当成一份“ANR 现场记录”，不要从第一行逐字段读到最后一行。建议用 Android Studio、VS Code 或浏览器 JSON Viewer 打开文件，先折叠顶层对象，只展开下面几个区域：
 
 ```text
@@ -226,7 +482,7 @@ sdkDiagnostics
 本次卡顿/ANR 属于什么类型，主线程当时卡在哪里，业务代码位置是什么，哪些可能性已被排除，下一步应该谁来修。
 ```
 
-### 6.1 第一步：先判断“这是哪一类问题”
+### 6.2 第一步：先判断“这是哪一类问题”
 
 先展开 `attribution` 和 `systemAnr`。
 
@@ -250,7 +506,7 @@ sdkDiagnostics
 | `BINDER_BLOCK_SUSPECTED` | 主线程疑似卡在跨进程/Binder 等待 |
 | `UNKNOWN_INSUFFICIENT_EVIDENCE` | 证据不足，需要先看缺失证据和采集失败原因 |
 
-### 6.2 第二步：找“主线程当时卡在哪里”
+### 6.3 第二步：找“主线程当时卡在哪里”
 
 再展开 `mainThread.current` 和 `mainThread.stackFrames`。
 
@@ -278,7 +534,7 @@ sdkDiagnostics
 | `callbackClass` 是业务 Runnable | 业务主动投递到主线程的任务卡住 |
 | 栈里没有业务包名 | 继续看历史消息、Pending 队列、Binder、Barrier，当前栈可能不是根因 |
 
-### 6.3 第三步：确认根因是不是“当前这条消息”
+### 6.4 第三步：确认根因是不是“当前这条消息”
 
 只看当前栈容易误判。接着展开 `mainThread.history`、`mainThread.stackSamples` 和 `pendingQueue.messages`。
 
@@ -297,7 +553,7 @@ sdkDiagnostics
 这次问题是“当前正在跑的代码慢”，还是“前面有慢消息/队列堆积导致现在看起来卡”？
 ```
 
-### 6.4 第四步：排除专项问题和环境干扰
+### 6.5 第四步：排除专项问题和环境干扰
 
 最后展开 `barrierEvidence`、`binderBlock`、`threadCpu`、`checktime`、`environmentSnapshot`、`sdkDiagnostics`。
 
@@ -312,7 +568,7 @@ sdkDiagnostics
 
 注意：`available=false` 或 `failureReason` 非空，只能说明这类证据没有采集到，不能反向证明没有这类问题。
 
-### 6.5 第五步：写成人能评审的定位结论
+### 6.6 第五步：写成人能评审的定位结论
 
 建议每次报告都按下面模板写结论，避免只贴 JSON：
 
@@ -354,32 +610,6 @@ collectorFailures
 ```
 
 会命令行的同学可以用 `jq` 提取字段，但 `jq` 只是辅助查看工具，最终评审仍以上面的人工结论为准。
-
-报告顶层字段补充说明：
-
-| 字段 | 含义 |
-| --- | --- |
-| `schemaVersion` | JSON 协议版本，当前为 `1` |
-| `event` | 事件 ID、环境、appId、发生时间 |
-| `systemAnr` | ActivityManager 确认 ANR 信息和组件阈值 |
-| `mainThread` | 当前消息、历史消息、主线程栈和慢消息栈样本 |
-| `pendingQueue` | Pending 队列快照 |
-| `barrierEvidence` | Barrier token 和 nativePollOnce 增强证据 |
-| `binderBlock` | Binder 阻塞疑似证据 |
-| `threadCpu` | 线程 CPU TopN |
-| `checktime` | Watchdog 调度延迟 |
-| `environmentSnapshot` | 系统负载、内存、存储、进程 I/O、设备信息 |
-| `attribution` | 主因、辅因、置信度、证据、缺失证据、治理建议 |
-| `sdkDiagnostics` | SDK 自监控、采集失败、隐私模式和报告构建成本 |
-
-评审报告时不要只看 `mainThread.stackFrames`。推荐按顺序看：
-
-1. `attribution.primary` 和 `confidence`，先确认 SDK 的主结论和可信度。
-2. `systemAnr`，确认是否是系统已确认 ANR，以及对应组件阈值。
-3. `mainThread.current`、`history`、`stackSamples`，判断当前慢、历史慢还是消息风暴。
-4. `pendingQueue` 和 `barrierEvidence`，复核是否存在同步屏障或队列无法推进。
-5. `threadCpu`、`checktime`、`environmentSnapshot`，排除进程内 CPU 或系统资源压力。
-6. `sdkDiagnostics.collectorFailures` 和 `missingEvidence`，确认是否因为 ROM、权限或隐私模式导致证据缺失。
 
 ## 7. Barrier 和 nativePollOnce 证据
 
