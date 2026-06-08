@@ -334,7 +334,7 @@ Run:
 
 Expected: PASS. If this fails with `Unresolved reference: IRemoteBlockingService`, verify the AIDL package path is exactly `app/src/main/aidl/com/valiantyan/vibeanrmonitoring/IRemoteBlockingService.aidl`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/build.gradle.kts app/src/main/aidl/com/valiantyan/vibeanrmonitoring/IRemoteBlockingService.aidl app/src/main/java/com/valiantyan/vibeanrmonitoring/RemoteBlockingService.kt
