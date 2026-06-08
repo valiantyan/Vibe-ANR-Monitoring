@@ -659,6 +659,26 @@ Demo 页面按钮：
 4. 使用 `adb shell run-as ... ls files/anr-monitor-reports` 查看报告文件。
 5. `cat` 对应 JSON，按第 6 节五步排查法输出定位结论。
 
+### 当前消息慢场景
+
+这个场景用于验证最基础的输入事件无响应：用户点击按钮后，当前主线程消息被业务代码阻塞超过疑似 ANR 阈值。
+
+操作步骤：
+
+1. 安装并打开 debug Demo App。
+2. 点击“当前消息慢”。
+3. 等待 logcat 出现 `suspect ANR captured` 和 `ANR report written`。
+4. 拉取最新 JSON 报告。
+5. 先看 `attribution.primary`，预期为 `CURRENT_MESSAGE_SLOW`。
+6. 再看 `mainThread.current.wallMs`，预期大于 `3000`。
+7. 最后看 `mainThread.stackFrames`，预期包含 `CurrentSlowInputScenario.run`。
+
+新人分析结论可以这样写：
+
+```text
+本次报告是 Demo 当前慢消息场景触发的疑似 ANR。当前主线程消息执行时间超过 3000ms，主线程栈包含 CurrentSlowInputScenario.run，说明按钮点击消息被业务代码主动阻塞。Barrier 和 Binder 证据不构成本次主因，因此根因是主线程当前消息执行耗时过长。
+```
+
 验证 `Sync Barrier 泄漏 ANR` 时，点击按钮后主线程会被故意卡住。为了触发系统 Input ANR，可以在按钮点击后继续点击屏幕；为了复核 SDK 报告，优先看以下字段：
 
 ```text

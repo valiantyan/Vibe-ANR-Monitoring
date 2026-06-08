@@ -495,7 +495,7 @@ git commit -m "接入当前慢消息场景按钮"
 **Files:**
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 
-- [ ] **Step 1: Add current slow scenario instructions**
+- [x] **Step 1: Add current slow scenario instructions**
 
 In `docs-anr/103-ANR监控SDK使用说明.md`, add this subsection under the Demo validation section:
 
@@ -521,7 +521,7 @@ In `docs-anr/103-ANR监控SDK使用说明.md`, add this subsection under the Dem
 ```
 ````
 
-- [ ] **Step 2: 检查文档格式**
+- [x] **Step 2: 检查文档格式**
 
 Run:
 
@@ -531,7 +531,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md
