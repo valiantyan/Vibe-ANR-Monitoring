@@ -24,6 +24,14 @@
         <service
             android:name=".BarrierLeakService"
             android:exported="false" />
+
+        <receiver
+            android:name=".BroadcastTimeoutReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.valiantyan.vibeanrmonitoring.action.BROADCAST_TIMEOUT" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

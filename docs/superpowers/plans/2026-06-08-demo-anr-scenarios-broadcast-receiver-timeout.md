@@ -334,7 +334,7 @@ git commit -m "实现 BroadcastReceiver 超时场景类"
 **Files:**
 - Modify: `app/src/main/AndroidManifest.xml`
 
-- [ ] **Step 1: Register receiver in AndroidManifest**
+- [x] **Step 1: Register receiver in AndroidManifest**
 
 Modify `app/src/main/AndroidManifest.xml` by adding this receiver entry inside `<application>` after `BarrierLeakService`:
 
@@ -364,7 +364,7 @@ The `<application>` block should contain both component registrations:
         </receiver>
 ```
 
-- [ ] **Step 2: Compile app Kotlin and manifest**
+- [x] **Step 2: Compile app Kotlin and manifest**
 
 Run:
 
@@ -374,7 +374,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add app/src/main/AndroidManifest.xml
