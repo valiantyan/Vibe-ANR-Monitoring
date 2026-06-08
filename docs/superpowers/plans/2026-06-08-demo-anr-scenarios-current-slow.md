@@ -69,7 +69,7 @@
 - Create: `docs-anr/105-Demo-ANR场景实现计划.md`
 - Modify: `docs-anr/README.md`
 
-- [ ] **Step 1: 创建场景矩阵文档**
+- [x] **Step 1: 创建场景矩阵文档**
 
 Create `docs-anr/105-Demo-ANR场景实现计划.md` with this content:
 
@@ -128,7 +128,7 @@ Create `docs-anr/105-Demo-ANR场景实现计划.md` with this content:
 后续按主线程 CPU 忙等、消息风暴、锁等待、Broadcast、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
 ```
 
-- [ ] **Step 2: 在 README 增加入口**
+- [x] **Step 2: 在 README 增加入口**
 
 Modify `docs-anr/README.md` by adding this row after the existing `104` row in the document table:
 
@@ -136,7 +136,7 @@ Modify `docs-anr/README.md` by adding this row after the existing `104` row in t
 | 105 | Demo ANR 场景实现计划 | [105-Demo-ANR场景实现计划.md](./105-Demo-ANR场景实现计划.md) | 已规划 Demo 全量 ANR 场景和逐个实现顺序 |
 ```
 
-- [ ] **Step 3: 检查文档格式**
+- [x] **Step 3: 检查文档格式**
 
 Run:
 
@@ -146,7 +146,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md docs-anr/README.m
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md docs-anr/README.md
