@@ -16,7 +16,7 @@
 | 1 | 输入事件当前慢消息 | 点击按钮后主线程阻塞 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.stackFrames` | 已验收 |
 | 2 | 主线程 CPU 忙等 | 点击“当前消息忙等”后主线程 busy loop 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.current.cpuMs`、`threadCpu.topThreads`、`MainThreadCpuBusyScenario.run` | 已验收 |
 | 3 | 消息风暴 | 点击“消息风暴”后投递大量同类主线程消息 | `MESSAGE_STORM` | `attribution.evidence`、`pendingQueue.messages` 重复 `MessageStormHandler` / `StormRunnable`、`MessageStormScenario.run` | 已验收 |
-| 4 | Sync Barrier 泄漏 / nativePollOnce | 点击按钮反射插入 Sync Barrier 且故意不移除 | `SYNC_BARRIER_STUCK` | `pendingQueue.messages[0].isBarrierLike=true`、`barrierEvidence.alignedWithPendingBarrier=true`、`nativePollOnceRecords` | 已实现，待手动验收 |
+| 4 | Sync Barrier 泄漏 / nativePollOnce | 点击按钮反射插入 Sync Barrier 且故意不移除 | `SYNC_BARRIER_STUCK` | `pendingQueue.messages[0].isBarrierLike=true`、`barrierEvidence.alignedWithPendingBarrier=true`、`nativePollOnceRecords` | 已验收 |
 | 5 | 主线程锁等待 | 子线程持锁，主线程等待锁 | 当前慢消息加等待栈证据 | `mainThread.stackFrames` 中锁等待业务帧 | 待实现 |
 | 6 | BroadcastReceiver 超时 | 发送显式广播，Receiver 阻塞 | Broadcast 组件超时 | `systemAnr.anrType`、Receiver 相关 ActivityThread 消息 | 待实现 |
 | 7 | Service 超时 | 启动阻塞 Service | Service 组件超时 | `systemAnr.anrType`、Service 相关 ActivityThread 消息 | 待实现 |
@@ -240,13 +240,14 @@ barrierEvidence.stuckTokens = []
 
 ### 验收记录
 
-- [ ] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.SyncBarrierLeakScenarioTest` 通过。
-- [ ] `./gradlew :app:compileDebugKotlin` 通过。
-- [ ] 真机或模拟器点击“Sync Barrier 泄漏 ANR”后生成 JSON。
-- [ ] JSON 中 `attribution.primary=SYNC_BARRIER_STUCK`。
-- [ ] JSON 中 `pendingQueue.messages[0].isBarrierLike=true`。
-- [ ] JSON 中 `barrierEvidence.alignedWithPendingBarrier=true`。
-- [ ] JSON 中 `barrierEvidence.stuckTokens[].postStack` 能定位到 `SyncBarrierLeakScenario.run`。
+- [x] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.SyncBarrierLeakScenarioTest` 通过。
+- [x] `./gradlew :app:compileDebugKotlin` 通过。
+- [x] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
+- [x] 真机或模拟器点击“Sync Barrier 泄漏 ANR”后生成 JSON：`3b8d7ef5-2145-4b15-9f41-ca70ddaa15dd.json`。
+- [x] JSON 中 `attribution.primary=SYNC_BARRIER_STUCK`。
+- [x] JSON 中 `pendingQueue.messages[0].isBarrierLike=true`。
+- [x] JSON 中 `barrierEvidence.alignedWithPendingBarrier=true`。
+- [x] JSON 中 `barrierEvidence.stuckTokens[].postStack` 能定位到 `SyncBarrierLeakScenario.run`。
 
 ## 后续批次顺序
 
