@@ -29,6 +29,18 @@ class FullAcceptanceMatrixTest {
         val barrierComponentStarterFile: File = rootDir.resolve(
             "app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/BarrierLeakComponentStarter.kt",
         )
+        val binderScenarioFile: File = rootDir.resolve(
+            "app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/BinderCrossProcessBlockScenario.kt",
+        )
+        val remoteBinderClientFile: File = rootDir.resolve(
+            "app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/RemoteBinderClient.kt",
+        )
+        val remoteBlockingServiceFile: File = rootDir.resolve(
+            "app/src/main/java/com/valiantyan/vibeanrmonitoring/RemoteBlockingService.kt",
+        )
+        val remoteBlockingAidlFile: File = rootDir.resolve(
+            "app/src/main/aidl/com/valiantyan/vibeanrmonitoring/IRemoteBlockingService.aidl",
+        )
         val contentProviderFile: File = rootDir.resolve(
             "app/src/main/java/com/valiantyan/vibeanrmonitoring/BlockingContentProvider.kt",
         )
@@ -41,28 +53,39 @@ class FullAcceptanceMatrixTest {
         assertContains(layoutText, "android:id=\"@+id/contentProviderBlockButton\"")
         assertContains(layoutText, "android:text=\"@string/demo_content_provider_block\"")
         assertContains(stringsText, "<string name=\"demo_sync_barrier_leak\">Sync Barrier 泄漏 ANR</string>")
+        assertContains(stringsText, "<string name=\"demo_binder_like_lock\">Binder 跨进程阻塞</string>")
         assertContains(stringsText, "<string name=\"demo_content_provider_block\">ContentProvider 阻塞</string>")
         assertContains(activityText, "R.id.currentBusyButton")
         assertContains(activityText, "mainThreadCpuBusyScenario.run()")
         assertContains(activityText, "R.id.binderLikeButton")
-        assertContains(activityText, "waitBinderLikeLock()")
+        assertContains(activityText, "binderCrossProcessBlockScenario.run()")
+        assertContains(activityText, "binderCrossProcessBlockScenario.release()")
         assertContains(activityText, "R.id.syncBarrierLeakButton")
         assertContains(activityText, "runSyncBarrierLeak()")
         assertContains(activityText, "R.id.contentProviderBlockButton")
         assertContains(activityText, "contentProviderBlockScenario.run()")
-        assertContains(activityText, "Thread.sleep(6_000L)")
         assertTrue("缺少 Sync Barrier 泄漏场景: ${syncBarrierScenarioFile.path}", syncBarrierScenarioFile.exists())
         assertTrue("缺少 Barrier 泄漏测试 Service: ${serviceFile.path}", serviceFile.exists())
         assertTrue(
             "缺少 Barrier 泄漏组件启动器: ${barrierComponentStarterFile.path}",
             barrierComponentStarterFile.exists(),
         )
+        assertTrue("缺少 Binder 跨进程阻塞场景: ${binderScenarioFile.path}", binderScenarioFile.exists())
+        assertTrue("缺少远端 Binder 客户端: ${remoteBinderClientFile.path}", remoteBinderClientFile.exists())
+        assertTrue("缺少远端阻塞 Service: ${remoteBlockingServiceFile.path}", remoteBlockingServiceFile.exists())
+        assertTrue("缺少远端阻塞 AIDL: ${remoteBlockingAidlFile.path}", remoteBlockingAidlFile.exists())
         assertTrue("缺少 ContentProvider 阻塞测试 Provider: ${contentProviderFile.path}", contentProviderFile.exists())
         assertContains(syncBarrierScenarioFile.readText(), "postSyncBarrier")
         assertContains(syncBarrierScenarioFile.readText(), "recordPostSyncBarrier")
         assertContains(barrierComponentStarterFile.readText(), "BarrierLeakService")
+        assertContains(binderScenarioFile.readText(), "BINDER_BLOCK_SUSPECTED")
+        assertContains(remoteBinderClientFile.readText(), "IRemoteBlockingService")
+        assertContains(remoteBlockingServiceFile.readText(), "IRemoteBlockingService.Stub")
+        assertContains(remoteBlockingAidlFile.readText(), "void blockFor(long durationMs);")
         assertContains(contentProviderFile.readText(), "BlockingContentProvider")
         assertContains(contentProviderFile.readText(), "ContentProviderBlocker")
+        assertContains(manifestText, "android:name=\".RemoteBlockingService\"")
+        assertContains(manifestText, "android:process=\":remote\"")
         assertContains(manifestText, "android:name=\".BlockingContentProvider\"")
         assertContains(manifestText, "android:authorities=\"\${applicationId}.blocking-provider\"")
     }
