@@ -543,7 +543,7 @@ git commit -m "补充当前慢消息场景验证说明"
 **Files:**
 - No production files modified.
 
-- [ ] **Step 1: Run all relevant automated checks**
+- [x] **Step 1: Run all relevant automated checks**
 
 Run:
 
@@ -553,7 +553,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 2: Install debug app**
+- [x] **Step 2: Install debug app**
 
 Run:
 
@@ -564,7 +564,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Expected: `adb devices` shows the intended device, and install prints `Success`.
 
-- [ ] **Step 3: Clear logcat**
+- [x] **Step 3: Clear logcat**
 
 Run:
 
@@ -574,7 +574,7 @@ adb logcat -c
 
 Expected: command exits with code `0`.
 
-- [ ] **Step 4: Manually trigger scenario**
+- [x] **Step 4: Manually trigger scenario**
 
 Open the app on the device and tap `当前消息慢`. During the 6 second block, tap the screen again once or twice to make the input timeout window easier to observe.
 
@@ -591,7 +591,7 @@ W VibeAnrApplication: suspect ANR captured: <event-id>
 W VibeAnrApplication: ANR report written: <event-id>
 ```
 
-- [ ] **Step 5: Pull JSON reports**
+- [x] **Step 5: Pull JSON reports**
 
 Run:
 
@@ -603,7 +603,7 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 
 Expected: at least one JSON report is available in `files/anr-monitor-reports`. Replace `<eventId>` with the newest file name printed by the `ls` command. The SDK writes reports to the app private `filesDir`, so do not use an external storage directory as the primary path.
 
-- [ ] **Step 6: Validate JSON root cause**
+- [x] **Step 6: Validate JSON root cause**
 
 Open the latest JSON report and verify these values:
 
@@ -622,7 +622,7 @@ Expected human conclusion:
 当前慢消息场景验收通过：SDK 捕获到疑似 ANR，归因为 CURRENT_MESSAGE_SLOW，主线程栈能定位到 CurrentSlowInputScenario.run，说明 JSON 可以直接解释根因是按钮点击消息阻塞主线程。
 ```
 
-- [ ] **Step 7: Commit manual acceptance record if docs changed**
+- [x] **Step 7: Commit manual acceptance record if docs changed**
 
 If manual validation notes are added to docs, commit them:
 

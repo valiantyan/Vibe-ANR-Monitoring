@@ -47,6 +47,43 @@
 - `binderBlock.suspected` 不应该为 true。
 - `pendingQueue.messages` 不应该以队头 Barrier 作为主证据。
 
+### 首次验收记录
+
+验收时间：2026-06-08 15:54 CST
+
+验收设备：`emulator-5554`
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 logcat -c
+adb -s emulator-5554 shell input tap 540 876
+adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/b027eea9-1c62-48a9-938c-ee1e1f28da0d.json
+```
+
+关键日志：
+
+```text
+W VibeAnrApplication: suspect ANR captured: b027eea9-1c62-48a9-938c-ee1e1f28da0d
+W VibeAnrApplication: ANR report written: b027eea9-1c62-48a9-938c-ee1e1f28da0d
+```
+
+关键 JSON 字段：
+
+```text
+event.eventType = SUSPECT_ANR
+attribution.primary = CURRENT_MESSAGE_SLOW
+mainThread.current.wallMs = 3060
+mainThread.stackFrames contains CurrentSlowInputScenario.run
+binderBlock.suspected = false
+barrierEvidence.stuckTokens = []
+```
+
+验收结论：当前消息慢场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，主线程栈能定位到 `CurrentSlowInputScenario.run`，Binder 和 Barrier 证据均不是本次主因，因此根因可以明确写为“按钮点击消息在主线程执行期间被 Demo 业务代码阻塞”。
+
 ## 后续批次顺序
 
 后续按主线程 CPU 忙等、消息风暴、锁等待、Broadcast、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
