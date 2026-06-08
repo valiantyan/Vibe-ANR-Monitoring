@@ -707,7 +707,7 @@ git commit -m "补充 ContentProvider 阻塞验证说明"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Update overview row**
+- [x] **Step 1: Update overview row**
 
 Modify the ContentProvider row in `docs-anr/105-Demo-ANR场景实现计划.md` from:
 
@@ -721,7 +721,7 @@ to:
 | 8 | ContentProvider 阻塞 | 点击“ContentProvider 阻塞”后查询应用内 Provider，`query()` 主线程阻塞 12 秒 | Provider 查询阻塞 + 当前消息慢证据 | `mainThread.stackFrames` 包含 `BlockingContentProvider.query`、`ContentProviderBlocker.block`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 ```
 
-- [ ] **Step 2: Add eighth batch section**
+- [x] **Step 2: Add eighth batch section**
 
 Add this section after the existing “第七批次：Service 超时” section and before “## 后续批次顺序”:
 
@@ -780,7 +780,7 @@ adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/an
 验收结论：执行 Task 6 后填写。期望结论为“ContentProvider 阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 能把 Provider 查询调用链和业务 Provider 阻塞入口分开表达；如果系统确认 ANR，`systemAnr.anrType=PROVIDER` 可作为组件超时证据；根因可以明确写为 `BlockingContentProvider.query` 在主线程执行耗时阻塞，导致 Provider 查询无法及时返回。”
 ````
 
-- [ ] **Step 3: Update later batch order**
+- [x] **Step 3: Update later batch order**
 
 Modify the final “后续批次顺序” sentence from:
 
@@ -794,7 +794,7 @@ to:
 后续按锁等待、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
 ```
 
-- [ ] **Step 4: Check docs diff**
+- [x] **Step 4: Check docs diff**
 
 Run:
 
@@ -804,7 +804,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md

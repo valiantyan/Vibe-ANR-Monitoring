@@ -20,7 +20,7 @@
 | 5 | 主线程锁等待 | 子线程持锁，主线程等待锁 | 当前慢消息加等待栈证据 | `mainThread.stackFrames` 中锁等待业务帧 | 待实现 |
 | 6 | BroadcastReceiver 超时 | 点击“BroadcastReceiver 超时”后发送显式应用内广播，Receiver 主线程阻塞 12 秒 | Broadcast 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `BroadcastTimeoutReceiver.onReceive`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 7 | Service 超时 | 点击“Service 超时”后启动显式应用内 Service，`onStartCommand()` 主线程阻塞 25 秒 | Service 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`、`mainThread.current.wallMs` | 已实现，待手动验收 |
-| 8 | ContentProvider 阻塞 | 查询阻塞 Provider | Provider 组件阻塞 | Provider 调用栈和系统组件证据 | 待实现 |
+| 8 | ContentProvider 阻塞 | 点击“ContentProvider 阻塞”后查询应用内 Provider，`query()` 主线程阻塞 12 秒 | Provider 查询阻塞 + 当前消息慢证据 | `mainThread.stackFrames` 包含 `BlockingContentProvider.query`、`ContentProviderBlocker.block`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 9 | Binder 跨进程阻塞 | 主进程调用远端阻塞服务 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected`、主线程 Binder 栈 | 待实现 |
 | 10 | 主线程 IO/数据库阻塞 | 主线程执行慢 IO 或慢查询 | `CURRENT_MESSAGE_SLOW` | IO/DB 业务栈、当前消息耗时 | 待实现 |
 | 11 | 线程池耗尽后主线程等待 | 占满线程池后主线程等待结果 | 等待类当前慢消息 | 主线程等待栈、后台线程证据 | 待实现 |
@@ -406,6 +406,59 @@ binderBlock.suspected = false
 
 验收结论：Service 超时场景验收通过。SDK 能捕获疑似 ANR，JSON 能把系统 Service 组件调度和业务 Service 阻塞入口分开表达；根因可以明确写为“`ServiceTimeoutService.onStartCommand` 在主线程执行耗时阻塞，导致 Service 生命周期回调无法及时返回”。
 
+## 第八批次：ContentProvider 阻塞
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“ContentProvider 阻塞”。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `event.eventType`，确认 SDK 已经生成疑似或确认报告。再看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。接着看 `mainThread.stackFrames`，应能看到 `BlockingContentProvider.query` 和 `ContentProviderBlocker.block`，说明业务根因入口是 Provider 查询。最后检查栈中是否存在 `ContentResolver.query` 或 `ContentProvider.Transport.query`，用于证明调用链经过 ContentProvider。
+
+如果 `systemAnr.isConfirmedAnr=true` 且 `systemAnr.anrType=PROVIDER`，说明系统也确认了 Provider 组件超时，`systemAnr.componentTimeoutMs` 通常应为 `10000`。如果 `systemAnr.isConfirmedAnr=false`，仍可先根据 SDK 疑似 ANR 报告定位业务根因，因为 SDK 阈值比系统确认阈值更早触发。如果系统版本没有输出明确 Provider 类型，也不要把 `systemAnr.anrType=UNKNOWN` 当成根因未知；根因仍以主线程栈和当前消息耗时为准。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `binderBlock.suspected` 不应该为 true。
+- 如果主线程栈只看到按钮点击入口而没有 `BlockingContentProvider.query`，优先检查 Provider 是否已经在 Manifest 中注册成功，或是否点错按钮。
+
+### 首次验收记录
+
+验收时间：执行 Task 6 时填写具体时间。
+
+验收设备：执行 Task 6 时填写设备序列号。
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s <device-id> logcat -c
+adb -s <device-id> shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity
+adb -s <device-id> shell input tap <content-provider-button-x> <content-provider-button-y>
+adb -s <device-id> logcat -d -s VibeAnrApplication
+adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json
+```
+
+验收清单：
+
+- [ ] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
+- [ ] 真机或模拟器点击“ContentProvider 阻塞”后生成 JSON。
+- [ ] JSON 中 `mainThread.stackFrames` 包含 `BlockingContentProvider.query`。
+- [ ] JSON 中 `mainThread.stackFrames` 包含 `ContentProviderBlocker.block`。
+- [ ] JSON 中 `mainThread.current.wallMs >= 3000`。
+- [ ] 如果系统已确认 ANR，`systemAnr.anrType=PROVIDER`。
+- [ ] Barrier 和 Binder 证据均不是本次主因。
+
+验收结论：执行 Task 6 后填写。期望结论为“ContentProvider 阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 能把 Provider 查询调用链和业务 Provider 阻塞入口分开表达；如果系统确认 ANR，`systemAnr.anrType=PROVIDER` 可作为组件超时证据；根因可以明确写为 `BlockingContentProvider.query` 在主线程执行耗时阻塞，导致 Provider 查询无法及时返回。”
+
 ## 后续批次顺序
 
-后续按锁等待、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
+后续按锁等待、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
