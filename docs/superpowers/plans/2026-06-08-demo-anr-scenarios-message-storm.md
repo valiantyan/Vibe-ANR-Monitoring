@@ -249,7 +249,7 @@ git commit -m "实现消息风暴Demo场景"
 **Files:**
 - Modify: `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 
-- [ ] **Step 1: Update imports**
+- [x] **Step 1: Update imports**
 
 In `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`, remove these imports:
 
@@ -264,7 +264,7 @@ Add this import after `MainThreadCpuBusyScenario`:
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
 ```
 
-- [ ] **Step 2: Remove mainHandler field**
+- [x] **Step 2: Remove mainHandler field**
 
 Remove this property from `MainActivity`:
 
@@ -273,7 +273,7 @@ Remove this property from `MainActivity`:
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
 ```
 
-- [ ] **Step 3: Add message storm scenario field**
+- [x] **Step 3: Add message storm scenario field**
 
 Add this property immediately after `currentSlowInputScenario`:
 
@@ -295,7 +295,7 @@ The surrounding code should become:
     private val mainThreadCpuBusyScenario: MainThreadCpuBusyScenario = MainThreadCpuBusyScenario()
 ```
 
-- [ ] **Step 4: Wire messageStormButton**
+- [x] **Step 4: Wire messageStormButton**
 
 Replace this block in `onCreate`:
 
@@ -313,7 +313,7 @@ with:
         }
 ```
 
-- [ ] **Step 5: Remove inline postMessageStorm**
+- [x] **Step 5: Remove inline postMessageStorm**
 
 Remove this method from `MainActivity`:
 
@@ -330,7 +330,7 @@ Remove this method from `MainActivity`:
     }
 ```
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run:
 
@@ -340,7 +340,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 7: Compile app**
+- [x] **Step 7: Compile app**
 
 Run:
 
@@ -350,7 +350,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt

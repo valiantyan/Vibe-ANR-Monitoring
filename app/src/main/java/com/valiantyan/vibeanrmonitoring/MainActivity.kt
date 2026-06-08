@@ -1,22 +1,21 @@
 package com.valiantyan.vibeanrmonitoring
 
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
+import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
 
 /**
  * ANR SDK 示例入口，提供全量验收所需的主线程慢消息、消息风暴、忙等和等待类场景。
  */
 class MainActivity : AppCompatActivity() {
-    // 主线程 Handler，用于构造大量 pending message 的验收场景。
-    private val mainHandler: Handler = Handler(Looper.getMainLooper())
-
     // 当前慢消息场景，用独立类承载根因入口，便于 JSON 栈中直接定位。
     private val currentSlowInputScenario: CurrentSlowInputScenario = CurrentSlowInputScenario()
+
+    // 消息风暴场景，用独立类投递大量同类 Pending 消息，便于 JSON 归因为 MESSAGE_STORM。
+    private val messageStormScenario: MessageStormScenario = MessageStormScenario()
 
     // 当前消息 CPU 忙等场景，用独立类承载根因入口，便于和 Thread.sleep 等待类场景区分。
     private val mainThreadCpuBusyScenario: MainThreadCpuBusyScenario = MainThreadCpuBusyScenario()
@@ -36,7 +35,7 @@ class MainActivity : AppCompatActivity() {
             currentSlowInputScenario.run()
         }
         findViewById<Button>(R.id.messageStormButton).setOnClickListener {
-            postMessageStorm()
+            messageStormScenario.run()
         }
         findViewById<Button>(R.id.currentBusyButton).setOnClickListener {
             mainThreadCpuBusyScenario.run()
@@ -47,17 +46,6 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.syncBarrierLeakButton).setOnClickListener {
             runSyncBarrierLeak()
         }
-    }
-
-    // 快速投递大量主线程消息，用于验证 pending 队列和历史消息窗口。
-    private fun postMessageStorm(): Unit {
-        repeat(times = 2_000) { index: Int ->
-            mainHandler.post {
-                val ignoredValue: Int = index * index
-                ignoredValue.toString()
-            }
-        }
-        Thread.sleep(6_000L)
     }
 
     // 模拟同步跨进程调用中的等待窗口，用于手动观察等待类主线程栈证据。
