@@ -367,7 +367,7 @@ git commit -m "补充主线程CPU忙等验证说明"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Update scenario table row**
+- [x] **Step 1: Update scenario table row**
 
 In `docs-anr/105-Demo-ANR场景实现计划.md`, replace the row:
 
@@ -381,7 +381,7 @@ with:
 | 2 | 主线程 CPU 忙等 | 点击“当前消息忙等”后主线程 busy loop 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.current.cpuMs`、`threadCpu.topThreads`、`MainThreadCpuBusyScenario.run` |
 ```
 
-- [ ] **Step 2: Add scenario details**
+- [x] **Step 2: Add scenario details**
 
 In `docs-anr/105-Demo-ANR场景实现计划.md`, add this section after the current slow scenario section and before `## 后续批次顺序`:
 
@@ -407,7 +407,7 @@ In `docs-anr/105-Demo-ANR场景实现计划.md`, add this section after the curr
 - `mainThread.current.cpuMs` 如果接近 0，应优先检查是否点错了“当前消息慢”按钮，或当前设备 CPU 证据采集是否失败。
 ```
 
-- [ ] **Step 3: Update follow-up order**
+- [x] **Step 3: Update follow-up order**
 
 In `docs-anr/105-Demo-ANR场景实现计划.md`, replace:
 
@@ -421,7 +421,7 @@ with:
 后续按消息风暴、锁等待、Broadcast、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
 ```
 
-- [ ] **Step 4: 检查文档格式**
+- [x] **Step 4: 检查文档格式**
 
 Run:
 
@@ -431,7 +431,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md
