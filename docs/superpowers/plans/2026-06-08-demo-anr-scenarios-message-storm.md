@@ -534,7 +534,7 @@ git commit -m "更新消息风暴场景矩阵"
 - Optional Create: `SDK案例分析/消息风暴/json/<event-id>.json`
 - Optional Create: `SDK案例分析/消息风暴/分析结果/<event-id>-ANR根因分析.html`
 
-- [ ] **Step 1: Run full local validation**
+- [x] **Step 1: Run full local validation**
 
 Run:
 
@@ -544,7 +544,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 2: Install debug app**
+- [x] **Step 2: Install debug app**
 
 Run:
 
@@ -555,7 +555,7 @@ adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
 
 Expected: install prints `Success`.
 
-- [ ] **Step 3: Clear old logs and trigger message storm**
+- [x] **Step 3: Clear old logs and trigger message storm**
 
 Run:
 
@@ -566,7 +566,7 @@ adb -s <device-id> shell input tap <message-storm-button-x> <message-storm-butto
 
 Expected: Demo App freezes briefly after tapping “消息风暴”.
 
-- [ ] **Step 4: Read event id from logcat**
+- [x] **Step 4: Read event id from logcat**
 
 Run:
 
@@ -581,7 +581,7 @@ W VibeAnrApplication: suspect ANR captured: <event-id>
 W VibeAnrApplication: ANR report written: <event-id>
 ```
 
-- [ ] **Step 5: Pull JSON report**
+- [x] **Step 5: Pull JSON report**
 
 Run:
 
@@ -592,7 +592,7 @@ adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/an
 
 Expected: local `message-storm-<event-id>.json` exists and is not empty.
 
-- [ ] **Step 6: Inspect JSON evidence**
+- [x] **Step 6: Inspect JSON evidence**
 
 Run:
 
@@ -619,7 +619,7 @@ binderBlock.suspected = false
 barrierEvidence.stuckTokens = []
 ```
 
-- [ ] **Step 7: Update acceptance record**
+- [x] **Step 7: Update acceptance record**
 
 In `docs-anr/105-Demo-ANR场景实现计划.md`, replace the “第三批次：消息风暴” acceptance placeholders with actual values:
 
@@ -641,7 +641,7 @@ with:
 验收结论：消息风暴场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `MESSAGE_STORM`，`attribution.evidence` 给出 repeated target count，`pendingQueue.messages` 能看到大量 `MessageStormHandler` 或 `StormRunnable` 消息，Binder 和 Barrier 证据均不是本次主因，因此根因可以明确写为“按钮点击后向主线程投递大量重复消息，导致队列拥塞和输入响应延迟”。
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md

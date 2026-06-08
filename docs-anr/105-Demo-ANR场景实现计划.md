@@ -167,9 +167,9 @@ barrierEvidence.stuckTokens = []
 
 ### 首次验收记录
 
-验收时间：待执行
+验收时间：2026-06-08 17:45 CST
 
-验收设备：待执行
+验收设备：`emulator-5554`
 
 执行命令：
 
@@ -182,19 +182,35 @@ adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-mo
 adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json
 ```
 
+实际执行：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 logcat -c
+adb -s emulator-5554 shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity
+adb -s emulator-5554 shell input tap 540 1044
+adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/2b47738a-806b-4b22-a136-b71cd5c37416.json
+```
+
 关键 JSON 字段：
 
 ```text
 event.eventType = SUSPECT_ANR
 attribution.primary = MESSAGE_STORM
-attribution.evidence contains pending repeated target count
-pendingQueue.messages contains repeated MessageStormHandler or StormRunnable
+attribution.evidence contains pending repeated target count=80
+pendingQueue.available = true
+pendingQueue.messages count = 90
+pendingQueue.messages contains 80 repeated MessageStormHandler / StormRunnable
 mainThread.stackFrames contains MessageStormScenario.run
+mainThread.current.wallMs = 3304
+mainThread.current.cpuMs = 15
 binderBlock.suspected = false
 barrierEvidence.stuckTokens = []
 ```
 
-验收结论：待执行。
+验收结论：消息风暴场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `MESSAGE_STORM`，`attribution.evidence` 给出 `pending repeated target count=80`，`pendingQueue.messages` 能看到 80 条 `MessageStormHandler` / `StormRunnable` 消息，Binder 和 Barrier 证据均不是本次主因，因此根因可以明确写为“按钮点击后向主线程投递大量重复消息，导致队列拥塞和输入响应延迟”。
 
 ## 后续批次顺序
 
