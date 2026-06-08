@@ -208,7 +208,7 @@ git commit -m "接入 Demo App 单元测试依赖"
 - Create: `app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/BlockingAction.kt`
 - Create: `app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/CurrentSlowInputScenario.kt`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `app/src/test/java/com/valiantyan/vibeanrmonitoring/scenario/CurrentSlowInputScenarioTest.kt`:
 
@@ -257,7 +257,7 @@ class CurrentSlowInputScenarioTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -267,7 +267,7 @@ Run:
 
 Expected: FAIL with unresolved references for `CurrentSlowInputScenario` and `BlockingAction`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/AnrDemoScenario.kt`:
 
@@ -353,7 +353,7 @@ class CurrentSlowInputScenario(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 
@@ -363,7 +363,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/src/test/java/com/valiantyan/vibeanrmonitoring/scenario/CurrentSlowInputScenarioTest.kt app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/AnrDemoScenario.kt app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/BlockingAction.kt app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/CurrentSlowInputScenario.kt
