@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>121c7a9e ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      line-height: 1.3;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    h2 {
+      margin-top: 28px;
+      font-size: 22px;
+      border-left: 4px solid var(--primary);
+      padding-left: 10px;
+    }
+
+    h3 {
+      margin-top: 22px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f9;
+      color: #24334d;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .subtitle {
+      color: #d6e4ff;
+      max-width: 900px;
+      margin-top: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06);
+    }
+
+    .result {
+      border-left: 5px solid var(--danger);
+    }
+
+    .evidence {
+      border-left: 5px solid var(--primary);
+    }
+
+    .exclude {
+      border-left: 5px solid var(--ok);
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .badge-danger {
+      background: #fee4e2;
+      color: var(--danger);
+    }
+
+    .badge-warn {
+      background: #fff4d6;
+      color: var(--warn);
+    }
+
+    .badge-ok {
+      background: #dcfae6;
+      color: var(--ok);
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 14px 0;
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .step-number {
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .quote {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    ul {
+      padding-left: 22px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：输入事件当前慢消息</h1>
+    <p class="subtitle">分析对象：<code>121c7a9e-b7b8-424d-9d7c-d69e249a229d.json</code>。这份记录按实际排查顺序展开：先确认报告类型，再看 SDK 归因、主线程现场、Pending 队列和排除项，最后给出根因与修复方向。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>最终结论</h2>
+        <p><span class="badge badge-danger">根因</span>按钮点击消息在主线程执行期间调用了阻塞逻辑，导致当前主线程消息执行超过 SDK 疑似 ANR 阈值。</p>
+        <p>具体业务入口是 <code>CurrentSlowInputScenario.run(CurrentSlowInputScenario.kt:25)</code>，阻塞点是 <code>Thread.sleep</code>，调用链来自 <code>MainActivity.onCreate$lambda$0(MainActivity.kt:32)</code> 的按钮点击回调。</p>
+      </div>
+
+      <div class="card evidence">
+        <h2>最关键证据</h2>
+        <p><span class="badge badge-warn">SDK 归因</span><code>attribution.primary = CURRENT_MESSAGE_SLOW</code></p>
+        <p><span class="badge badge-warn">当前消息耗时</span><code>mainThread.current.wallMs = 3033ms</code></p>
+        <p><span class="badge badge-warn">主线程栈</span><code>Thread.sleep -> CurrentSlowInputScenario.run -> onClick</code></p>
+      </div>
+
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p><span class="badge badge-ok">非 Barrier</span><code>barrierEvidence.stuckTokens = []</code></p>
+        <p><span class="badge badge-ok">非 Binder</span><code>binderBlock.suspected = false</code></p>
+        <p><span class="badge badge-ok">非系统调度</span><code>checktime.severeDelayCount = 0</code></p>
+      </div>
+    </section>
+
+    <section>
+      <h2>1. 先把 JSON 当成一本书看</h2>
+      <p>不要从第一行读到最后一行。先看“目录”，知道每个节点回答什么问题，再逐步查证。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>JSON 节点</th>
+            <th>本次怎么看</th>
+            <th>本次结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>event</code></td>
+            <td>确认报告 ID、类型、环境。</td>
+            <td>这是一份 debug 环境下的 <code>SUSPECT_ANR</code> 报告。</td>
+          </tr>
+          <tr>
+            <td><code>systemAnr</code></td>
+            <td>确认系统是否已经判定 ANR。</td>
+            <td><code>isConfirmedAnr = false</code>，说明 SDK 提前抓到了疑似 ANR 现场。</td>
+          </tr>
+          <tr>
+            <td><code>attribution</code></td>
+            <td>看 SDK 给出的初始方向。</td>
+            <td><code>CURRENT_MESSAGE_SLOW</code>，优先怀疑当前正在执行的消息太慢。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread</code></td>
+            <td>看主线程当前消息、历史消息和堆栈。</td>
+            <td>当前消息是按钮点击回调，已经执行 <code>3033ms</code>，栈中命中 Demo 慢消息场景。</td>
+          </tr>
+          <tr>
+            <td><code>pendingQueue</code></td>
+            <td>看后续消息是否被堵住。</td>
+            <td>队头消息已被阻塞约 <code>3023ms</code>，这是主线程被当前消息占住后的结果。</td>
+          </tr>
+          <tr>
+            <td><code>barrierEvidence</code></td>
+            <td>排查是否是 Sync Barrier 或 nativePollOnce 假死。</td>
+            <td>没有卡住的 Barrier token，不是本次主因。</td>
+          </tr>
+          <tr>
+            <td><code>binderBlock</code></td>
+            <td>排查是否 Binder 或跨进程阻塞。</td>
+            <td><code>suspected = false</code>，不是本次主因。</td>
+          </tr>
+          <tr>
+            <td><code>threadCpu</code> / <code>checktime</code></td>
+            <td>排查 CPU 竞争或系统调度异常。</td>
+            <td>没有强证据说明 CPU 竞争或 Watchdog 调度异常是根因。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>2. 按步骤定位根因</h2>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>确认报告基本信息</h3>
+          <p>先看 <code>event</code>，确认这份报告是谁生成的、是不是当前要分析的文件。</p>
+          <pre>{
+  "eventId": "121c7a9e-b7b8-424d-9d7c-d69e249a229d",
+  "eventType": "SUSPECT_ANR",
+  "appId": "vibe-anr-demo",
+  "environment": "debug"
+}</pre>
+          <p>这里说明：这不是线上正式用户报告，而是 Demo App 在 debug 环境生成的疑似 ANR 快照。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>看系统是否确认 ANR</h3>
+          <pre>{
+  "available": true,
+  "isConfirmedAnr": false,
+  "anrType": "UNKNOWN"
+}</pre>
+          <p><code>isConfirmedAnr = false</code> 不代表没有问题，只代表系统还没有走到最终 ANR 弹窗或系统确认阶段。SDK 的价值就是在疑似 ANR 时先保住现场。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>读 SDK 初始归因，但继续复核</h3>
+          <pre>{
+  "primary": "CURRENT_MESSAGE_SLOW",
+  "confidence": "LOW",
+  "evidence": [
+    "current message wall=3033ms cpu=0ms",
+    "top thread RenderThread cpu=1000ms"
+  ],
+  "missingEvidence": []
+}</pre>
+          <p>SDK 已经提示当前消息慢。这里置信度是 <code>LOW</code>，所以不能只抄结论，必须继续看 <code>mainThread.current</code> 和栈。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>确认当前主线程消息是否真的慢</h3>
+          <pre>{
+  "kind": "CURRENT",
+  "messageType": "looper_dispatch",
+  "targetClass": "android.view.ViewRootImpl$ViewRootHandler",
+  "callbackClass": "android.view.View$PerformClick@1fa9d7",
+  "wallMs": 3033,
+  "cpuMs": 0
+}</pre>
+          <p>这一步非常关键：<code>callbackClass</code> 是 <code>View$PerformClick</code>，说明当前正在处理一次点击事件；<code>wallMs = 3033ms</code>，说明这次点击事件已经在主线程执行了 3 秒多。</p>
+          <p><code>cpuMs = 0</code> 说明主线程不是在疯狂计算，而是在等待或睡眠。本次栈会告诉我们它具体在等什么。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <h3>看主线程栈，找到业务入口</h3>
+          <pre>java.lang.Thread.sleep(Native Method)
+java.lang.Thread.sleep(Thread.java:450)
+java.lang.Thread.sleep(Thread.java:355)
+com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario$ThreadSleepBlockingAction.block(CurrentSlowInputScenario.kt:30)
+com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario.run(CurrentSlowInputScenario.kt:25)
+com.valiantyan.vibeanrmonitoring.MainActivity.onCreate$lambda$0(MainActivity.kt:32)
+com.valiantyan.vibeanrmonitoring.MainActivity$$ExternalSyntheticLambda0.onClick(D8$$SyntheticClass:0)
+android.view.View.performClick(View.java:7498)</pre>
+          <p>读栈时从上往下看阻塞点，从下往上看调用来源：</p>
+          <ul>
+            <li>阻塞点：<code>Thread.sleep</code>。</li>
+            <li>业务场景：<code>CurrentSlowInputScenario.run</code>。</li>
+            <li>触发来源：<code>MainActivity</code> 中按钮点击回调。</li>
+          </ul>
+          <p>所以问题不是系统随机卡顿，而是 Demo 场景故意在主线程按钮点击消息里睡眠，模拟“当前消息执行过慢”。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div>
+          <h3>看 Pending 队列，解释为什么后续消息也卡住</h3>
+          <pre>{
+  "index": 0,
+  "blockedMs": 3023,
+  "targetClass": "android.view.ViewRootImpl$ViewRootHandler",
+  "callbackClass": "android.view.View$UnsetPressedState",
+  "isBarrierLike": false
+}</pre>
+          <p>队头消息 <code>View$UnsetPressedState</code> 已经等待约 <code>3023ms</code>。这不是根因，而是结果：主线程正在执行点击回调，后面的 UI 状态恢复消息无法被调度。</p>
+          <p>如果这里 <code>isBarrierLike = true</code>，才要重点怀疑 Sync Barrier。本次为 <code>false</code>。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">7</div>
+        <div>
+          <h3>排除 Sync Barrier 和 nativePollOnce 类问题</h3>
+          <pre>{
+  "repeatedInfinitePollCount": 0,
+  "alignedWithPendingBarrier": false,
+  "stuckTokens": [],
+  "nativePollOnceRecords": []
+}</pre>
+          <p>本次主线程栈顶不是 <code>nativePollOnce</code>，队头也不是 Barrier，专项证据里没有卡住的 token。因此这不是“Sync Barrier 泄漏导致 nativePollOnce 假死”的场景。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">8</div>
+        <div>
+          <h3>排除 Binder 和跨进程阻塞</h3>
+          <pre>{
+  "suspected": false,
+  "mainThreadInBinder": false,
+  "binderThreadWaitsMain": false
+}</pre>
+          <p>没有主线程 Binder 调用证据，也没有 Binder 线程反等主线程的证据。所以不要把这次问题写成 Binder 阻塞。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">9</div>
+        <div>
+          <h3>看系统调度和环境证据，确认不是外部环境主因</h3>
+          <pre>{
+  "checktime": {
+    "maxDelayMs": 2,
+    "severeDelayCount": 0
+  },
+  "collectorFailures": [
+    "load average io failed: /proc/loadavg: open failed: EACCES (Permission denied)"
+  ]
+}</pre>
+          <p><code>checktime.maxDelayMs = 2ms</code>，说明 SDK 自身调度没有被系统明显拖慢。<code>/proc/loadavg</code> 读取失败是 Android 权限限制导致的采集缺失，不是本次 ANR 根因。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">10</div>
+        <div>
+          <h3>写出根因结论</h3>
+          <div class="quote">
+            <p>本次报告是 Demo App “输入事件当前慢消息”场景触发的疑似 ANR。SDK 在按钮点击消息执行期间采集到现场：<code>mainThread.current.callbackClass</code> 为 <code>View$PerformClick</code>，当前消息已执行 <code>3033ms</code>；主线程栈显示阻塞点为 <code>Thread.sleep</code>，业务入口为 <code>CurrentSlowInputScenario.run(CurrentSlowInputScenario.kt:25)</code>，触发来源为 <code>MainActivity</code> 的点击回调。Pending 队列中后续 UI 消息被阻塞约 <code>3023ms</code>，这是当前消息占住主线程后的结果。Barrier、Binder 和系统调度证据均不构成本次主因。因此根因是：按钮点击事件在主线程执行了阻塞逻辑，导致当前主线程消息执行过慢。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 本次问题应该怎么修</h2>
+      <p>这类问题的修复重点不是“调大 ANR 阈值”，也不是“忽略这条报告”，而是把点击事件里的阻塞动作从主线程拿走。主线程只负责接收点击、切换按钮状态、展示加载中和更新结果，真正耗时的等待、计算、I/O 或跨进程调用都要放到后台执行。</p>
+
+      <h3>3.1 本次 Demo 场景的直接修复</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>当前写法</th>
+            <th>问题</th>
+            <th>推荐改法</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>onClick -> CurrentSlowInputScenario.run() -> Thread.sleep(6000)</code></td>
+            <td>点击回调运行在主线程，<code>Thread.sleep</code> 会直接让主线程停止处理后续 UI、输入和生命周期消息。</td>
+            <td>点击回调只发起任务；耗时逻辑放到后台线程、协程或线程池；任务完成后再切回主线程更新 UI。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre>// 反例：点击回调里直接阻塞主线程
+button.setOnClickListener {
+    CurrentSlowInputScenario().run()
+}
+
+// 推荐方向：主线程只发起任务，耗时动作离开主线程
+button.setOnClickListener {
+    button.isEnabled = false
+    backgroundExecutor.execute {
+        runSlowWorkOffMainThread()
+        mainHandler.post {
+            button.isEnabled = true
+            renderResult()
+        }
+    }
+}</pre>
+
+      <p>如果业务使用 Kotlin 协程，也可以用 <code>Dispatchers.IO</code> 或业务专用调度器承载耗时工作，再用 <code>Dispatchers.Main</code> 更新 UI。关键原则只有一个：点击回调本身必须很快返回。</p>
+
+      <h3>3.2 真实业务里要排查哪些代码</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>问题点</th>
+            <th>修复方向</th>
+            <th>验收方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>点击事件直接在主线程执行耗时等待。</td>
+            <td>不要在主线程调用 <code>Thread.sleep</code>、同步 I/O、同步锁等待、网络请求或大计算。</td>
+            <td>再次点击按钮后，<code>mainThread.current.wallMs</code> 不应超过 ANR 阈值。</td>
+          </tr>
+          <tr>
+            <td>耗时逻辑和 UI 点击回调耦合。</td>
+            <td>把耗时任务拆到后台线程、协程、线程池或异步任务；主线程只更新 UI 状态。</td>
+            <td>主线程栈不再出现业务阻塞方法，Pending 队列不再持续堆积。</td>
+          </tr>
+          <tr>
+            <td>低置信度报告也需要人工复核。</td>
+            <td>保留当前消息、采样栈、Pending 队列、排除项一起看。</td>
+            <td>分析结论必须能引用至少两个 JSON 节点作为证据。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>3.3 修复后的验收标准</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>验收项</th>
+            <th>通过标准</th>
+            <th>怎么看</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>主线程当前消息耗时</td>
+            <td><code>mainThread.current.wallMs</code> 不再超过 SDK 疑似 ANR 阈值，点击回调应尽快结束。</td>
+            <td>重新触发同一操作，检查新 JSON 或确认不再生成同类疑似 ANR 报告。</td>
+          </tr>
+          <tr>
+            <td>主线程栈</td>
+            <td>栈中不再出现业务阻塞方法，例如 <code>Thread.sleep</code>、同步锁等待、同步网络、同步文件读写。</td>
+            <td>查看 <code>mainThread.stackFrames</code> 和 <code>stackSamples</code>。</td>
+          </tr>
+          <tr>
+            <td>Pending 队列</td>
+            <td>后续 UI 或输入消息不再长时间 <code>blockedMs</code>。</td>
+            <td>查看 <code>pendingQueue.messages[0].blockedMs</code>，确认没有持续堆积。</td>
+          </tr>
+          <tr>
+            <td>归因结果</td>
+            <td>不再出现同一入口的 <code>CURRENT_MESSAGE_SLOW</code>，或者归因转为其他真实问题后继续分析。</td>
+            <td>查看 <code>attribution.primary</code>、<code>evidence</code> 和主线程栈。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>3.4 防止同类问题再次出现</h3>
+      <ul>
+        <li>点击、滑动、输入、生命周期回调中不做同步等待；必须异步化。</li>
+        <li>耗时任务统一经过后台执行入口，避免业务代码随手在主线程执行阻塞逻辑。</li>
+        <li>对高频入口加埋点或日志，记录点击到结果展示的耗时，提前发现慢操作。</li>
+        <li>上线后按 <code>attribution.primary</code>、业务栈顶方法和页面聚类，优先治理重复出现的入口。</li>
+        <li>评审代码时重点搜索 <code>Thread.sleep</code>、<code>CountDownLatch.await</code>、<code>Future.get</code>、同步 I/O、主线程锁等待等高风险写法。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>4. 分析记录模板</h2>
+      <pre>报告 ID：121c7a9e-b7b8-424d-9d7c-d69e249a229d
+场景：输入事件当前慢消息
+系统是否确认 ANR：否，SDK 疑似 ANR
+SDK 初始归因：CURRENT_MESSAGE_SLOW
+关键证据 1：mainThread.current.wallMs = 3033ms
+关键证据 2：callbackClass = android.view.View$PerformClick
+关键证据 3：主线程栈命中 Thread.sleep 和 CurrentSlowInputScenario.run
+排除项：非 Sync Barrier、非 Binder、非系统调度延迟
+根因：按钮点击回调在主线程执行阻塞逻辑，导致当前消息执行过慢
+修复建议：移除主线程阻塞，把耗时逻辑异步化，主线程只做轻量 UI 更新
+修复验收：再次触发相同操作，不再生成同入口 CURRENT_MESSAGE_SLOW；主线程栈不再命中 Thread.sleep；Pending 队列不再长时间 blocked</pre>
+    </section>
+  </main>
+</body>
+</html>
