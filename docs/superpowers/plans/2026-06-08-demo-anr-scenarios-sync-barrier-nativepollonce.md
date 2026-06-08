@@ -553,7 +553,7 @@ git commit -m "实现 Sync Barrier 泄漏场景类"
 - Modify: `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 - Delete: `app/src/main/java/com/valiantyan/vibeanrmonitoring/SyncBarrierLeakScenario.kt`
 
-- [ ] **Step 1: Update MainActivity import**
+- [x] **Step 1: Update MainActivity import**
 
 Modify `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`.
 
@@ -571,11 +571,11 @@ private val syncBarrierLeakScenario: SyncBarrierLeakScenario by lazy {
 }
 ```
 
-- [ ] **Step 2: Delete old root package scenario**
+- [x] **Step 2: Delete old root package scenario**
 
 Delete `app/src/main/java/com/valiantyan/vibeanrmonitoring/SyncBarrierLeakScenario.kt`.
 
-- [ ] **Step 3: Compile app**
+- [x] **Step 3: Compile app**
 
 Run:
 
@@ -585,7 +585,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 4: Run focused app scenario tests**
+- [x] **Step 4: Run focused app scenario tests**
 
 Run:
 
@@ -595,7 +595,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt app/src/main/java/com/valiantyan/vibeanrmonitoring/SyncBarrierLeakScenario.kt

@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
+import com.valiantyan.vibeanrmonitoring.scenario.SyncBarrierLeakScenario
 
 /**
  * ANR SDK 示例入口，提供全量验收所需的主线程慢消息、消息风暴、忙等和等待类场景。
