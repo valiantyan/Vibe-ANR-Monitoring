@@ -207,8 +207,8 @@ val uploader = AnrReportUploader { report: AnrReport ->
 
 ```bash
 adb shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb shell run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<eventId>.json
-adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<eventId>.json > anr-report.json
+adb shell run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<eventId>.JSON
+adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<eventId>.JSON > anr-report.JSON
 ```
 
 ### 6.1 JSON 报告目录

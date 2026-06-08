@@ -61,7 +61,7 @@ adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s emulator-5554 logcat -c
 adb -s emulator-5554 shell input tap 540 876
 adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/b027eea9-1c62-48a9-938c-ee1e1f28da0d.json
+adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/b027eea9-1c62-48a9-938c-ee1e1f28da0d.JSON
 ```
 
 关键日志：
@@ -118,7 +118,7 @@ adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s emulator-5554 logcat -c
 adb -s emulator-5554 shell input tap 540 1212
 adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/65ec033f-7411-4fe4-a5b2-2d92dee348ef.json
+adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/65ec033f-7411-4fe4-a5b2-2d92dee348ef.JSON
 ```
 
 关键日志：
@@ -179,7 +179,7 @@ adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s <device-id> logcat -c
 adb -s <device-id> shell input tap <message-storm-button-x> <message-storm-button-y>
 adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json
+adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.JSON
 ```
 
 实际执行：
@@ -191,7 +191,7 @@ adb -s emulator-5554 logcat -c
 adb -s emulator-5554 shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity
 adb -s emulator-5554 shell input tap 540 1044
 adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/2b47738a-806b-4b22-a136-b71cd5c37416.json
+adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/2b47738a-806b-4b22-a136-b71cd5c37416.JSON
 ```
 
 关键 JSON 字段：

@@ -598,7 +598,7 @@ Run:
 ```bash
 mkdir -p manual-anr-reports
 adb shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<eventId>.json > manual-anr-reports/<eventId>.json
+adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<eventId>.JSON > manual-anr-reports/<eventId>.JSON
 ```
 
 Expected: at least one JSON report is available in `files/anr-monitor-reports`. Replace `<eventId>` with the newest file name printed by the `ls` command. The SDK writes reports to the app private `filesDir`, so do not use an external storage directory as the primary path.

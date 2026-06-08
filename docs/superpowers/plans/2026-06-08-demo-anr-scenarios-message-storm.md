@@ -587,7 +587,7 @@ Run:
 
 ```bash
 adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json > message-storm-<event-id>.json
+adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.JSON > message-storm-<event-id>.JSON
 ```
 
 Expected: local `message-storm-<event-id>.json` exists and is not empty.
@@ -597,7 +597,7 @@ Expected: local `message-storm-<event-id>.json` exists and is not empty.
 Run:
 
 ```bash
-rg -n "\"primary\"|MESSAGE_STORM|pending repeated target count|MessageStormScenario|\"pendingQueue\"|\"targetClass\"|\"callbackClass\"|\"binderBlock\"|\"barrierEvidence\"" message-storm-<event-id>.json
+rg -n "\"primary\"|MESSAGE_STORM|pending repeated target count|MessageStormScenario|\"pendingQueue\"|\"targetClass\"|\"callbackClass\"|\"binderBlock\"|\"barrierEvidence\"" message-storm-<event-id>.JSON
 ```
 
 Expected output contains:

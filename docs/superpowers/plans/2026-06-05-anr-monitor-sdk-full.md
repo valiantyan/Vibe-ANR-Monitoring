@@ -2453,7 +2453,7 @@ class LocalAnrReportWriter(
         if (!reportDirectory.exists()) {
             reportDirectory.mkdirs()
         }
-        val file = File(reportDirectory, "${report.snapshot.eventId}.json")
+        val file = File(reportDirectory, "${report.snapshot.eventId}.JSON")
         file.writeText(
             text = encoder.encode(report = report),
             charset = Charsets.UTF_8,
@@ -3753,13 +3753,13 @@ class ReportRetentionPolicyTest {
 
         val expired = policy.selectExpiredReports(
             reports = listOf(
-                LocalReportMeta(fileName = "1.json", createUptimeMs = 1L),
-                LocalReportMeta(fileName = "2.json", createUptimeMs = 2L),
-                LocalReportMeta(fileName = "3.json", createUptimeMs = 3L),
+                LocalReportMeta(fileName = "1.JSON", createUptimeMs = 1L),
+                LocalReportMeta(fileName = "2.JSON", createUptimeMs = 2L),
+                LocalReportMeta(fileName = "3.JSON", createUptimeMs = 3L),
             ),
         )
 
-        assertEquals(listOf("1.json"), expired.map { report -> report.fileName })
+        assertEquals(listOf("1.JSON"), expired.map { report -> report.fileName })
     }
 }
 ```

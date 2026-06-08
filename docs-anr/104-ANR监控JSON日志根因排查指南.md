@@ -737,61 +737,61 @@ availableStorageBytes = 183775485952
 查看报告目录：
 
 ```bash
-jq 'keys' anr-report.json
+jq 'keys' anr-report.JSON
 ```
 
 查看 SDK 归因：
 
 ```bash
-jq '.attribution' anr-report.json
+jq '.attribution' anr-report.JSON
 ```
 
 查看系统确认信息：
 
 ```bash
-jq '.systemAnr' anr-report.json
+jq '.systemAnr' anr-report.JSON
 ```
 
 查看主线程栈：
 
 ```bash
-jq '.mainThread.stackFrames' anr-report.json
+jq '.mainThread.stackFrames' anr-report.JSON
 ```
 
 查看 Pending 队头：
 
 ```bash
-jq '.pendingQueue.messages[0]' anr-report.json
+jq '.pendingQueue.messages[0]' anr-report.JSON
 ```
 
 查看被堵住的关键组件消息：
 
 ```bash
-jq '.pendingQueue.messages[] | select(.isCriticalComponent == true)' anr-report.json
+jq '.pendingQueue.messages[] | select(.isCriticalComponent == true)' anr-report.JSON
 ```
 
 查看 Barrier 证据：
 
 ```bash
-jq '.barrierEvidence' anr-report.json
+jq '.barrierEvidence' anr-report.JSON
 ```
 
 查看 Binder 证据：
 
 ```bash
-jq '.binderBlock' anr-report.json
+jq '.binderBlock' anr-report.JSON
 ```
 
 查看 CPU 排名：
 
 ```bash
-jq '.threadCpu.topThreads' anr-report.json
+jq '.threadCpu.topThreads' anr-report.JSON
 ```
 
 查看 SDK 自检失败原因：
 
 ```bash
-jq '.sdkDiagnostics.collectorFailures' anr-report.json
+jq '.sdkDiagnostics.collectorFailures' anr-report.JSON
 ```
 
 如果没有 `jq`，也可以用 Android Studio、VS Code 或任意 JSON Viewer 打开，按节点折叠阅读。最常搜索的关键词是：

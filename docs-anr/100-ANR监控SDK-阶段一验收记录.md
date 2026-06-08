@@ -90,7 +90,7 @@ UI 坐标来自 `uiautomator dump`：
 
 ```bash
 $ adb shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-6d722839-938b-4d62-a6d5-faf6f3311605.json
+6d722839-938b-4d62-a6d5-faf6f3311605.JSON
 ```
 
 Logcat 输出：
@@ -136,7 +136,7 @@ $ adb shell "run-as com.valiantyan.vibeanrmonitoring grep -o '\"current\":{[^}]*
 
 ```bash
 $ adb shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-e6ab7a35-09ae-4ee5-89c9-eae321e9ee48.json
+e6ab7a35-09ae-4ee5-89c9-eae321e9ee48.JSON
 ```
 
 Logcat 输出：
