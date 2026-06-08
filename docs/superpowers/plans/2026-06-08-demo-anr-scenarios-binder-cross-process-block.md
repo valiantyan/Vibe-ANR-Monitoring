@@ -1072,7 +1072,7 @@ git commit -m "更新 Binder 跨进程阻塞验证说明"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Run full local verification**
+- [x] **Step 1: Run full local verification**
 
 Run:
 
@@ -1082,7 +1082,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 2: Install debug APK**
+- [x] **Step 2: Install debug APK**
 
 Run:
 
@@ -1093,7 +1093,7 @@ adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
 
 Expected: `Success`.
 
-- [ ] **Step 3: Trigger Binder scenario**
+- [x] **Step 3: Trigger Binder scenario**
 
 Run:
 
@@ -1116,7 +1116,7 @@ W VibeAnrApplication: suspect ANR captured: <event-id>
 W VibeAnrApplication: ANR report written: <event-id>
 ```
 
-- [ ] **Step 4: Pull the latest report**
+- [x] **Step 4: Pull the latest report**
 
 Run:
 
@@ -1127,7 +1127,7 @@ adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/an
 
 Expected: report file exists and contains `binderBlock`.
 
-- [ ] **Step 5: Verify JSON evidence manually**
+- [x] **Step 5: Verify JSON evidence manually**
 
 Open `/tmp/binder-cross-process-anr.json` and verify these exact signals:
 
@@ -1144,7 +1144,7 @@ barrierEvidence.stuckTokens = []
 
 If `attribution.primary=CURRENT_MESSAGE_SLOW` but `binderBlock.mainThreadInBinder=true`, record it as a SDK attribution gap and do not mark the task complete until `AttributionAnalyzer` priority or Binder evidence conditions are reviewed.
 
-- [ ] **Step 6: Update acceptance record**
+- [x] **Step 6: Update acceptance record**
 
 Replace the “验收结论：待执行后填写。” line in the new Binder section of `docs-anr/105-Demo-ANR场景实现计划.md` with the actual event id and key fields:
 
@@ -1152,7 +1152,7 @@ Replace the “验收结论：待执行后填写。” line in the new Binder se
 验收结论：Binder / 跨进程阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `BINDER_BLOCK_SUSPECTED`，`binderBlock.suspected=true`，主线程栈命中 `BinderProxy.transact` 并能回溯到 `BinderCrossProcessBlockScenario.run`。Barrier 证据不是本次主因，因此本次可以写为“主线程同步 Binder 调用远端进程时等待返回，属于跨进程阻塞疑似”，不能写为“已确认跨进程死锁”。
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md
