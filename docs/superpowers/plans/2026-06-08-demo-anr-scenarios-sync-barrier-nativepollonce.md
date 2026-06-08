@@ -691,7 +691,7 @@ git commit -m "补充 Sync Barrier 场景验证说明"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Update scenario overview row**
+- [x] **Step 1: Update scenario overview row**
 
 In `docs-anr/105-Demo-ANR场景实现计划.md`, update the Sync Barrier row to:
 
@@ -699,7 +699,7 @@ In `docs-anr/105-Demo-ANR场景实现计划.md`, update the Sync Barrier row to:
 | 4 | Sync Barrier 泄漏 / nativePollOnce | 点击按钮反射插入 Sync Barrier 且故意不移除 | `SYNC_BARRIER_STUCK` | `pendingQueue.messages[0].isBarrierLike=true`、`barrierEvidence.alignedWithPendingBarrier=true`、`nativePollOnceRecords` | 已实现，待手动验收 |
 ```
 
-- [ ] **Step 2: Add fourth batch section**
+- [x] **Step 2: Add fourth batch section**
 
 Append this section after the existing message storm batch section:
 
@@ -741,7 +741,7 @@ Append this section after the existing message storm batch section:
 - [ ] JSON 中 `barrierEvidence.stuckTokens[].postStack` 能定位到 `SyncBarrierLeakScenario.run`。
 ```
 
-- [ ] **Step 3: Check markdown formatting**
+- [x] **Step 3: Check markdown formatting**
 
 Run:
 
@@ -751,7 +751,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md

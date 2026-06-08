@@ -11,21 +11,21 @@
 
 ## 场景总览
 
-| 顺序 | 场景 | 触发方式 | 预期归因 | 关键 JSON 字段 |
-| --- | --- | --- | --- | --- |
-| 1 | 输入事件当前慢消息 | 点击按钮后主线程阻塞 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.stackFrames` |
-| 2 | 主线程 CPU 忙等 | 点击“当前消息忙等”后主线程 busy loop 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.current.cpuMs`、`threadCpu.topThreads`、`MainThreadCpuBusyScenario.run` |
-| 3 | 消息风暴 | 点击“消息风暴”后投递大量同类主线程消息 | `MESSAGE_STORM` | `attribution.evidence`、`pendingQueue.messages` 重复 `MessageStormHandler` / `StormRunnable`、`MessageStormScenario.run` |
-| 4 | Sync Barrier 泄漏 | 插入 Barrier 后不移除 | `SYNC_BARRIER_STUCK` | `pendingQueue.messages[0].isBarrierLike`、`barrierEvidence.stuckTokens`、`nativePollOnceRecords` |
-| 5 | 主线程锁等待 | 子线程持锁，主线程等待锁 | 当前慢消息加等待栈证据 | `mainThread.stackFrames` 中锁等待业务帧 |
-| 6 | BroadcastReceiver 超时 | 发送显式广播，Receiver 阻塞 | Broadcast 组件超时 | `systemAnr.anrType`、Receiver 相关 ActivityThread 消息 |
-| 7 | Service 超时 | 启动阻塞 Service | Service 组件超时 | `systemAnr.anrType`、Service 相关 ActivityThread 消息 |
-| 8 | ContentProvider 阻塞 | 查询阻塞 Provider | Provider 组件阻塞 | Provider 调用栈和系统组件证据 |
-| 9 | Binder 跨进程阻塞 | 主进程调用远端阻塞服务 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected`、主线程 Binder 栈 |
-| 10 | 主线程 IO/数据库阻塞 | 主线程执行慢 IO 或慢查询 | `CURRENT_MESSAGE_SLOW` | IO/DB 业务栈、当前消息耗时 |
-| 11 | 线程池耗尽后主线程等待 | 占满线程池后主线程等待结果 | 等待类当前慢消息 | 主线程等待栈、后台线程证据 |
-| 12 | GC / 内存抖动 | 大量分配对象制造 GC 压力 | 环境或资源辅因 | `environmentSnapshot`、历史消息抖动 |
-| 13 | 进程内 CPU 竞争 | 后台线程打满 CPU | CPU 竞争辅因 | `threadCpu.topThreads`、`checktime.maxDelayMs` |
+| 顺序 | 场景 | 触发方式 | 预期归因 | 关键 JSON 字段 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 输入事件当前慢消息 | 点击按钮后主线程阻塞 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.stackFrames` | 已验收 |
+| 2 | 主线程 CPU 忙等 | 点击“当前消息忙等”后主线程 busy loop 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.current.cpuMs`、`threadCpu.topThreads`、`MainThreadCpuBusyScenario.run` | 已验收 |
+| 3 | 消息风暴 | 点击“消息风暴”后投递大量同类主线程消息 | `MESSAGE_STORM` | `attribution.evidence`、`pendingQueue.messages` 重复 `MessageStormHandler` / `StormRunnable`、`MessageStormScenario.run` | 已验收 |
+| 4 | Sync Barrier 泄漏 / nativePollOnce | 点击按钮反射插入 Sync Barrier 且故意不移除 | `SYNC_BARRIER_STUCK` | `pendingQueue.messages[0].isBarrierLike=true`、`barrierEvidence.alignedWithPendingBarrier=true`、`nativePollOnceRecords` | 已实现，待手动验收 |
+| 5 | 主线程锁等待 | 子线程持锁，主线程等待锁 | 当前慢消息加等待栈证据 | `mainThread.stackFrames` 中锁等待业务帧 | 待实现 |
+| 6 | BroadcastReceiver 超时 | 发送显式广播，Receiver 阻塞 | Broadcast 组件超时 | `systemAnr.anrType`、Receiver 相关 ActivityThread 消息 | 待实现 |
+| 7 | Service 超时 | 启动阻塞 Service | Service 组件超时 | `systemAnr.anrType`、Service 相关 ActivityThread 消息 | 待实现 |
+| 8 | ContentProvider 阻塞 | 查询阻塞 Provider | Provider 组件阻塞 | Provider 调用栈和系统组件证据 | 待实现 |
+| 9 | Binder 跨进程阻塞 | 主进程调用远端阻塞服务 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected`、主线程 Binder 栈 | 待实现 |
+| 10 | 主线程 IO/数据库阻塞 | 主线程执行慢 IO 或慢查询 | `CURRENT_MESSAGE_SLOW` | IO/DB 业务栈、当前消息耗时 | 待实现 |
+| 11 | 线程池耗尽后主线程等待 | 占满线程池后主线程等待结果 | 等待类当前慢消息 | 主线程等待栈、后台线程证据 | 待实现 |
+| 12 | GC / 内存抖动 | 大量分配对象制造 GC 压力 | 环境或资源辅因 | `environmentSnapshot`、历史消息抖动 | 待实现 |
+| 13 | 进程内 CPU 竞争 | 后台线程打满 CPU | CPU 竞争辅因 | `threadCpu.topThreads`、`checktime.maxDelayMs` | 待实现 |
 
 ## 当前批次：输入事件当前慢消息
 
@@ -211,6 +211,42 @@ barrierEvidence.stuckTokens = []
 ```
 
 验收结论：消息风暴场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `MESSAGE_STORM`，`attribution.evidence` 给出 `pending repeated target count=80`，`pendingQueue.messages` 能看到 80 条 `MessageStormHandler` / `StormRunnable` 消息，Binder 和 Barrier 证据均不是本次主因，因此根因可以明确写为“按钮点击后向主线程投递大量重复消息，导致队列拥塞和输入响应延迟”。
+
+## 第四批次：Sync Barrier 泄漏 / nativePollOnce
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“Sync Barrier 泄漏 ANR”。
+4. 持续点击屏幕 5 到 10 秒，制造输入等待窗口。
+5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `attribution.primary`，预期为 `SYNC_BARRIER_STUCK`。再看 `pendingQueue.messages[0]`，预期 `isBarrierLike=true` 且 `targetClass=null`。然后看 `barrierEvidence.stuckTokens`，预期 token 能和 `pendingQueue.messages[0].arg1` 对齐。最后看 `barrierEvidence.nativePollOnceRecords`，如果存在 `source=STACK_INFERENCE` 或 `source=HOOK`，说明 SDK 已把 nativePollOnce 表象和队头 Barrier 证据串起来。
+
+### 排除项
+
+- `binderBlock.suspected` 不应该为 true。
+- `attribution.primary` 不应该是 `MESSAGE_STORM`。
+- 不能只凭 `mainThread.stackFrames` 中出现 `nativePollOnce` 下结论，必须同时看到 Pending 队头 Barrier 和 token 对齐证据。
+
+### 修复方向
+
+- 检查 Barrier token 的 post/remove 配对。
+- 重点排查插入栈中的业务 owner、UI 刷新、动画或调度封装。
+- 确认异常分支、取消分支和页面销毁分支都会移除 Barrier。
+
+### 验收记录
+
+- [ ] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.SyncBarrierLeakScenarioTest` 通过。
+- [ ] `./gradlew :app:compileDebugKotlin` 通过。
+- [ ] 真机或模拟器点击“Sync Barrier 泄漏 ANR”后生成 JSON。
+- [ ] JSON 中 `attribution.primary=SYNC_BARRIER_STUCK`。
+- [ ] JSON 中 `pendingQueue.messages[0].isBarrierLike=true`。
+- [ ] JSON 中 `barrierEvidence.alignedWithPendingBarrier=true`。
+- [ ] JSON 中 `barrierEvidence.stuckTokens[].postStack` 能定位到 `SyncBarrierLeakScenario.run`。
 
 ## 后续批次顺序
 
