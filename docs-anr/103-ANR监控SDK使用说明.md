@@ -650,6 +650,7 @@ Demo 页面按钮：
 | `当前消息忙等` | 主线程忙等 | 当前消息慢、线程 CPU TopN |
 | `Binder 模拟等待` | 模拟等待类窗口 | 主线程等待栈、Binder suspected 相关复核入口 |
 | `Sync Barrier 泄漏 ANR` | 反射插入 Sync Barrier 并故意不移除 | `SYNC_BARRIER_STUCK`、队头 `isBarrierLike=true`、`stuckTokens` token 对齐 |
+| `BroadcastReceiver 超时` | 发送显式应用内广播，Receiver 主线程阻塞 12 秒 | `systemAnr.anrType=BROADCAST_*`、`BroadcastTimeoutReceiver.onReceive`、当前消息耗时 |
 
 验证步骤：
 
@@ -790,6 +791,55 @@ barrierEvidence.nativePollOnceRecords[].source = STACK_INFERENCE 或 HOOK
 - 修复后重新验证同一场景，预期 `barrierEvidence.stuckTokens` 不再出现长期存活 token，Pending 队头不再是 `isBarrierLike=true`。
 
 同一次主线程卡死在恢复前只会写出第一份报告。若看到多份报告，先比较 `pendingQueue.messages[0].arg1`、`barrierEvidence.stuckTokens[].token` 和 `event.timeUptimeMs`：token 相同且时间递增，通常是同一轮卡死的历史报告；token 不同或心跳恢复后再次卡死，才按新事件处理。
+
+### BroadcastReceiver 超时场景
+
+这个场景用于验证“系统广播组件超时”和“业务 Receiver 阻塞根因”要分开看。按钮本身只发送显式应用内广播，真正阻塞发生在 `BroadcastTimeoutReceiver.onReceive`。
+
+操作步骤：
+
+1. 安装 debug 包并打开 Demo App。
+2. 点击“BroadcastReceiver 超时”。
+3. 等待 12 秒左右，期间不要切到其他 App。
+4. 观察 Logcat 中 `VibeAnrApplication` 是否输出 `suspect ANR captured`、`confirmed ANR report` 或 `ANR report written`。
+5. 从设备拉取 `files/anr-monitor-reports/<eventId>.json`。
+
+优先检查这些字段：
+
+```text
+mainThread.stackFrames 包含 BroadcastTimeoutReceiver.onReceive
+mainThread.current.wallMs >= 3000
+systemAnr.isConfirmedAnr = true 或 false
+systemAnr.anrType = BROADCAST_FOREGROUND 或 BROADCAST_BACKGROUND 或 UNKNOWN
+systemAnr.componentTimeoutMs = 10000 或 60000 或 null
+barrierEvidence.stuckTokens = []
+binderBlock.suspected = false
+```
+
+字段解释：
+
+| 字段 | 期望 | 怎么理解 |
+| --- | --- | --- |
+| `mainThread.stackFrames` | 包含 `BroadcastTimeoutReceiver.onReceive` | 直接定位 Receiver 业务入口正在阻塞 |
+| `systemAnr.isConfirmedAnr` | 可能为 `true` 或 `false` | `false` 代表 SDK 先抓到疑似 ANR，`true` 代表系统也确认了 ANR |
+| `systemAnr.anrType` | 系统确认后应为 `BROADCAST_FOREGROUND` 或 `BROADCAST_BACKGROUND` | 说明系统等待广播完成通知超时 |
+| `systemAnr.componentTimeoutMs` | 前台广播通常 `10000`，后台广播通常 `60000` | 用来解释系统为什么在该时间点确认 ANR |
+| `attribution.primary` | 常见为 `CURRENT_MESSAGE_SLOW` | 表示当前主线程消息正在慢执行，业务根因仍要看栈 |
+| `barrierEvidence.stuckTokens` | 空数组或不是主因 | 排除 Sync Barrier 泄漏 |
+| `binderBlock.suspected` | `false` | 排除 Binder / 跨进程等待 |
+
+定位结论写法：
+
+```text
+本次 ANR 是 BroadcastReceiver 执行超时。系统侧证据是 systemAnr.anrType 命中 BROADCAST_FOREGROUND/BROADCAST_BACKGROUND 或广播完成通知未及时返回；业务根因证据是主线程栈包含 BroadcastTimeoutReceiver.onReceive，当前消息执行时间超过阈值。Barrier 和 Binder 证据不构成本次主因，因此根因是 Receiver 在主线程执行了耗时阻塞逻辑。
+```
+
+修复方向：
+
+- `onReceive()` 中只做参数校验、轻量分发和状态记录，不执行耗时 IO、网络、锁等待或长计算。
+- 必须异步处理时使用 `goAsync()` 获取 `PendingResult`，把耗时工作切到后台线程，并确保所有分支都会调用 `finish()`。
+- 前台广播按 10 秒预算看待，实际业务应远低于该阈值，建议把主线程 Receiver 执行控制在数百毫秒内。
+- 如果广播只是应用内事件，优先考虑更明确的进程内事件分发或后台任务，不要用 Receiver 承载复杂业务。
 
 ## 9. 线上接入清单
 

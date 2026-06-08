@@ -519,7 +519,7 @@ git commit -m "接入 BroadcastReceiver 超时按钮"
 **Files:**
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 
-- [ ] **Step 1: Add button row**
+- [x] **Step 1: Add button row**
 
 In `docs-anr/103-ANR监控SDK使用说明.md`, update the Demo 页面按钮 table by adding this row after `Sync Barrier 泄漏 ANR`:
 
@@ -527,7 +527,7 @@ In `docs-anr/103-ANR监控SDK使用说明.md`, update the Demo 页面按钮 tabl
 | `BroadcastReceiver 超时` | 发送显式应用内广播，Receiver 主线程阻塞 12 秒 | `systemAnr.anrType=BROADCAST_*`、`BroadcastTimeoutReceiver.onReceive`、当前消息耗时 |
 ```
 
-- [ ] **Step 2: Add BroadcastReceiver section**
+- [x] **Step 2: Add BroadcastReceiver section**
 
 Add this section after the “Sync Barrier 泄漏 / nativePollOnce 场景” section and before “线上接入清单”:
 
@@ -582,7 +582,7 @@ binderBlock.suspected = false
 - 如果广播只是应用内事件，优先考虑更明确的进程内事件分发或后台任务，不要用 Receiver 承载复杂业务。
 ````
 
-- [ ] **Step 3: Check doc formatting**
+- [x] **Step 3: Check doc formatting**
 
 Run:
 
@@ -592,7 +592,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md
