@@ -362,7 +362,7 @@ git commit -m "接入消息风暴按钮"
 **Files:**
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 
-- [ ] **Step 1: Add message storm verification section**
+- [x] **Step 1: Add message storm verification section**
 
 In `docs-anr/103-ANR监控SDK使用说明.md`, find the Demo 场景验证 section that already includes “当前消息慢” and “当前消息忙等”. Add this new subsection after “当前消息忙等”:
 
@@ -403,7 +403,7 @@ In `docs-anr/103-ANR监控SDK使用说明.md`, find the Demo 场景验证 sectio
 - 页面销毁、数据源切换或请求取消时，及时 `removeCallbacks` / `removeMessages` 清理过期任务。
 ```
 
-- [ ] **Step 2: Verify markdown mentions MESSAGE_STORM**
+- [x] **Step 2: Verify markdown mentions MESSAGE_STORM**
 
 Run:
 
@@ -413,7 +413,7 @@ rg -n "消息风暴场景|MESSAGE_STORM|pending repeated target count" docs-anr/
 
 Expected: output includes the new subsection title, the attribution code, and the evidence phrase.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md

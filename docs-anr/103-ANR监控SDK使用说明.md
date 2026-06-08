@@ -701,6 +701,41 @@ Demo 页面按钮：
 本次报告是 Demo 当前消息忙等场景触发的疑似 ANR。当前主线程消息执行时间超过 3000ms，同时当前消息 CPU 耗时和线程 CPU 证据都偏高，主线程栈包含 MainThreadCpuBusyScenario.run 或 DefaultCpuBusyAction.burn。Barrier 和 Binder 证据不构成本次主因，因此根因是点击回调在主线程持续计算，导致输入事件无法及时处理。
 ```
 
+### 消息风暴场景
+
+用于验证“主线程 Pending 队列中堆积大量同类消息”的定位能力。这个场景不是看单条业务代码执行慢，而是看队列里是否出现大量重复 `MessageStormHandler` 或 `StormRunnable`。
+
+操作步骤：
+
+1. 安装并打开 Demo App。
+2. 点击“消息风暴”。
+3. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+4. 拉取最新 JSON 报告。
+
+重点看这些字段：
+
+| 字段 | 预期 | 怎么理解 |
+| --- | --- | --- |
+| `attribution.primary` | `MESSAGE_STORM` | SDK 判断本次主因是消息风暴 |
+| `attribution.evidence` | 包含 `pending repeated target count=...` | Pending 队列里同类消息数量已经超过阈值 |
+| `pendingQueue.messages` | 多条消息的 `targetClass` 包含 `MessageStormHandler`，或 `callbackClass` 包含 `StormRunnable` | 证明主线程不是卡在一个孤立任务，而是被重复消息压住 |
+| `mainThread.current.wallMs` | 可能超过 3000ms | Demo 会短时间占住点击消息，目的是给 Pending 快照留下采集窗口 |
+| `barrierEvidence.stuckTokens` | 空数组或不是主因 | 说明本次不是 Sync Barrier 泄漏 |
+| `binderBlock.suspected` | `false` | 说明本次不是 Binder 或跨进程等待 |
+
+定位结论写法：
+
+```text
+本次 ANR 主因是消息风暴。证据是 attribution.primary=MESSAGE_STORM，pendingQueue.messages 中存在大量 MessageStormHandler/StormRunnable，attribution.evidence 给出 pending repeated target count。当前消息耗时只是 Demo 为了保留采集窗口制造的阻塞，不是本次根因。
+```
+
+修复方向：
+
+- 合并重复 `Handler.post` / `sendMessage`，同一类刷新任务只保留最后一次。
+- 在投递前使用“是否已在队列中”的状态位做去重。
+- 对高频事件增加防抖或节流，避免每次输入、滚动、数据变化都投递主线程任务。
+- 页面销毁、数据源切换或请求取消时，及时 `removeCallbacks` / `removeMessages` 清理过期任务。
+
 验证 `Sync Barrier 泄漏 ANR` 时，点击按钮后主线程会被故意卡住。为了触发系统 Input ANR，可以在按钮点击后继续点击屏幕；为了复核 SDK 报告，优先看以下字段：
 
 ```text
