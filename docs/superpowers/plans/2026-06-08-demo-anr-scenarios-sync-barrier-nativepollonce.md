@@ -608,7 +608,7 @@ git commit -m "接入 Sync Barrier 泄漏按钮"
 **Files:**
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 
-- [ ] **Step 1: Replace existing Barrier validation block**
+- [x] **Step 1: Replace existing Barrier validation block**
 
 In `docs-anr/103-ANR监控SDK使用说明.md`, replace the paragraph from `验证 Sync Barrier 泄漏 ANR` through `同一次主线程卡死在恢复前只会写出第一份报告...` with:
 
@@ -669,7 +669,7 @@ barrierEvidence.nativePollOnceRecords[].source = STACK_INFERENCE 或 HOOK
 同一次主线程卡死在恢复前只会写出第一份报告。若看到多份报告，先比较 `pendingQueue.messages[0].arg1`、`barrierEvidence.stuckTokens[].token` 和 `event.timeUptimeMs`：token 相同且时间递增，通常是同一轮卡死的历史报告；token 不同或心跳恢复后再次卡死，才按新事件处理。
 ```
 
-- [ ] **Step 2: Check markdown formatting**
+- [x] **Step 2: Check markdown formatting**
 
 Run:
 
@@ -679,7 +679,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md

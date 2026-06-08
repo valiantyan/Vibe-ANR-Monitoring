@@ -736,18 +736,58 @@ Demo 页面按钮：
 - 对高频事件增加防抖或节流，避免每次输入、滚动、数据变化都投递主线程任务。
 - 页面销毁、数据源切换或请求取消时，及时 `removeCallbacks` / `removeMessages` 清理过期任务。
 
-验证 `Sync Barrier 泄漏 ANR` 时，点击按钮后主线程会被故意卡住。为了触发系统 Input ANR，可以在按钮点击后继续点击屏幕；为了复核 SDK 报告，优先看以下字段：
+### Sync Barrier 泄漏 / nativePollOnce 场景
+
+这个场景用于验证最容易误判的一类 ANR：系统 Trace 看到主线程在 `android.os.MessageQueue.nativePollOnce`，但真实原因不是“主线程空闲”，而是 Sync Barrier 留在队头，普通同步消息被挡住无法执行。
+
+操作步骤：
+
+1. 安装 debug 包并打开 Demo App。
+2. 点击“Sync Barrier 泄漏 ANR”。
+3. 点击后继续点屏幕 5 到 10 秒，让系统输入事件也进入等待窗口。
+4. 观察 Logcat 中 `VibeAnrApplication` 是否输出 `confirmed ANR report: <eventId>`。
+5. 从设备拉取 `files/anr-monitor-reports/<eventId>.json`。
+
+优先检查这些字段：
 
 ```text
 attribution.primary = SYNC_BARRIER_STUCK
+pendingQueue.available = true
 pendingQueue.messages[0].isBarrierLike = true
 pendingQueue.messages[0].targetClass = null
+pendingQueue.messages[0].arg1 = <barrier token>
+barrierEvidence.available = true
 barrierEvidence.stuckTokens[].token = pendingQueue.messages[0].arg1
+barrierEvidence.stuckTokens[].postStack 包含 SyncBarrierLeakScenario.run
 barrierEvidence.alignedWithPendingBarrier = true
 barrierEvidence.nativePollOnceRecords[].source = STACK_INFERENCE 或 HOOK
 ```
 
-如果系统 trace 同时显示主线程在 `android.os.MessageQueue.nativePollOnce`，这次问题的可评审结论应写成：主线程不是业务代码直接耗时，而是 Sync Barrier 泄漏挡住同步消息，导致 Looper 看似停在 `nativePollOnce`。
+再做排除检查：
+
+| 字段 | 期望 | 说明 |
+| --- | --- | --- |
+| `attribution.primary` | `SYNC_BARRIER_STUCK` | SDK 已把队头 Barrier 识别为主因 |
+| `pendingQueue.messages[0].isBarrierLike` | `true` | 队头消息像 Sync Barrier，普通同步消息会被挡住 |
+| `pendingQueue.messages[0].targetClass` | `null` | Sync Barrier 的结构特征是没有 target |
+| `barrierEvidence.alignedWithPendingBarrier` | `true` | token 证据能和 Pending 队头 Barrier 对上 |
+| `barrierEvidence.stuckTokens[].postStack` | 包含 `SyncBarrierLeakScenario.run` | 能定位是谁插入了未移除的 Barrier |
+| `binderBlock.suspected` | `false` | 排除 Binder / 跨进程等待主因 |
+| `attribution.primary` | 不是 `MESSAGE_STORM` | 排除大量同类消息堆积主因 |
+
+定位结论写法：
+
+```text
+本次 ANR 主因是 Sync Barrier 泄漏。证据是 attribution.primary=SYNC_BARRIER_STUCK，Pending 队头消息 isBarrierLike=true 且 targetClass=null，barrierEvidence.stuckTokens 中的 token 与 pendingQueue.messages[0].arg1 对齐，postStack 指向 SyncBarrierLeakScenario.run。主线程停在 nativePollOnce 是结果，不是根因；根因是未移除的 Sync Barrier 挡住了后续同步消息。
+```
+
+修复方向：
+
+- 检查所有 `postSyncBarrier` 和 `removeSyncBarrier` 是否严格成对执行。
+- 不要在异常分支、页面销毁、动画取消、任务取消时漏掉 `removeSyncBarrier`。
+- 如果业务封装了 UI 调度、绘制、刷新合批能力，必须把 token 生命周期放进同一个 owner 中管理。
+- 为 Barrier token 增加超时告警，超过安全阈值时输出插入栈和页面信息。
+- 修复后重新验证同一场景，预期 `barrierEvidence.stuckTokens` 不再出现长期存活 token，Pending 队头不再是 `isBarrierLike=true`。
 
 同一次主线程卡死在恢复前只会写出第一份报告。若看到多份报告，先比较 `pendingQueue.messages[0].arg1`、`barrierEvidence.stuckTokens[].token` 和 `event.timeUptimeMs`：token 相同且时间递增，通常是同一轮卡死的历史报告；token 不同或心跳恢复后再次卡死，才按新事件处理。
 
