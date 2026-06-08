@@ -74,7 +74,8 @@ UI 坐标来自 `uiautomator dump`：
 
 - `Current Slow Message`：`[63,981][1017,1107]`，点击中心点 `540,1044`
 - `Message Storm`：`[63,1149][1017,1275]`，点击中心点 `540,1212`
-- `SharedPreferences Apply Burst`：`[63,1317][1017,1443]`，点击中心点 `540,1380`
+
+> 2026-06-08 范围纠偏：`SharedPreferences Apply Burst` 已从当前 Demo 和 SDK 验收中移除。第五篇文档只作为 ANR 监控完成后的实战分析案例，不再作为 SDK 需求或 Demo 场景。
 
 ## 当前消息慢场景
 
@@ -162,48 +163,6 @@ $ adb shell "run-as com.valiantyan.vibeanrmonitoring grep -o '\"current\":{[^}]*
 
 关键证据：Pending 队列中同类 `android.os.Handler` / `MainActivity$$ExternalSyntheticLambda3` 消息重复，归因证据为 `pending repeated target count=198`。
 
-## SharedPreferences apply 场景
-
-- 触发入口：`SharedPreferences Apply Burst`
-- 触发命令：`adb shell input tap 540 1380`
-- 报告文件：`d5939cc3-b6cb-455a-9c2e-5d34c6e23e2a.json`
-- 期望归因：`SP_APPLY_WAIT` 或当前慢消息中包含 SP 相关证据
-- 实际归因：`CURRENT_MESSAGE_SLOW`
-- 结论：PASS，按阶段一 demo 口径通过；稳定 `QueuedWork.waitToFinish` 专项复现进入后续全量验收
-
-报告目录输出：
-
-```bash
-$ adb shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-d5939cc3-b6cb-455a-9c2e-5d34c6e23e2a.json
-```
-
-Logcat 输出：
-
-```bash
-$ adb logcat -d -s VibeAnrApplication:W '*:S'
---------- beginning of main
-06-06 11:47:40.675  5738  5752 W VibeAnrApplication: suspect ANR captured: d5939cc3-b6cb-455a-9c2e-5d34c6e23e2a
-06-06 11:47:40.687  5738  5752 W VibeAnrApplication: confirmed ANR report: d5939cc3-b6cb-455a-9c2e-5d34c6e23e2a
-```
-
-关键 JSON 字段输出：
-
-```bash
-$ adb shell "run-as com.valiantyan.vibeanrmonitoring grep -o '\"primary\":\"[A-Z_]*\"' files/anr-monitor-reports/d5939cc3-b6cb-455a-9c2e-5d34c6e23e2a.json"
-"primary":"CURRENT_MESSAGE_SLOW"
-
-$ adb shell "run-as com.valiantyan.vibeanrmonitoring grep -o '\"current\":{[^}]*}' files/anr-monitor-reports/d5939cc3-b6cb-455a-9c2e-5d34c6e23e2a.json"
-"current":{"seq":66,"kind":"CURRENT","messageType":"looper_dispatch","what":0,"targetClass":"android.view.ViewRootImpl$ViewRootHandler","callbackClass":"android.view.View$PerformClick@adf02d0","isCriticalComponent":false,"startUptimeMs":500976,"endUptimeMs":null,"wallMs":3243,"cpuMs":0,"count":1,"sampleStackIds":[]}
-
-$ adb shell "run-as com.valiantyan.vibeanrmonitoring grep -o 'SharedPreferences[^\"]*' files/anr-monitor-reports/d5939cc3-b6cb-455a-9c2e-5d34c6e23e2a.json"
-SharedPreferencesBurst(MainActivity.kt:61)
-
-$ adb shell "run-as com.valiantyan.vibeanrmonitoring grep -o 'QueuedWork[^\"]*' files/anr-monitor-reports/d5939cc3-b6cb-455a-9c2e-5d34c6e23e2a.json"
-```
-
-最后一条 `QueuedWork` 检索命令无 stdout，退出码为 1。阶段一 demo 使用 `apply()` burst 后主动 `Thread.sleep`，不能稳定制造系统生命周期 `QueuedWork.waitToFinish` 栈；SP 专项稳定复现进入后续 instrumentation / 全量验收场景。
-
 ## 验收中发现并修复的问题
 
 ### 当前慢消息低 CPU 误判 UNKNOWN
@@ -234,4 +193,3 @@ $ adb shell "run-as com.valiantyan.vibeanrmonitoring grep -o 'QueuedWork[^\"]*' 
 
 - `CURRENT_MESSAGE_SLOW`：PASS
 - `MESSAGE_STORM`：PASS
-- `SharedPreferences Apply Burst`：按阶段一当前慢消息口径 PASS，稳定 SP wait 专项留到后续全量验收

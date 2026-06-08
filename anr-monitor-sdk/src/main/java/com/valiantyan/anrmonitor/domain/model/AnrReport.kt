@@ -53,9 +53,6 @@ data class AnrReport(
                 environmentSnapshot = SystemEnvironmentSnapshot.unavailable(
                     reason = "empty report",
                 ),
-                sharedPreferencesSnapshot = SharedPreferencesSnapshot.unavailable(
-                    reason = "empty report",
-                ),
                 barrierEvidenceSnapshot = BarrierEvidenceSnapshot.unavailable(
                     reason = "empty report",
                 ),

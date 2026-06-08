@@ -1,7 +1,7 @@
 package com.valiantyan.anrmonitor.domain.model
 
 /**
- * 归因主因和辅因编码，覆盖五篇资料中的关键 ANR 模式。
+ * 归因主因和辅因编码，覆盖 ANR 监控 SDK 内建的关键模式。
  */
 enum class AnrAttributionCode {
     /**
@@ -23,16 +23,6 @@ enum class AnrAttributionCode {
      * 同步屏障阻塞同步消息，导致主线程看似空闲但队列无法推进。
      */
     SYNC_BARRIER_STUCK,
-
-    /**
-     * SharedPreferences 首次加载等待。
-     */
-    SP_LOAD_WAIT,
-
-    /**
-     * SharedPreferences apply 后在 [android.app.QueuedWork] 等待落盘。
-     */
-    SP_APPLY_WAIT,
 
     /**
      * 主线程疑似阻塞在 Binder/跨进程调用，仍需线下 Trace 复核确认。

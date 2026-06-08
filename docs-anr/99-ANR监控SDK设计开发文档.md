@@ -1,17 +1,19 @@
 # ANR 监控 SDK 设计开发文档
 
-> 输入资料：`01-第一篇-设计原理及影响因素.md`、`02-第二篇-监控工具与分析思路.md`、`03-第三篇-实例剖析集锦.md`、`04-第四篇-Barrier导致主线程假死.md`、`05-第五篇-告别SharedPreference等待.md`
+> 需求输入：`01-第一篇-设计原理及影响因素.md`、`02-第二篇-监控工具与分析思路.md`、`03-第三篇-实例剖析集锦.md`、`04-第四篇-Barrier导致主线程假死.md`
+>
+> 实战分析样例：`05-第五篇-告别SharedPreference等待.md`。第五篇是在具备 ANR 监控能力后，对 Android 系统中已知的 SharedPreferences ANR 风险做专项复盘，不能反推为 SDK 必须实现的基础需求。
 
 ## 1. 文档目标
 
-本文用于指导当前项目开发一个 Android ANR 监控 SDK。文档目标不是复述 ANR 文章，而是把 5 篇文章中的原理、工具、案例和专项治理方案转化为可开发、可评审、可验收的 SDK 方案。
+本文用于指导当前项目开发一个 Android ANR 监控 SDK。文档目标不是复述 ANR 文章，而是把前 4 篇文章中的原理、工具、案例和 Barrier 专项转化为可开发、可评审、可验收的 SDK 方案；第 5 篇仅作为 SharedPreferences ANR 的实战分析样例，用来验证 SDK 能否支撑问题复盘。
 
 本 SDK 的核心目标：
 
 - 在线上应用侧低成本记录 ANR 形成过程，而不是只记录 ANR 发生时的 Trace 快照。
 - 用主线程消息时间线串联过去、现在和 Pending 队列，解释系统超时为什么发生。
 - 通过规则化归因输出证据链、置信度和治理建议，减少 Trace 误判。
-- 支持当前消息慢、历史消息慢、累计慢、消息风暴、进程内资源抢占、外部系统负载、跨进程阻塞疑似、Sync Barrier 残留、SharedPreferences 等待等核心类型。
+- 支持当前消息慢、历史消息慢、累计慢、消息风暴、进程内资源抢占、外部系统负载、跨进程阻塞疑似、Sync Barrier 残留等核心类型；第五篇中的 SharedPreferences 案例只作为通用证据链复盘样例，不进入 SDK 专项 API、归因码、报告字段或治理能力。
 - 在兼容、性能、隐私、稳定性可控的前提下，为后续服务端聚类和业务治理提供标准数据协议。
 
 一句话设计原则：
@@ -67,14 +69,17 @@ SDK 必须增加独立归因分支：
 - 当前消息 Wall 高 Cpu 低。
 - `nativePollOnce(-1)` 多次出现时可增强置信度。
 
-### 2.5 来自第五篇：SP 等待是专项治理型 ANR
+### 2.5 来自第五篇：实战分析样例不进入 SDK 需求
 
-SharedPreferences 相关 ANR 至少拆成两类：
+第五篇不是 ANR 监控 SDK 的需求来源，而是在监控能力具备后，对 SharedPreferences 已知 ANR 问题做实战复盘。SP 本身存在首次加载等待和 `apply()` 生命周期等待风险，因此它适合作为验证 SDK 证据链是否足够的案例，而不是要求所有接入方必须改造 SP。
 
-- `SP_LOAD_WAIT`：主线程卡在 `SharedPreferencesImpl.awaitLoadedLocked`，等待首次加载完成。
-- `SP_APPLY_WAIT`：生命周期边界触发 `QueuedWork.waitToFinish`，等待 `apply()` 写盘完成。
+SDK 边界因此收敛为：
 
-SDK 必须能区分两类等待，并输出具体文件、大小、key 数量、调用点、pending apply、写盘耗时和数据一致性风险。
+- 不提供 SharedPreferences 包装入口。
+- 不扫描 `shared_prefs` 文件健康度。
+- 不输出 SP 专项归因码或报告字段。
+- 不实现 `QueuedWork` 绕过、Hook 或治理策略。
+- 只依赖主线程栈、消息时间线、Pending 队列、线程 CPU、Checktime、系统环境等通用证据，帮助后续人工复盘第五篇这类案例。
 
 ## 3. 总体设计
 
@@ -123,8 +128,7 @@ com.valiantyan.anrmonitor
 │   ├── threadcpu
 │   ├── checktime
 │   ├── anrinfo
-│   ├── barrier
-│   └── sharedprefs
+│   └── barrier
 ├── reporter
 │   ├── encoder
 │   ├── uploader
@@ -229,8 +233,6 @@ AnrMonitor.install(
 | `checktimeSevereDelayMs` | `800` | 严重调度延迟阈值 |
 | `captureThreadCpu` | `true` | 是否采集进程内线程 CPU |
 | `capturePendingQueue` | `true` | 是否读取 Pending 队列 |
-| `captureSpHealth` | `true` | 是否采集 SP 健康度 |
-| `enableQueuedWorkBypass` | `false` | 是否启用 SP waitToFinish 绕过，默认关闭 |
 | `privacyMode` | `Safe` | 默认不上传对象内容和参数 |
 
 ### 4.3 事件监听
@@ -479,57 +481,22 @@ Trace 位于 MessageQueue.nativePollOnce 或当前消息 Wall 高 Cpu 低
 - 中：队头疑似 Barrier + 当前 Wall 高 Cpu 低，但缺少 token 或同步/异步分布。
 - 低：只有 `NativePollOnce`，无 Pending 证据，不应直接下 Barrier 结论。
 
-### 6.2 SharedPreferences 监控与治理
+### 6.2 第五篇案例复盘边界
 
-SP 能力拆成“归因监控”和“优化治理”两条线。
+第五篇可以用于验证 SDK 的通用证据链是否足够完整，但不产生 SDK 专项能力。复盘这类已知系统风险时，SDK 只提供以下通用证据：
 
-#### 归因监控
+- 当前主线程栈和慢消息采样栈。
+- 当前消息、历史消息和 Pending 队列时间线。
+- 当前消息 Wall/Cpu、线程 CPU 排名、Checktime 和系统环境。
+- 归因置信度、缺失证据和下一步线下复核建议。
 
-归因码：
+不进入 SDK 的内容：
 
-- `SP_LOAD_WAIT`
-- `SP_APPLY_WAIT`
+- SharedPreferences 专项 API、包装器、文件健康度扫描和写入调用点记录。
+- SP 专项归因码、报告字段、看板卡片和 owner 聚类维度。
+- `QueuedWork` 绕过、Hook、插桩、迁移治理或数据一致性策略。
 
-采集字段：
-
-- SP 文件名。
-- 文件大小、key 数量。
-- 首次加载耗时。
-- 主线程等待 `awaitLoadedLocked` 耗时。
-- `apply/commit` 调用次数。
-- 最近写入调用栈。
-- pending apply 数量。
-- 单次写盘耗时。
-- 生命周期消息类型：`PAUSE_ACTIVITY`、`STOP_SERVICE`、`SERVICE_ARGS` 等。
-
-实现分层：
-
-- P0：通过 Trace 规则识别 `awaitLoadedLocked`、`QueuedWork.waitToFinish`、`writtenToDiskLatch.await`、`writeToFile`。
-- P1：扫描 `shared_prefs` 目录，建立文件大小和 key 数量排行榜。
-- P1：提供 `MonitoredSharedPreferences` 包装入口，让新代码可记录文件名、调用栈和写入耗时。
-- P2：对历史代码做 Gradle 插桩或静态扫描，识别主线程关键路径 SP 使用。
-
-#### 优化治理
-
-`QueuedWork.sPendingWorkFinishers` 绕过方案默认关闭，只能远程灰度打开。
-
-启用条件：
-
-- 仅对可接受最终一致的数据开放。
-- 强一致数据、跨进程实时读取数据、登录态和支付相关数据必须排除。
-- 具备 ROM/Android 版本白名单。
-- 具备快速回滚开关。
-- 具备写盘积压、配置丢失、crash、业务状态回滚监控。
-
-治理策略：
-
-| 数据类型 | 策略 |
-| --- | --- |
-| 强一致数据 | 迁移可靠存储或显式同步写，不跳过等待 |
-| 最终一致数据 | 可灰度跳过生命周期等待，监控落盘延迟 |
-| 可丢弃数据 | 迁移内存缓存或普通缓存文件 |
-| 大文件/多 key | 拆分文件或迁移 DataStore/MMKV/数据库 |
-| 高频 apply | 合并、防抖、批量写入 |
+若业务需要治理 SharedPreferences 风险，应由存储治理专项处理；ANR SDK 只负责提供通用证据，避免在监控基础设施里改变 Android 系统等待语义。
 
 ### 6.3 跨进程阻塞疑似识别
 
@@ -563,7 +530,6 @@ AnrReport
 ├── threadCpu
 ├── stacks
 ├── checktime
-├── sharedPreferences
 ├── barrier
 ├── attribution
 └── sdkDiagnostics
@@ -673,15 +639,13 @@ AttributionResult
 | `BINDER_BLOCK_SUSPECTED` | Binder 或跨进程等待疑似 |
 | `CROSS_PROCESS_DEADLOCK_SUSPECTED` | 跨进程死锁疑似，需线下 Trace |
 | `SYNC_BARRIER_STUCK` | Sync Barrier 残留导致同步消息不调度 |
-| `SP_LOAD_WAIT` | SharedPreferences 首次加载等待 |
-| `SP_APPLY_WAIT` | SharedPreferences apply 写入等待 |
 | `UNKNOWN_INSUFFICIENT_EVIDENCE` | 证据不足 |
 
 ### 8.3 规则优先级
 
 归因不是简单 if/else，而是候选评分。建议规则顺序：
 
-1. 强机制类优先：`SP_LOAD_WAIT`、`SP_APPLY_WAIT`、`SYNC_BARRIER_STUCK`、明显死锁。
+1. 强机制类优先：`SYNC_BARRIER_STUCK`、明显死锁。
 2. 当前消息强证据：当前 Wall/Cpu 高且 Pending Block 对齐。
 3. 历史消息强证据：当前短，历史慢，Pending Block 对齐。
 4. 消息风暴：重复 Handler/callback 高、主线程 CPU 高、单条不极慢。
@@ -729,15 +693,6 @@ main.wallMs 高且 cpuMs 低
 -> PROCESS_IO_PRESSURE
 ```
 
-#### SP 写入等待
-
-```text
-main stack 命中 QueuedWork.waitToFinish
-+ stack 命中 writtenToDiskLatch.await 或 SharedPreferencesImpl.writeToFile
-+ pending apply 或 SP 写盘耗时可见
--> SP_APPLY_WAIT
-```
-
 ## 9. 性能与稳定性预算
 
 ### 9.1 端侧成本目标
@@ -780,7 +735,7 @@ SDK 自身要上报：
 默认策略：
 
 - 不上传 Message `obj` 内容。
-- 不上传业务参数、Intent extras、Bundle 内容、SP key/value 内容。
+- 不上传业务参数、Intent extras、Bundle 内容、持久化 key/value 内容。
 - 类名可配置为明文、hash、包名前缀裁剪三种模式。
 - 堆栈只保留方法签名，不保留局部变量。
 - 线程名可能含业务信息，支持 hash。
@@ -809,7 +764,6 @@ SDK 自身要上报：
 | Message 字段 | `isAsynchronous` 访问限制 | 可选字段，缺失不阻断报告 |
 | `/proc` 读取 | 高版本权限和厂商限制 | 只依赖 self，可失败 |
 | SIGQUIT | 影响 ART 原信号处理 | P2 实验能力，默认不启用 |
-| `QueuedWork` 代理 | 改变系统等待语义 | 默认关闭，白名单灰度 |
 | Barrier hook | 隐藏 API 和 Hook 风险 | P0 只做快照识别，Hook 放 P2 |
 
 ## 12. 开发里程碑
@@ -826,7 +780,7 @@ SDK 自身要上报：
 - Watchdog 疑似 ANR 检测。
 - 当前主线程栈、当前消息 Wall/Cpu。
 - Pending 队列快照，最多 200 条。
-- 基础归因：当前慢、历史慢、消息风暴、Barrier 疑似、SP Trace 命中、未知。
+- 基础归因：当前慢、历史慢、消息风暴、Barrier 疑似、未知。
 - 本地 JSON 报告落盘。
 - 示例 app 接入。
 
@@ -847,7 +801,6 @@ SDK 自身要上报：
 - 线程 CPU 排名和可疑线程栈。
 - Checktime。
 - ActivityThread.H 关键组件消息识别。
-- SP 文件健康度扫描和包装 API。
 - 归因规则评分和置信度。
 - 报告压缩、重试、限频、采样。
 - SDK 自监控。
@@ -855,7 +808,6 @@ SDK 自身要上报：
 验收：
 
 - 可解释当前慢、历史慢、消息风暴、进程内 IO、环境调度异常。
-- SP 加载等待与 apply 写入等待能拆分归因。
 - 报告能输出缺失证据和下一步建议。
 
 ### P2：专项增强与治理闭环
@@ -866,15 +818,12 @@ SDK 自身要上报：
 
 - `nativePollOnce(timeoutMillis)` 监控。
 - Barrier token 配对监控。
-- `QueuedWork.waitToFinish` 绕过方案灰度能力。
 - Binder/跨进程等待线下辅助分析。
-- 静态扫描或 Gradle 插桩辅助 SP 治理。
 - 服务端聚类协议、看板字段和 owner 映射。
 
 验收：
 
 - Barrier 残留能高置信识别并关联连续 ANR。
-- SP 绕过方案可按 ROM/版本/文件分级灰度和回滚。
 - 能把同类问题聚合到业务 owner、版本和设备维度。
 
 ## 13. 测试方案
@@ -931,7 +880,7 @@ SDK 自身要上报：
 4. 慢消息采样堆栈聚合。
 5. Pending 重复消息 Top N。
 6. 线程 CPU Top N。
-7. SP/Barrier 专项卡片。
+7. Barrier 专项卡片。
 8. 缺失证据和降级原因。
 9. 治理建议和 owner hint。
 
@@ -942,7 +891,6 @@ SDK 自身要上报：
 - 当前 Trace 栈 hash。
 - 历史慢消息栈 hash。
 - Pending target/callback hash。
-- SP 文件名。
 - Barrier token/队头特征。
 - 设备/ROM/Android 版本。
 - App 版本、灰度批次、页面。
@@ -957,7 +905,6 @@ SDK 自身要上报：
 | 上报字段太多 | 网络和存储压力 | 截断、压缩、hash、分层采集 |
 | 隐私泄漏 | 合规风险 | 默认不上传对象内容，严格脱敏 |
 | 误归因 | 业务信任下降 | 输出置信度和缺失证据，不强行定责 |
-| SP 绕过等待改变语义 | 数据一致性事故 | 默认关闭、分级、白名单、回滚 |
 | Barrier hook 风险 | ROM 崩溃或兼容问题 | P0 不 Hook，只快照识别 |
 | 外部系统负载不可完全证明 | 线上证据不足 | 输出疑似环境标签，保留线下复核入口 |
 
@@ -980,7 +927,7 @@ SDK 自身要上报：
 - 是否能区分进程内 IO 和外部系统负载？
 - 是否把跨进程死锁作为线上疑似、线下确认能力？
 - 是否把 Sync Barrier 残留作为独立归因分支？
-- 是否把 SP 加载等待和 apply 写入等待拆成两个归因码？
+- 是否明确第五篇只作为通用证据链复盘样例，不进入 SDK 专项能力？
 
 ### 16.3 工程安全
 
@@ -999,9 +946,8 @@ SDK 自身要上报：
 2. 是否已有服务端接收 ANR 报告？若没有，P0 是否先落本地 JSON 和 Debug UI？
 3. 线上是否允许上传业务包名和方法名，还是必须 hash？
 4. 是否需要支持多进程全量监控？
-5. `QueuedWork.waitToFinish` 绕过方案是否进入当前版本，还是仅先做监控？
-6. 是否接受反射读取 Pending 队列作为 P0 能力？
-7. 是否需要配套 Gradle 插件做 SP 静态扫描和后续插桩？
+5. 是否接受反射读取 Pending 队列作为 P0 能力？
+6. 是否需要配套服务端协议、聚类字段和 Debug UI？
 
 ## 18. 推荐下一步任务拆分
 
@@ -1012,7 +958,7 @@ SDK 自身要上报：
 5. 实现 Pending 队列快照和脱敏。
 6. 实现基础归因规则和本地 JSON 报告。
 7. 补充慢消息采样、Checktime、线程 CPU。
-8. 加入 SP 和 Barrier 专项归因。
+8. 加入 Barrier 专项归因和跨进程阻塞疑似识别。
 9. 建立测试场景和性能基准。
 10. 评估服务端协议和聚类字段。
 
@@ -1024,10 +970,10 @@ SDK 自身要上报：
 - 用 Pending 队列解释组件消息为什么迟迟没执行。
 - 用 Wall/Cpu 和线程 CPU 区分执行、等待和资源抢占。
 - 用 Checktime 和环境字段降低系统负载场景的误归因。
-- 用 Barrier 和 SP 专项规则覆盖隐藏但高价值的系统机制问题。
+- 用 Barrier 专项规则覆盖隐藏但高价值的消息队列机制问题。
 - 用证据链、置信度和缺失证据让报告可以被业务和评审信任。
 
-第一版 SDK 应优先把 P0 做稳：低成本采集、可降级、可解释、可本地验证。P1/P2 再逐步补齐慢消息采样、资源环境、Barrier 生命周期、SP 治理和服务端闭环。
+第一版 SDK 应优先把 P0 做稳：低成本采集、可降级、可解释、可本地验证。P1/P2 再逐步补齐慢消息采样、资源环境、Barrier 生命周期、跨进程辅助分析和服务端闭环。
 
 ## 20. 举一反三提问
 
@@ -1110,16 +1056,16 @@ SDK 自身要上报：
 7. Hook `postSyncBarrier/removeSyncBarrier` 的收益是否值得承担隐藏 API 和 ROM 风险？
 8. Barrier 归因报告应给业务方哪些可执行线索，而不是只解释 Android 机制？
 
-### 20.8 SharedPreferences 专项
+### 20.8 第五篇边界与实战复盘
 
-1. `SP_LOAD_WAIT` 和 `SP_APPLY_WAIT` 的修复策略为什么不能混用？
-2. 如果 Trace 只看到 `FileDescriptor.sync`，如何判断是否属于 SP 写盘，而不是普通文件 IO？
-3. SDK 如何定位到具体 SP 文件名、文件大小和最近调用栈？
-4. 高频 `apply()` 的阈值按次数、队列长度、写盘耗时还是生命周期等待次数定义？
-5. `QueuedWork.waitToFinish` 绕过方案如果只能全局生效，如何按业务数据分级控制风险？
-6. 哪些 SP key 必须排除在最终一致策略之外？
-7. 跳过等待后，如何监控配置丢失、状态回滚、跨进程可见性变化？
-8. 长期治理中，哪些数据迁移到 DataStore、MMKV、数据库或内存缓存更合适？
+1. 为什么第五篇不能反推为 SDK 必须实现 SharedPreferences 专项能力？
+2. 当主线程栈命中已知系统等待链路时，SDK 应输出哪些通用证据，而不是新增专项归因码？
+3. 如何用当前消息、历史消息、Pending 队列和线程 CPU 解释一个存储等待案例？
+4. 为什么 ANR SDK 不应该实现 `QueuedWork` 绕过或改变 Android 系统等待语义？
+5. 业务需要治理 SharedPreferences 风险时，哪些工作应转交存储治理专项？
+6. 使用第五篇做评审案例时，如何避免把“案例复盘能力”说成“SDK 功能承诺”？
+7. 如果通用证据不足以确认具体文件或 key，报告应如何表达缺失证据？
+8. 长期治理中，ANR SDK 与存储治理、静态扫描、业务迁移之间的边界如何划分？
 
 ### 20.9 性能、稳定性与自监控
 
@@ -1134,7 +1080,7 @@ SDK 自身要上报：
 
 ### 20.10 隐私、合规与数据安全
 
-1. Message `obj`、Intent、Bundle、SP key/value 中哪些内容绝对不能上传？
+1. Message `obj`、Intent、Bundle、持久化 key/value 中哪些内容绝对不能上传？
 2. 类名和方法名是否属于可上传数据？不同业务线和地区是否有不同标准？
 3. hash 后的 target/callback 是否仍可能被反推敏感业务含义？
 4. 堆栈中包含用户 ID、文件路径、URL 参数时如何过滤？
@@ -1147,7 +1093,7 @@ SDK 自身要上报：
 
 1. 服务端应优先按 Trace 栈聚类，还是按归因码、历史慢消息、Pending 特征聚类？
 2. 同一个 ANR 同时有业务慢和系统负载时，看板如何避免重复计数？
-3. SP 文件名、Barrier token、Handler hash、线程名分别适合映射到什么 owner？
+3. Barrier token、Handler hash、线程名分别适合映射到什么 owner？
 4. 外部系统负载类 ANR 应该进入业务治理看板，还是进入设备/ROM 风险看板？
 5. 业务修复后，验证指标应该看 ANR 率、慢消息耗时、Pending Block、消息风暴次数还是线程 IO？
 6. 服务端报告如何展示缺失证据，避免业务误以为 SDK 没有采集就是没有问题？
@@ -1159,7 +1105,7 @@ SDK 自身要上报：
 1. 如何稳定制造“历史消息慢但当前 Trace 是 NativePollOnce”的测试场景？
 2. 如何构造消息风暴，并证明 SDK 没把普通消息堆积误判成风暴？
 3. 如何在 Debug 环境安全制造 Barrier 残留，不污染正式代码路径？
-4. 如何制造 SP 加载等待和 apply 写入等待两个可重复场景？
+4. 如何用第五篇这类外部案例验证 SDK 的通用证据链，而不新增专项测试入口？
 5. 单元测试如何覆盖归因规则冲突和证据缺失？
 6. 性能测试是否覆盖低端机、低电、后台、多进程和高消息吞吐？
 7. 兼容测试失败时，是否能自动把某能力加入 ROM 黑名单？
@@ -1171,7 +1117,7 @@ SDK 自身要上报：
 2. 如果评审质疑“反射 Pending 风险太大”，P0 是否有可替代的降级方案？
 3. 如果评审质疑“抓栈会影响性能”，需要哪些基准数据证明成本可控？
 4. 如果评审质疑“自动归因会误导业务”，如何解释置信度和缺失证据机制？
-5. 如果评审质疑“SP 绕过等待会丢数据”，如何说明默认关闭、分级和回滚策略？
+5. 如果评审质疑“为什么不做 SharedPreferences 专项治理”，如何说明 SDK 与存储治理的边界？
 6. 如果评审质疑“Barrier 场景太低频”，如何说明它对 `NativePollOnce` 误判纠正的价值？
 7. 如果评审质疑“没有服务端先做 SDK 意义不大”，如何说明本地 JSON 和标准协议的阶段价值？
 8. 如果评审要求缩小 P0 范围，哪些能力可以后移，哪些能力不能砍？
@@ -1180,7 +1126,7 @@ SDK 自身要上报：
 
 ### 21.1 第一轮：事实一致性审核
 
-审核结论：通过。文档主线与 5 篇输入文档一致，能够从 ANR 设计原理、Raster 工具、案例归因、Barrier 专项和 SP 专项推导出 SDK 设计。
+审核结论：通过。文档主线与前 4 篇需求输入一致，能够从 ANR 设计原理、Raster 工具、案例归因和 Barrier 专项推导出 SDK 设计；第 5 篇只作为 SharedPreferences ANR 实战复盘样例，不参与 SDK 能力设计。
 
 已确认一致的事实：
 
@@ -1189,8 +1135,7 @@ SDK 自身要上报：
 - 文档采用“过去、现在、Pending”的主线程消息时间线模型，符合第二篇 Raster 的核心思想。
 - 文档把第三篇 6 类案例转成了归因码和必要证据，包括当前消息慢、历史消息慢、消息风暴、进程内 IO、外部系统负载和跨进程疑似。
 - 文档没有把所有 `NativePollOnce` 都归为无问题，也没有把所有 `NativePollOnce` 都归为 Barrier；它把 Barrier 作为独立分支，并要求 Pending 队头字段作为强证据。
-- 文档把 SharedPreferences 拆成 `SP_LOAD_WAIT` 和 `SP_APPLY_WAIT`，符合第五篇两类等待机制。
-- 文档明确 `QueuedWork.waitToFinish` 绕过方案默认关闭，并说明数据一致性风险，没有把它描述成无副作用优化。
+- 文档明确第五篇不进入 SDK 专项 API、归因码、报告字段或治理能力，避免把 SharedPreferences 已知系统风险变成监控 SDK 的默认职责。
 - 文档承认线上应用侧通常拿不到完整 Kernel、系统 Logcat 和多进程 Trace，因此对外部负载和跨进程死锁采用疑似或线下确认口径。
 
 需要继续保持的表达边界：
@@ -1198,7 +1143,7 @@ SDK 自身要上报：
 - 不说“SDK 可以定位所有 ANR 根因”，应说“SDK 可以提高过程化证据完整度和归因置信度”。
 - 不说“Checktime delay 就是系统问题”，应说“Checktime 是调度能力变差的环境证据”。
 - 不说“Pending 队头 `target == null` 就一定是 ANR 根因”，应结合存活时长、同步消息等待、当前 Wall/Cpu 等证据。
-- 不说“SP 绕过等待解决 SP 滥用”，应区分短期止血和长期存储治理。
+- 不说“ANR SDK 负责治理 SharedPreferences 风险”，应把这类问题交给存储治理专项，SDK 只提供通用证据链。
 - 不说“外部系统负载不可治理就没有价值”，应说明它能减少误归因，并支持设备/ROM/环境看板。
 
 事实链建议在后续评审中固定为：
@@ -1229,8 +1174,8 @@ SDK 自身要上报：
 - 已给出 `anr-monitor-sdk` 独立模块建议，边界清楚。
 - 已给出 `api/domain/data/core/collector/reporter/internal` 分层，便于后续按包拆文件。
 - 已给出 `AnrMonitor.install`、`AnrMonitorConfig`、`AnrReportUploader`、`AnrEventListener` 的外部 API 草案。
-- 已定义主线程消息、Pending、Checktime、Barrier、SP、归因和报告的大体字段。
-- 已把能力分为 P0/P1/P2，避免把 Hook、SIGQUIT、QueuedWork 绕过等高风险能力放入首版。
+- 已定义主线程消息、Pending、Checktime、Barrier、归因和报告的大体字段。
+- 已把能力分为 P0/P1/P2，避免把 Hook、SIGQUIT 等高风险能力放入首版。
 - 已明确性能预算、降级策略、自监控和兼容矩阵。
 - 已提供测试场景，可以直接转化为 instrumentation demo。
 
@@ -1240,10 +1185,9 @@ P0 需要进一步收敛的点：
 | --- | --- | --- |
 | Looper Printer 代理 | 与宿主或三方库冲突 | P0 先实现代理链和冲突诊断，再做复杂消息分类 |
 | Pending 反射 | 兼容和耗时不确定 | P0 只在疑似 ANR 时采集一次，并有总耗时预算 |
-| 归因规则 | 一次性覆盖太多类型 | P0 先做当前慢、历史慢、消息风暴、Barrier 疑似、SP 栈命中、UNKNOWN |
+| 归因规则 | 一次性覆盖太多类型 | P0 先做当前慢、历史慢、消息风暴、Barrier 疑似、UNKNOWN |
 | 本地落盘 | 可能放大 IO 压力 | P0 Debug 可明文 JSON，线上需异步压缩和大小限制 |
 | 线程 CPU | `/proc` 兼容差异 | P1 再做排名，P0 只保留线程栈和主线程 CPU |
-| SP 监控 | 包装 API 覆盖不到旧代码 | P0 先通过 Trace 规则识别，P1 再做文件健康度 |
 | Barrier | token 生命周期需要 Hook | P0 只做 Pending 队头快照，P2 再做 token 配对 |
 
 建议的 P0 二段拆分：
@@ -1251,7 +1195,7 @@ P0 需要进一步收敛的点：
 | 迭代 | 目标 | 范围 |
 | --- | --- | --- |
 | P0-A 骨架版本 | SDK 可初始化、可记录消息、可输出本地报告 | API、配置、Looper 代理、环形缓冲、Watchdog、主线程栈、本地 JSON |
-| P0-B 证据版本 | 报告具备基础归因价值 | Pending 快照、当前/历史 Wall/Cpu、基础规则、SP 栈命中、Barrier 疑似、示例场景 |
+| P0-B 证据版本 | 报告具备基础归因价值 | Pending 快照、当前/历史 Wall/Cpu、基础规则、Barrier 疑似、示例场景 |
 
 必须补齐的编码前细节：
 
@@ -1278,7 +1222,7 @@ P0 需要进一步收敛的点：
 
 1. 先讲问题：系统 Trace 是 ANR 发生时快照，复杂场景容易误判当前栈。
 2. 再讲模型：ANR 要按“系统超时形成过程”理解，核心是主线程过去、当前、Pending 三段时间线。
-3. 再讲证据：当前消息 Wall/Cpu、历史消息、Pending Block、线程 CPU、Checktime、SP/Barrier 专项。
+3. 再讲证据：当前消息 Wall/Cpu、历史消息、Pending Block、线程 CPU、Checktime、Barrier 专项。
 4. 再讲归因：输出归因码、证据链、置信度、缺失证据，而不是单个 Trace 栈。
 5. 再讲工程：低成本、可降级、可远程关闭、可脱敏、可兼容。
 6. 最后讲计划：P0 做稳定证据，P1 提升置信度，P2 做专项治理和服务端闭环。
@@ -1287,14 +1231,14 @@ P0 需要进一步收敛的点：
 
 - “我们不是替代系统 ANR，而是在应用侧补齐系统 Trace 缺失的调度过程。”
 - “报告结论不是只看当前栈，而是看当前消息、历史消息和 Pending 是否能在时间线上对齐。”
-- “Barrier 和 SP 是两个专项能力：一个是消息队列调度协议问题，一个是系统组件等待语义被业务规模放大。”
+- “Barrier 是 SDK 内的专项识别分支；第五篇的 SharedPreferences 是外部实战复盘样例，不是 SDK 专项能力。”
 - “外部系统负载和跨进程死锁在线上可能只能疑似，SDK 会明确证据缺失，不会强行派单。”
 - “P0 的成功标准是证据完整、成本可控、不误导；不是一开始就自动定位所有根因。”
 
 不建议的评审表达：
 
 - 不从“我们要做一个 Watchdog”开始讲，这会让方案显得只是传统卡顿检测。
-- 不把 `QueuedWork` 绕过作为核心卖点提前抛出，容易让评审聚焦数据一致性风险。
+- 不把 SharedPreferences 治理作为 SDK 核心卖点提前抛出，避免模糊监控 SDK 与存储治理专项的边界。
 - 不把 Hook、SIGQUIT、nativePollOnce 作为 P0 亮点，它们应放在增强和灰度章节。
 - 不说“有 Pending 就能定位根因”，Pending 只是证据之一。
 - 不说“所有高 Load 都是系统问题”，还要结合当前进程、历史消息和线程证据。
@@ -1303,7 +1247,7 @@ P0 需要进一步收敛的点：
 
 - 一张“系统 ANR 超时形成过程”时序图。
 - 一张“过去/现在/Pending 主线程时间线”图。
-- 一张“归因决策树”图，展示当前慢、历史慢、消息风暴、资源抢占、Barrier、SP。
+- 一张“归因决策树”图，展示当前慢、历史慢、消息风暴、资源抢占、Barrier 和跨进程疑似。
 - 一张“P0/P1/P2 里程碑和风险边界”表。
 - 一张“报告样例”，包含归因码、置信度、证据链和缺失证据。
 

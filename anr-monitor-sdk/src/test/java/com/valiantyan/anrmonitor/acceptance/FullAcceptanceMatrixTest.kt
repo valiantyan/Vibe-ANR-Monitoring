@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 验证全量验收矩阵与 demo 入口，防止 01 到 05 的覆盖口径在交付末端退化。
+ * 验证全量验收矩阵与 demo 入口，防止 01 到 04 需求和第 5 篇实战样例的边界在交付末端退化。
  */
 class FullAcceptanceMatrixTest {
     /**
@@ -51,10 +51,6 @@ class FullAcceptanceMatrixTest {
             "线程 CPU",
             "Checktime",
             "系统环境",
-            "SP_LOAD_WAIT",
-            "SP_APPLY_WAIT",
-            "SharedPreferences 文件健康度",
-            "QueuedWork 绕过治理",
             "Binder 阻塞疑似",
             "报告治理",
             "SDK 自监控",
@@ -72,7 +68,7 @@ class FullAcceptanceMatrixTest {
     }
 
     /**
-     * 服务端消费协议必须把端侧字段、服务端派生维度和 01 到 05 的设计来源连起来。
+     * 服务端消费协议必须把端侧字段、服务端派生维度、01 到 04 需求来源和第 5 篇样例边界连起来。
      */
     @Test
     fun serverConsumptionProtocolCoversContractAndDesignTraceability(): Unit {
@@ -88,15 +84,13 @@ class FullAcceptanceMatrixTest {
             "HISTORY_MESSAGE_SLOW",
             "MESSAGE_STORM",
             "SYNC_BARRIER_STUCK",
-            "SP_LOAD_WAIT",
-            "SP_APPLY_WAIT",
             "BINDER_BLOCK_SUSPECTED",
             "UNKNOWN_INSUFFICIENT_EVIDENCE",
             "服务端派生维度",
             "PROCESS_IO_PRESSURE",
             "EXTERNAL_SYSTEM_LOAD",
             "Barrier token",
-            "SP 文件名",
+            "Binder 证据签名",
             "Pending target/callback hash",
             "结论卡片",
             "证据链",
@@ -109,6 +103,8 @@ class FullAcceptanceMatrixTest {
             "第三篇",
             "第四篇",
             "第五篇",
+            "实战分析",
+            "不产生端侧字段、归因码、看板卡片或基础需求",
         )
         requiredTerms.forEach { requiredTerm: String ->
             assertContains(protocolText, requiredTerm)
@@ -116,6 +112,32 @@ class FullAcceptanceMatrixTest {
         assertContains(planText, "- [x] **步骤 1：创建服务端消费协议**")
         assertContains(planText, "- [x] **步骤 2：最终扫描计划覆盖**")
         assertContains(planText, "- [x] **步骤 3：提交服务端协议和计划修订**")
+    }
+
+    /**
+     * SDK 主代码不能再暴露 SharedPreferences 专项 API、配置、归因码或报告字段。
+     */
+    @Test
+    fun sdkSourceDoesNotExposeSharedPreferencesSpecialCases(): Unit {
+        val rootDir: File = findProjectRoot()
+        val sdkSourceDir: File = rootDir.resolve("anr-monitor-sdk/src/main/java")
+        val sourceText: String = sdkSourceDir.walkTopDown()
+            .filter { file: File -> file.isFile && file.extension == "kt" }
+            .joinToString(separator = "\n") { file: File -> file.readText() }
+        val forbiddenTerms: List<String> = listOf(
+            "SP_LOAD_WAIT",
+            "SP_APPLY_WAIT",
+            "captureSpHealth",
+            "enableQueuedWorkBypass",
+            "openSharedPreferences",
+            "monitorSharedPreferences",
+            "SharedPreferences",
+            "\"sharedPreferences\"",
+            "collector.sharedprefs",
+        )
+        forbiddenTerms.forEach { forbiddenTerm: String ->
+            assertTrue("不应继续暴露 SP 专项能力: $forbiddenTerm", !sourceText.contains(forbiddenTerm))
+        }
     }
 
     // 从 Gradle 测试工作目录向上查找项目根目录，避免依赖固定执行目录。

@@ -1,6 +1,5 @@
 package com.valiantyan.vibeanrmonitoring
 
-import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -8,7 +7,7 @@ import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 
 /**
- * ANR SDK 示例入口，提供全量验收所需的主线程慢消息、消息风暴、SP apply 和等待类场景。
+ * ANR SDK 示例入口，提供全量验收所需的主线程慢消息、消息风暴、忙等和等待类场景。
  */
 class MainActivity : AppCompatActivity() {
     // 主线程 Handler，用于构造大量 pending message 的验收场景。
@@ -25,9 +24,6 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.messageStormButton).setOnClickListener {
             postMessageStorm()
-        }
-        findViewById<Button>(R.id.spApplyButton).setOnClickListener {
-            writeSharedPreferencesBurst()
         }
         findViewById<Button>(R.id.currentBusyButton).setOnClickListener {
             runBusyLoop()
@@ -51,20 +47,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         Thread.sleep(6_000L)
-    }
-
-    // 批量触发 SharedPreferences apply，并阻塞主线程以暴露等待链路证据。
-    private fun writeSharedPreferencesBurst(): Unit {
-        val preferences: SharedPreferences = getSharedPreferences(
-            "anr_demo_prefs",
-            MODE_PRIVATE,
-        )
-        repeat(times = 500) { index ->
-            preferences.edit()
-                .putString("key_$index", "value_$index")
-                .apply()
-        }
-        Thread.sleep(4_000L)
     }
 
     // 主线程持续忙等，用于验收当前消息慢且 CPU 占用较高的场景。

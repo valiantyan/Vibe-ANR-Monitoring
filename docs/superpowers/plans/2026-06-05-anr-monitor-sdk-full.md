@@ -2,11 +2,13 @@
 
 > **给 agent 执行者：** 必须使用子技能 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans`，按任务逐步执行本计划。步骤使用 checkbox（`- [ ]`）语法跟踪进度。
 
-**目标：** 构建覆盖 `docs-anr/01-第一篇-设计原理及影响因素.md` 到 `docs-anr/05-第五篇-告别SharedPreference等待.md` 全部核心内容的 Android ANR 监控 SDK，包括系统超时模型、主线程消息时间线、慢消息采样、Pending 队列、线程 CPU、Checktime、系统环境、Barrier、SharedPreferences、跨进程阻塞疑似、完整归因、上报协议、治理闭环和验收体系。
+**目标：** 构建覆盖 `docs-anr/01-第一篇-设计原理及影响因素.md` 到 `docs-anr/04-第四篇-Barrier导致主线程假死.md` 核心需求的 Android ANR 监控 SDK，包括系统超时模型、主线程消息时间线、慢消息采样、Pending 队列、线程 CPU、Checktime、系统环境、Barrier、跨进程阻塞疑似、完整归因、上报协议、治理闭环和验收体系。`docs-anr/05-第五篇-告别SharedPreference等待.md` 仅作为 SharedPreferences ANR 实战分析样例，不再作为 SDK 基础需求来源。
 
-**架构：** 新增独立的 `anr-monitor-sdk` Android Library 模块。领域模型和归因逻辑保持纯 Kotlin，方便 JVM 单元测试；Android 运行时访问集中在 collector/runtime 包内；示例 `app` 只作为接入、复现和验收入口。阶段一到阶段四只是交付顺序，不是能力范围裁剪：本计划最终必须覆盖 01 到 05 文档的全部 SDK 能力。
+**架构：** 新增独立的 `anr-monitor-sdk` Android Library 模块。领域模型和归因逻辑保持纯 Kotlin，方便 JVM 单元测试；Android 运行时访问集中在 collector/runtime 包内；示例 `app` 只作为接入、复现和验收入口。阶段一到阶段四只是交付顺序，不是能力范围裁剪：本计划最终必须覆盖 01 到 04 文档的全部 SDK 能力，第 5 篇只用于验证监控完成后能否支撑外部案例复盘。
 
-**技术栈：** Android Gradle Plugin 8.5.2、Kotlin 1.9.22、minSdk 23、targetSdk 35、JUnit 4.13.2、Android framework `Looper`/`Handler`/`MessageQueue`/`Debug`/`ActivityManager`、`/proc` 自进程读取、SharedPreferences 包装入口、本地 JSON/gzip 报告、可选远程上传扩展点。
+**技术栈：** Android Gradle Plugin 8.5.2、Kotlin 1.9.22、minSdk 23、targetSdk 35、JUnit 4.13.2、Android framework `Looper`/`Handler`/`MessageQueue`/`Debug`/`ActivityManager`、`/proc` 自进程读取、本地 JSON/gzip 报告、可选远程上传扩展点。
+
+> **2026-06-08 范围纠偏优先级：** 本计划中的历史 SP 实战分析辅助任务已废弃并从当前实现移除。第五篇 `docs-anr/05-第五篇-告别SharedPreference等待.md` 不是 SDK 需求来源，不产生 SDK API、配置、归因码、报告字段、Demo 入口、服务端协议字段或 `QueuedWork` 治理能力。若下文历史执行记录与本段冲突，以本段和任务 15 的移除记录为准。
 
 ---
 
@@ -28,7 +30,7 @@
 
 - Pending 队列快照和反射失败诊断。
 - 基于 Pending 队头的 Sync Barrier 疑似证据。
-- 基础归因规则：当前消息慢、历史消息慢、消息风暴、Barrier 疑似、SP 栈命中和未知。
+- 基础归因规则：当前消息慢、历史消息慢、消息风暴、Barrier 疑似和未知。
 - 用于手动验证的 demo app 场景。
 
 阶段三：线上诊断能力：
@@ -37,15 +39,12 @@
 - 线程 CPU 排名、可疑线程栈和 `/proc/self/task/<tid>/stat` 自进程读取。
 - Checktime 调度能力检测和系统/设备环境采集。
 - ActivityManager confirmed ANR 增强、组件阈值配置、ActivityThread.H 关键组件消息识别。
-- SP 文件健康度扫描、包装 API、调用栈和写入耗时记录。
 - 报告压缩、重试、限频、采样、保留策略和 SDK 自监控。
 
 阶段四：专项增强和治理闭环：
 
 - `nativePollOnce(timeoutMillis)` 监控和 Barrier token 配对诊断。
-- `QueuedWork.waitToFinish` 绕过灰度能力，默认关闭并带白名单、回滚和一致性监控。
 - Binder/跨进程阻塞疑似分析和线下 Trace/Perfetto 复核入口。
-- SP 静态扫描或 Gradle 插桩辅助治理。
 - 服务端聚类字段、owner hint、看板协议和治理闭环。
 
 ## 输入来源与能力追溯矩阵
@@ -56,7 +55,7 @@
 | 02 监控工具与分析思路 | Raster 三段时间线、慢消息采样、Wall/Cpu、Checktime、AnrInfo、Logcat/Kernel/Meminfo 可得性分级 | 任务 4、5、6、11、12、13、14、18、19 |
 | 03 实例剖析集锦 | 当前慢、历史慢、累计慢、消息风暴、进程内 IO、外部系统负载、Binder/跨进程疑似、证据链归因 | 任务 7、11、12、13、17、18、20 |
 | 04 Barrier 导致主线程假死 | Pending 队头 `target == null`、Barrier token、同步消息被挡、`nativePollOnce` 不能简单视为空闲 | 任务 6、7、16、19、20 |
-| 05 告别 SharedPreference 等待 | `SP_LOAD_WAIT`、`SP_APPLY_WAIT`、SP 文件健康度、包装 API、QueuedWork 绕过灰度和数据一致性治理 | 任务 7、15、18、19、20 |
+| 05 告别 SharedPreference 等待 | 非需求输入，仅作为 SharedPreferences ANR 实战分析样例；不能要求 SDK 实现专项 API、归因码、报告字段、Demo 入口、服务端字段或 `QueuedWork` 绕过 | 任务 15 已废弃并移除，任务 7、18、19、20 只保留通用证据链能力 |
 
 ## 文件结构
 
@@ -148,9 +147,6 @@ Demo app：
 - 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/checktime/ChecktimeMonitor.kt`: 调度能力检测。
 - 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentSnapshotter.kt`: 系统和设备环境采集。
 - 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/anrinfo/AnrInfoCollector.kt`: `ActivityManager.getProcessesInErrorState()` 确认 ANR。
-- 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesHealthScanner.kt`: SP 文件大小、key 数和健康度扫描。
-- 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/MonitoredSharedPreferences.kt`: SP 包装入口和调用栈记录。
-- 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/QueuedWorkBypassController.kt`: `QueuedWork.waitToFinish` 绕过灰度控制。
 - 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/barrier/BarrierTokenTracker.kt`: Barrier token 配对诊断。
 - 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/nativepoll/NativePollOnceMonitor.kt`: `nativePollOnce(timeoutMillis)` 证据记录。
 - 创建 `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/binder/BinderBlockClassifier.kt`: Binder/跨进程阻塞疑似识别。
@@ -166,7 +162,6 @@ Demo app：
 - 创建 `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/threadcpu/ThreadCpuSnapshotterTest.kt`.
 - 创建 `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/checktime/ChecktimeMonitorTest.kt`.
 - 创建 `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentSnapshotterTest.kt`.
-- 创建 `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesHealthScannerTest.kt`.
 - 创建 `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/barrier/BarrierTokenTrackerTest.kt`.
 - 创建 `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/binder/BinderBlockClassifierTest.kt`.
 - 创建 `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/retry/ReportRetentionPolicyTest.kt`.
@@ -350,7 +345,6 @@ git commit -m "新增 ANR SDK 模块骨架"
 package com.valiantyan.anrmonitor.api
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -366,7 +360,6 @@ class AnrMonitorConfigTest {
         assertEquals(120, config.historyBufferSize)
         assertEquals(5_000L, config.suspectAnrMs)
         assertEquals(200, config.pendingSnapshotMaxDepth)
-        assertFalse(config.enableQueuedWorkBypass)
     }
 
     @Test
@@ -425,8 +418,6 @@ data class AnrMonitorConfig(
     val suspectAnrMs: Long = 5_000L,
     val pendingSnapshotMaxDepth: Int = 200,
     val capturePendingQueue: Boolean = true,
-    val captureSpHealth: Boolean = true,
-    val enableQueuedWorkBypass: Boolean = false,
     val privacyMode: AnrPrivacyMode = AnrPrivacyMode.SAFE,
 ) {
     val normalizedSampleRate: Float = sampleRate.coerceIn(
@@ -560,8 +551,6 @@ enum class AnrAttributionCode {
     HISTORY_MESSAGE_SLOW,
     MESSAGE_STORM,
     SYNC_BARRIER_STUCK,
-    SP_LOAD_WAIT,
-    SP_APPLY_WAIT,
     UNKNOWN_INSUFFICIENT_EVIDENCE,
 }
 ```
@@ -1899,21 +1888,6 @@ import org.junit.Test
 
 class AttributionAnalyzerTest {
     @Test
-    fun analyzeReturnsSpLoadWaitWhenStackContainsAwaitLoadedLocked(): Unit {
-        val result = AttributionAnalyzer().analyze(
-            snapshot = snapshot(
-                current = message(seq = 1L, wallMs = 6_000L, cpuMs = 20L),
-                history = emptyList(),
-                pending = emptyList(),
-                frames = listOf("android.app.SharedPreferencesImpl.awaitLoadedLocked(SharedPreferencesImpl.java:300)"),
-            ),
-        )
-
-        assertEquals(AnrAttributionCode.SP_LOAD_WAIT, result.primaryCode)
-        assertEquals(Confidence.HIGH, result.confidence)
-    }
-
-    @Test
     fun analyzeReturnsBarrierWhenQueueHeadIsBarrierAndSyncMessageBlocked(): Unit {
         val result = AttributionAnalyzer().analyze(
             snapshot = snapshot(
@@ -2095,10 +2069,6 @@ class AttributionAnalyzer(
 ) {
     fun analyze(snapshot: AnrSnapshot): AttributionResult {
         val frames: List<String> = snapshot.mainThreadStack.frames
-        val spResult: AttributionResult? = analyzeSharedPreferences(frames = frames)
-        if (spResult != null) {
-            return spResult
-        }
         val pendingSummary: PendingQueueSummary = PendingQueueAnalyzer.analyze(
             messages = snapshot.pendingQueue.messages,
         )
@@ -2119,27 +2089,6 @@ class AttributionAnalyzer(
             return stormResult
         }
         return unknownResult(snapshot = snapshot)
-    }
-
-    private fun analyzeSharedPreferences(frames: List<String>): AttributionResult? {
-        val joinedFrames: String = frames.joinToString(separator = "\n")
-        if (joinedFrames.contains(other = "SharedPreferencesImpl.awaitLoadedLocked")) {
-            return result(
-                code = AnrAttributionCode.SP_LOAD_WAIT,
-                confidence = Confidence.HIGH,
-                evidence = listOf("main stack contains SharedPreferencesImpl.awaitLoadedLocked"),
-                suggestion = "将首次读取前置到后台线程，拆分过大的 shared_prefs 文件。",
-            )
-        }
-        if (joinedFrames.contains(other = "QueuedWork.waitToFinish") || joinedFrames.contains(other = "writtenToDiskLatch.await")) {
-            return result(
-                code = AnrAttributionCode.SP_APPLY_WAIT,
-                confidence = Confidence.HIGH,
-                evidence = listOf("main stack contains QueuedWork.waitToFinish or writtenToDiskLatch.await"),
-                suggestion = "治理生命周期边界前的高频 apply，强一致数据不要跳过等待。",
-            )
-        }
-        return null
     }
 
     private fun analyzeBarrier(summary: PendingQueueSummary): AttributionResult? {
@@ -2861,13 +2810,6 @@ class VibeAnrApplication : Application() {
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="Message Storm" />
-
-    <Button
-        android:id="@+id/spApplyButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="SharedPreferences Apply Burst" />
 </LinearLayout>
 ```
 
@@ -2876,7 +2818,6 @@ class VibeAnrApplication : Application() {
 ```kotlin
 package com.valiantyan.vibeanrmonitoring
 
-import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -2884,7 +2825,7 @@ import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 
 /**
- * ANR SDK 示例入口，提供 阶段一验收所需的主线程慢消息、消息风暴和 SP apply 场景。
+ * ANR SDK 示例入口，提供阶段一验收所需的主线程慢消息和消息风暴场景。
  */
 class MainActivity : AppCompatActivity() {
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
@@ -2897,9 +2838,6 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.messageStormButton).setOnClickListener {
             postMessageStorm()
-        }
-        findViewById<Button>(R.id.spApplyButton).setOnClickListener {
-            writeSharedPreferencesBurst()
         }
     }
 
@@ -2916,18 +2854,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun writeSharedPreferencesBurst(): Unit {
-        val preferences: SharedPreferences = getSharedPreferences(
-            "anr_demo_prefs",
-            MODE_PRIVATE,
-        )
-        repeat(times = 500) { index ->
-            preferences.edit()
-                .putString("key_$index", "value_$index")
-                .apply()
-        }
-        Thread.sleep(4_000L)
-    }
 }
 ```
 
@@ -3054,13 +2980,6 @@ Tap `Message Storm`.
 - 实际归因：`MESSAGE_STORM`
 - 关键证据：Pending 队列或历史消息中同一 Handler 重复次数超过阈值。
 
-## SharedPreferences apply 场景
-
-- 触发入口：`SharedPreferences Apply Burst`
-- 期望归因：`SP_APPLY_WAIT` 或当前慢消息中包含 SP 证据。
-- 实际归因：`CURRENT_MESSAGE_SLOW`
-- 关键证据：阶段一 demo 使用 `apply()` burst 后主动 sleep，不能稳定制造系统生命周期 `QueuedWork.waitToFinish` 栈；SP 专项稳定复现进入 专项 instrumentation 场景。
-
 ## 阶段一结论
 
 阶段一通过：SDK 可初始化、可采集主线程消息时间线、可触发疑似 ANR 快照、可输出本地 JSON、可给出基础归因和缺失证据。
@@ -3082,8 +3001,8 @@ git commit -m "新增 ANR SDK 阶段一验收记录"
 - 已在 `Pixel_9a` AVD 上安装 debug app，包名为 `com.valiantyan.vibeanrmonitoring`。
 - 已创建 `docs-anr/100-ANR监控SDK-阶段一验收记录.md`，记录真实 Gradle、adb、logcat 和关键 JSON 字段输出。
 - 验收中发现当前消息低 CPU 等待型阻塞被误判为 `UNKNOWN_INSUFFICIENT_EVIDENCE`，已补充单测并修复为按 `wallMs >= suspectAnrMs` 识别 `CURRENT_MESSAGE_SLOW`，CPU 比例只影响置信度。
-- 验收中发现 `Message Storm` demo 只投递短任务无法触发 watchdog，已补充单测、调整归因顺序为 SP、Barrier、Message Storm、Current、History，并让 demo 在堆积 pending 消息后阻塞当前点击消息。
-- 最终验证通过：`./gradlew :anr-monitor-sdk:testDebugUnitTest`、`./gradlew :app:assembleDebug`、`./gradlew :app:installDebug`、`Current Slow Message`、`Message Storm`、`SharedPreferences Apply Burst`。
+- 验收中发现 `Message Storm` demo 只投递短任务无法触发 watchdog，已补充单测、调整归因顺序为 Barrier、Message Storm、Current、History，并让 demo 在堆积 pending 消息后阻塞当前点击消息。
+- 最终验证通过：`./gradlew :anr-monitor-sdk:testDebugUnitTest`、`./gradlew :app:assembleDebug`、`./gradlew :app:installDebug`、`Current Slow Message`、`Message Storm`。
 
 ### 任务 11：新增慢消息堆栈采样
 
@@ -3532,133 +3451,40 @@ git commit -m "新增系统确认 ANR 与组件阈值模型"
 - 验证：`./gradlew :anr-monitor-sdk:compileDebugKotlin` PASS。
 - 验证：`./gradlew :app:compileDebugKotlin` PASS。
 
-### 任务 15：新增 SharedPreferences 全量监控和治理能力
+### 任务 15：废弃并移除 SharedPreferences 专项能力
 
-**文件：**
-- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesHealthScannerTest.kt`
-- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/sharedprefs/MonitoredSharedPreferencesTest.kt`
-- 创建： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/sharedprefs/QueuedWorkBypassControllerTest.kt`
-- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/api/AnrMonitorConfigTest.kt`
-- 修改： `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoderTest.kt`
-- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/SharedPreferencesSnapshot.kt`
-- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesHealthScanner.kt`
-- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/MonitoredSharedPreferences.kt`
-- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/MonitoredSharedPreferencesEditor.kt`
-- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesOperationRecorder.kt`
-- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/SharedPreferencesOperationReporter.kt`
-- 创建： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs/QueuedWorkBypassController.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitor.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/api/AnrMonitorConfig.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrSnapshot.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrReport.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrMonitorRuntime.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/AnrReportAssembler.kt`
-- 修改： `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt`
+**状态：已完成。**
 
-- [x] **步骤 1：编写失败的 SP 健康度测试**
+2026-06-08 范围纠偏：第 5 篇是 ANR 监控完成后的 SharedPreferences 实战分析案例，不是 SDK 需求来源。SharedPreferences 本身属于 Android 系统已知 ANR 风险点，ANR 监控 SDK 不应通过包装 API、文件扫描、专项归因码、报告字段或 `QueuedWork` 绕过去承担存储治理职责。
 
-创建 `SharedPreferencesHealthScannerTest.kt`：
+**移除范围：**
 
-```kotlin
-package com.valiantyan.anrmonitor.collector.sharedprefs
+- 删除 `collector/sharedprefs` 包及其单元测试。
+- 删除 `SharedPreferencesSnapshot` 领域模型。
+- 删除 `AnrMonitor.openSharedPreferences()` 和 `AnrMonitor.monitorSharedPreferences()` 对外入口。
+- 删除 `captureSpHealth`、`enableQueuedWorkBypass` 等配置项。
+- 删除 `SP_LOAD_WAIT`、`SP_APPLY_WAIT` 归因码和规则。
+- 删除报告 JSON 中的 `sharedPreferences` 字段。
+- 删除 Demo 中的 `SharedPreferences Apply Burst` 入口。
+- 更新 `docs-anr/99`、`100`、`101`、`102`、`103` 和本计划的边界说明。
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
+**保留能力：**
 
-class SharedPreferencesHealthScannerTest {
-    @Test
-    fun scanSortsLargeFilesFirst(): Unit {
-        val scanner = SharedPreferencesHealthScanner(
-            fileReader = {
-                listOf(
-                    SharedPreferencesFileStat(fileName = "small.xml", sizeBytes = 100L, keyCount = 2),
-                    SharedPreferencesFileStat(fileName = "large.xml", sizeBytes = 2_000L, keyCount = 80),
-                )
-            },
-        )
+- 主线程栈、慢消息采样、历史消息、Pending 队列、线程 CPU、Checktime、系统环境和缺失证据。
+- 这些通用证据足以支撑第五篇这类外部案例的人工复盘，但不会输出 SP 专项结论。
 
-        val result = scanner.scanTopFiles(maxCount = 1)
+**新增守护测试：**
 
-        assertEquals("large.xml", result.first().fileName)
-    }
-}
-```
+- `FullAcceptanceMatrixTest.sdkSourceDoesNotExposeSharedPreferencesSpecialCases()` 扫描 SDK 主代码，禁止再次暴露 SharedPreferences 专项 API、配置、归因码或 JSON 字段。
 
-- [x] **步骤 2：新增 SP 健康度和治理实现**
-
-创建 `SharedPreferencesHealthScanner.kt`：
-
-```kotlin
-package com.valiantyan.anrmonitor.collector.sharedprefs
-
-data class SharedPreferencesFileStat(
-    val fileName: String,
-    val sizeBytes: Long,
-    val keyCount: Int,
-)
-
-class SharedPreferencesHealthScanner(
-    private val fileReader: () -> List<SharedPreferencesFileStat>,
-) {
-    fun scanTopFiles(maxCount: Int): List<SharedPreferencesFileStat> {
-        return fileReader()
-            .sortedWith(compareByDescending<SharedPreferencesFileStat> { stat -> stat.sizeBytes }.thenByDescending { stat -> stat.keyCount })
-            .take(n = maxCount)
-    }
-}
-```
-
-创建 `QueuedWorkBypassController.kt`：
-
-```kotlin
-package com.valiantyan.anrmonitor.collector.sharedprefs
-
-data class QueuedWorkBypassPolicy(
-    val enabled: Boolean,
-    val allowedFiles: Set<String>,
-    val blockedFiles: Set<String>,
-)
-
-class QueuedWorkBypassController(
-    private val policyProvider: () -> QueuedWorkBypassPolicy,
-) {
-    fun canBypass(fileName: String): Boolean {
-        val policy: QueuedWorkBypassPolicy = policyProvider()
-        if (!policy.enabled) {
-            return false
-        }
-        if (fileName in policy.blockedFiles) {
-            return false
-        }
-        return fileName in policy.allowedFiles
-    }
-}
-```
-
-- [x] **步骤 3：运行测试并提交**
-
-运行：
+**验证命令：**
 
 ```bash
-./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.sharedprefs.SharedPreferencesHealthScannerTest
-git add anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/sharedprefs anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/sharedprefs
-git commit -m "新增 SharedPreferences 全量监控与治理"
+./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.acceptance.FullAcceptanceMatrixTest.sdkSourceDoesNotExposeSharedPreferencesSpecialCases
+./gradlew :anr-monitor-sdk:testDebugUnitTest
+./gradlew :anr-monitor-sdk:compileDebugKotlin
+./gradlew :app:assembleDebug
 ```
-
-预期：测试 PASS，提交成功。
-
-执行记录：
-
-- RED：先新增 `SharedPreferencesHealthScannerTest`、`MonitoredSharedPreferencesTest`、`QueuedWorkBypassControllerTest`，并扩展 `AnrMonitorConfigTest`、`AnrReportJsonEncoderTest`；定向测试按预期因缺少 `SharedPreferencesSnapshot`、`MonitoredSharedPreferences`、`QueuedWorkBypassController`、配置字段和 JSON 字段失败。
-- GREEN：新增 SP 领域模型，覆盖文件名、大小、key 数、首次加载耗时、apply/commit 次数、最近写入耗时、调用栈、线程、pending finisher 和 QueuedWork 治理状态。
-- 接线：`AnrMonitor` 新增 `openSharedPreferences`/`monitorSharedPreferences` 包装入口；`AnrMonitorRuntime` 按 `captureSpHealth` 采集 SP 快照；`AnrSnapshot`、`AnrReportJsonEncoder` 和 `SdkDiagnostics` 输出 SP 专项证据与失败原因。
-- 治理边界：`QueuedWorkBypassController` 只做决策，默认关闭；白名单、黑名单、ROM 厂商边界、SDK 版本边界和回滚开关全部参与判断，避免默认改变系统等待语义。
-- 评审口径：主因仍由主线程栈中的 `SharedPreferencesImpl.awaitLoadedLocked`、`QueuedWork.waitToFinish` 或 `writtenToDiskLatch.await` 决定；SP 文件健康和 wrapper 操作记录只增强证据，不替代归因。
-- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.sharedprefs.SharedPreferencesHealthScannerTest --tests com.valiantyan.anrmonitor.collector.sharedprefs.MonitoredSharedPreferencesTest --tests com.valiantyan.anrmonitor.collector.sharedprefs.QueuedWorkBypassControllerTest --tests com.valiantyan.anrmonitor.api.AnrMonitorConfigTest --tests com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoderTest` PASS。
-- 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
-- 验证：`./gradlew :anr-monitor-sdk:compileDebugKotlin` PASS。
-- 验证：`./gradlew :app:compileDebugKotlin` PASS。
 
 ### 任务 16：新增 Barrier token 和 nativePollOnce 增强证据
 
@@ -3883,7 +3709,7 @@ git commit -m "新增 Binder 与跨进程阻塞疑似识别"
 - RED：新增 `BinderBlockClassifierTest`，并扩展 `AnrMonitorConfigTest`、`AttributionAnalyzerTest`、`AnrReportJsonEncoderTest`；定向测试按预期因缺少 `BinderBlockClassifier`、`BinderBlockSnapshot`、`captureBinderEvidence`、`BINDER_BLOCK_SUSPECTED`、`AnrSnapshot.binderBlockSnapshot` 和 `binderBlock` JSON 字段失败。
 - GREEN：新增 `BinderBlockSnapshot`、`BinderBlockClassifier`、`BinderThreadStackCollector`；分类器要求主线程命中 `BinderProxy.transactNative`/`transact` 且 Binder 线程出现 wait/park/lock/mainThread 等等待迹象才输出 `suspected=true`，只有主线程在 Binder 中不会误报。
 - 接线：`AnrMonitorConfig` 增加 `captureBinderEvidence`、`binderThreadMaxCount`、`binderThreadStackMaxFrames`；`AnrMonitorRuntime` 采集主线程栈后读取当前进程 Binder 线程栈并生成 `binderBlockSnapshot`；`AnrSnapshot`、`AnrReportAssembler`、`AttributionAnalyzer` 和 `AnrReportJsonEncoder` 输出 Binder 疑似证据与降级原因。
-- 评审口径：新增 `BINDER_BLOCK_SUSPECTED` 为中等置信度疑似归因，弱于 SP、Barrier 和消息风暴；端侧不输出 `confirmedDeadlock`，跨进程死锁必须结合 Perfetto/system trace 或远端进程栈复核。
+- 评审口径：新增 `BINDER_BLOCK_SUSPECTED` 为中等置信度疑似归因，弱于 Barrier 和消息风暴；SP 仅作为实战分析辅助归因。端侧不输出 `confirmedDeadlock`，跨进程死锁必须结合 Perfetto/system trace 或远端进程栈复核。
 - 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.collector.binder.BinderBlockClassifierTest --tests com.valiantyan.anrmonitor.api.AnrMonitorConfigTest --tests com.valiantyan.anrmonitor.domain.analyzer.AttributionAnalyzerTest --tests com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoderTest` PASS。
 - 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
 - 验证：`./gradlew :anr-monitor-sdk:compileDebugKotlin` PASS。
@@ -4077,14 +3903,12 @@ private fun waitBinderLikeLock(): Unit {
 - 慢消息堆栈采样：已验证 stack hash 和 hit count
 - 线程 CPU：已验证 Top N 排名
 - Checktime：已验证 max delay 和 severe count
-- SP_LOAD_WAIT：已验证栈命中归因
-- SP_APPLY_WAIT：已验证栈命中归因
 - Binder 阻塞疑似：已验证 BinderProxy 栈识别
 - 报告治理：已验证保留策略和 SDK 自监控指标
 
 ## 结论
 
-全量 SDK 能力覆盖 01 到 05 文档的核心输入，阶段一到阶段四仅表示交付顺序，不表示范围裁剪。
+全量 SDK 能力覆盖 01 到 04 文档的核心需求输入，阶段一到阶段四仅表示交付顺序，不表示范围裁剪；第 5 篇仅作为外部实战分析样例。
 ```
 
 - [x] **步骤 3：运行全量构建并提交**
@@ -4103,7 +3927,7 @@ git commit -m "新增 ANR SDK 全量场景验收"
 **执行记录（2026-06-07）：**
 - 计划审查：原任务只要求新增两个 demo 按钮和简版验收记录；为避免全量覆盖口径退化，先新增 `FullAcceptanceMatrixTest` 作为静态守护测试，检查 demo 入口、Activity 接线、全量验收文档、性能预算和构建命令。
 - RED：`./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.acceptance.FullAcceptanceMatrixTest` 失败，原因分别是 `docs-anr/101-ANR监控SDK全量验收记录.md` 缺失，以及 `currentBusyButton` / `binderLikeButton` 入口缺失，失败符合预期。
-- GREEN：`activity_main.xml` 新增 `Current Busy Loop` 与 `Binder Like Wait` 按钮；`MainActivity.kt` 新增 `runBusyLoop()` 和 `waitBinderLikeLock()`，其中锁对象使用 Kotlin `Any` 避免 `java.lang.Object` 编译告警；新增 `docs-anr/101-ANR监控SDK全量验收记录.md`，记录 01 到 05 全量能力矩阵、demo 入口、性能预算、隐私与风险验收。
+- GREEN：`activity_main.xml` 新增 `Current Busy Loop` 与 `Binder Like Wait` 按钮；`MainActivity.kt` 新增 `runBusyLoop()` 和 `waitBinderLikeLock()`，其中锁对象使用 Kotlin `Any` 避免 `java.lang.Object` 编译告警；新增并修订 `docs-anr/101-ANR监控SDK全量验收记录.md`，记录 01 到 04 全量能力矩阵、demo 入口、性能预算、隐私与风险验收，并明确第 5 篇不参与 SDK 验收。
 - 验证：定向 `FullAcceptanceMatrixTest` PASS。
 - 验证：`./gradlew :anr-monitor-sdk:testDebugUnitTest` PASS。
 - 验证：`./gradlew :app:assembleDebug` PASS。
@@ -4124,16 +3948,16 @@ git commit -m "新增 ANR SDK 全量场景验收"
 
 ## 聚类维度
 
-- 端侧归因码：`CURRENT_MESSAGE_SLOW`、`HISTORY_MESSAGE_SLOW`、`MESSAGE_STORM`、`BINDER_BLOCK_SUSPECTED`、`SYNC_BARRIER_STUCK`、`SP_LOAD_WAIT`、`SP_APPLY_WAIT`、`UNKNOWN_INSUFFICIENT_EVIDENCE`
+- 端侧归因码：`CURRENT_MESSAGE_SLOW`、`HISTORY_MESSAGE_SLOW`、`MESSAGE_STORM`、`BINDER_BLOCK_SUSPECTED`、`SYNC_BARRIER_STUCK`、`UNKNOWN_INSUFFICIENT_EVIDENCE`
 - 服务端派生维度：`PROCESS_IO_PRESSURE`、`EXTERNAL_SYSTEM_LOAD`、`BUSINESS_OWNER_HINT`
 - ANR 类型：Input、Service、Broadcast、Provider、Activity、Finalizer
 - 当前栈 hash、历史慢消息栈 hash、Pending target/callback hash
-- Barrier token、SP 文件名、设备/ROM/Android 版本、App 版本、页面、进程名
+- Barrier token、Binder 证据签名、设备/ROM/Android 版本、App 版本、页面、进程名
 
 ## 报告页面
 
 1. 结论卡片：归因码、置信度、业务可治理性。
-2. 证据链：系统 Reason、当前 Trace、当前消息、历史消息、Pending、线程 CPU、Checktime、SP/Barrier/Binder。
+2. 证据链：系统 Reason、当前 Trace、当前消息、历史消息、Pending、线程 CPU、Checktime、Barrier/Binder。
 3. 时间线：过去、当前、Pending 三段联动。
 4. 专项卡片：SP、Barrier、Binder、环境负载。
 5. 缺失证据：collector 失败、权限限制、ROM 限制、隐私模式裁剪。
@@ -4164,7 +3988,7 @@ git commit -m "完善 ANR SDK 全量实施计划和服务端协议"
 **执行记录（2026-06-07）：**
 - 计划审查：任务 20 原模板把 `PROCESS_IO_PRESSURE` 和 `EXTERNAL_SYSTEM_LOAD` 放在“归因码”中；当前 SDK 端侧枚举没有这两个值，因此本次修订为“端侧归因码 + 服务端派生维度”，避免服务端按不存在的端侧字段消费。
 - RED：新增 `FullAcceptanceMatrixTest.serverConsumptionProtocolCoversContractAndDesignTraceability`，运行 `./gradlew :anr-monitor-sdk:testDebugUnitTest --tests com.valiantyan.anrmonitor.acceptance.FullAcceptanceMatrixTest` 失败，原因是 `docs-anr/102-ANR监控SDK服务端消费协议.md` 缺失，失败符合预期。
-- GREEN：新增 `docs-anr/102-ANR监控SDK服务端消费协议.md`，覆盖协议边界、JSON 字段映射、聚类维度、报告页面、隐私权限、01 到 05 全量设计追溯和验收口径。
+- GREEN：新增并修订 `docs-anr/102-ANR监控SDK服务端消费协议.md`，覆盖协议边界、JSON 字段映射、聚类维度、报告页面、隐私权限、01 到 04 需求追溯，并明确第 5 篇不产生端侧字段或归因码。
 - 覆盖扫描：`rg -n "单阶段 P[0]|P[1]/P[2].*不[纳]入|能力可[以]省略" docs/superpowers/plans/2026-06-05-anr-monitor-sdk-full.md` 无结果，说明计划没有重新出现阶段裁剪口径。
 - 验证：定向 `FullAcceptanceMatrixTest` PASS。
 - 验证：最终 `./gradlew :anr-monitor-sdk:testDebugUnitTest`、`./gradlew :anr-monitor-sdk:compileDebugKotlin`、`./gradlew :app:assembleDebug` 均 PASS。
@@ -4195,7 +4019,7 @@ git status --short
 - 第 5.3 节 Pending 队列快照：任务 6。
 - 第 5.5 节 Watchdog：任务 5 和任务 9。
 - 第 6.1 节 Sync Barrier 首阶段识别：任务 6 和任务 7。
-- 第 6.2 节 SP 首阶段栈识别：任务 7。
+- 第 6.2 节第五篇案例复盘边界：任务 15 完成移除，通用证据链保留。
 - 第 7 节本地报告模型和 JSON：任务 2 和任务 8。
 - 第 8 节基础归因：任务 7。
 - 第 9 节性能和稳定性预算：任务 3 有界缓冲区、任务 6 深度上限、任务 8 本地报告大小意识。
@@ -4203,15 +4027,15 @@ git status --short
 - 第 12 节 阶段一/阶段二里程碑：任务 1 到任务 10。
 - 第 13 节测试：单元测试见任务 2 到任务 18，手动 demo 和性能验收见任务 10、任务 19。
 - 第 14 节服务端消费建议：任务 20 创建服务端消费协议。
-- 第 21 节 阶段一/阶段二 拆分：任务 1 到任务 10 属于首个可运行里程碑，任务 11 到任务 20 补齐 01 到 05 的全量能力。
+- 第 21 节 阶段一/阶段二 拆分：任务 1 到任务 10 属于首个可运行里程碑，任务 11 到任务 20 补齐 01 到 04 的全量能力；第 5 篇只作为外部案例复盘材料。
 
 ## 自审
 
 规格覆盖：
 
 - 已覆盖 阶段一 骨架版本：模块、API、配置、Looper 采集器、环形缓冲区、Watchdog、栈快照和本地报告路径。
-- 已覆盖 阶段二 证据版本：Pending 快照、Barrier 疑似摘要、SP 栈归因、当前/历史/消息风暴归因、demo 场景和验收记录。
-- 已覆盖完整诊断版本：慢消息堆栈采样、线程 CPU 排名、Checktime、系统环境、系统确认 ANR、SP 文件健康度、QueuedWork 绕过灰度、Barrier token、nativePollOnce、Binder 阻塞疑似、报告治理、SDK 自监控、全量验收和服务端消费协议。
+- 已覆盖 阶段二 证据版本：Pending 快照、Barrier 疑似摘要、当前/历史/消息风暴归因、demo 场景和验收记录。
+- 已覆盖完整诊断版本：慢消息堆栈采样、线程 CPU 排名、Checktime、系统环境、系统确认 ANR、Barrier token、nativePollOnce、Binder 阻塞疑似、报告治理、SDK 自监控、全量验收和服务端消费协议。
 
 占位扫描：
 
@@ -4223,7 +4047,7 @@ git status --short
 
 - `AnrMonitorConfig.suspectAnrMs` 输入到 `HeartbeatState`、`AnrWatchdog` 和 `AttributionThresholds`。
 - `MessageRecord`、`PendingMessage`、`PendingQueueSnapshot`、`AnrSnapshot` 和 `AnrReport` 命名在 collector、analyzer、encoder 和测试中保持一致。
-- 归因码命名与设计文档一致：`CURRENT_MESSAGE_SLOW`、`HISTORY_MESSAGE_SLOW`、`MESSAGE_STORM`、`SYNC_BARRIER_STUCK`、`SP_LOAD_WAIT`、`SP_APPLY_WAIT` 和 `UNKNOWN_INSUFFICIENT_EVIDENCE`。
+- 归因码命名与设计文档一致：`CURRENT_MESSAGE_SLOW`、`HISTORY_MESSAGE_SLOW`、`MESSAGE_STORM`、`SYNC_BARRIER_STUCK`、`BINDER_BLOCK_SUSPECTED` 和 `UNKNOWN_INSUFFICIENT_EVIDENCE`。
 - 分阶段命名保持一致：阶段一到阶段四是交付顺序，不是范围排除；任务 20 的扫描命令用于防止重新出现“仅限首阶段”的矛盾表述。
 
 ## 举一反三提问
@@ -4231,7 +4055,7 @@ git status --short
 ### 1. 全量范围和里程碑
 
 - 阶段一到阶段四是否被表达为交付顺序，而不是范围裁剪？
-- 任务 11 到任务 20 是否补齐 01 到 05 文档中的慢栈采样、线程 CPU、Checktime、SP 治理、Barrier 增强、Binder 疑似、报告治理和服务端消费？
+- 任务 11 到任务 20 是否补齐 01 到 04 文档中的慢栈采样、线程 CPU、Checktime、Barrier 增强、Binder 疑似、报告治理和服务端消费，同时把第 5 篇 SP 治理限定为实战分析辅助？
 - 全量 SDK 的成功标准是否仍然是“证据完整、成本可控、不误导”，而不是承诺端侧确认所有复杂根因？
 - 如果任务 6 Pending 反射在部分 ROM 失败，全量报告是否仍然能结合历史消息、当前栈、线程 CPU、Checktime 和缺失证据继续解释问题？
 - 如果手动 demo 场景不稳定，任务 19 是否补充了全量验收矩阵，而不是只依赖 阶段一 demo？
@@ -4248,7 +4072,7 @@ git status --short
 
 - `AnrMonitor.install` 是否幂等？重复调用是否返回同一个 session，而不是重复安装 Printer 和 Watchdog？
 - `AnrMonitorSession.stop()` 是否能停止 Watchdog，避免 Activity 或测试结束后后台线程残留？
-- `AnrMonitorConfig` 默认值是否对线上安全：`uploadEnabled=false`、`enableQueuedWorkBypass=false`、Pending 深度受限？
+- `AnrMonitorConfig` 默认值是否对线上安全：`uploadEnabled=false`、Pending 深度受限、采样率归一化？
 - `sampleRate` 是否做了归一化，避免宿主传入负数或大于 1 的值影响采样判断？
 - `AnrEventListener` 是否能满足 debug 面板和自动化测试，不强制宿主实现全部回调？
 
@@ -4276,17 +4100,17 @@ git status --short
 - `objClass` 是否只上传类型，不上传 `obj.toString()` 或业务参数？
 - Pending 深度超过 `maxDepth` 时是否标记 `truncated=true`，避免服务端误以为队列只有这些消息？
 
-### 7. SharedPreferences 专项
+### 7. 第五篇边界
 
-- 阶段一可以先做栈命中识别，但任务 15 是否继续补齐 SP 文件健康度、包装 API 和 `QueuedWork.waitToFinish` 绕过灰度治理？
-- `SP_LOAD_WAIT` 和 `SP_APPLY_WAIT` 是否是两个独立归因码，避免把首次加载和 apply 写盘等待混在一起？
-- Demo 中的 `SharedPreferences Apply Burst` 是否明确是近似场景，稳定专项复现进入 专项 instrumentation？
-- `QueuedWork` 绕过是否放在任务 15 的灰度控制器中，默认关闭，并要求白名单、黑名单、回滚和一致性风险边界？
-- 任务 15 是否需要补 SP 文件大小、key 数量、首次加载耗时和写入调用栈？
+- 阶段一可以保留栈命中识别，但任务 15 是否明确只作为第 5 篇实战分析辅助，而不是基础 SDK 必选需求？
+- 第五篇是否被明确标记为外部实战分析案例，而不是 SDK 需求来源？
+- 任务 15 是否已经从“新增能力”修正为“废弃并移除 SharedPreferences 专项能力”？
+- SDK 主代码是否禁止出现 SharedPreferences 专项 API、配置、归因码和 JSON 字段？
+- SharedPreferences 风险治理是否转交存储治理专项，而不是由 ANR SDK 改变系统等待语义？
 
 ### 8. 归因和证据链
 
-- 归因规则是否按机制强证据优先：SP、Barrier，再看当前慢、历史慢、消息风暴？
+- 归因规则是否按机制强证据优先：Barrier、当前慢、历史慢、消息风暴和 unknown？
 - `CURRENT_MESSAGE_SLOW` 是否要求 Wall 和 Cpu 同时高，避免把等待型问题误判为业务计算慢？
 - `HISTORY_MESSAGE_SLOW` 是否能表达“当前 Trace 不是根因，需要回看历史消息”？
 - `MESSAGE_STORM` 是否基于重复 target/callback 数量，而不是单条消息耗时？
@@ -4305,14 +4129,14 @@ git status --short
 - 每个纯 Kotlin 组件是否都有先失败、再实现、再通过的单元测试步骤？
 - Android-only 组件是否至少通过 `compileDebugKotlin` 和 demo 手动验证兜底？
 - 验收记录是否要求保存真实命令结果，而不是只写理论 PASS？
-- 当前慢、消息风暴、Pending 缺失、SP 近似场景是否分别有可观察输出？
+- 当前慢、消息风暴、Pending 缺失和 Barrier 疑似场景是否分别有可观察输出？
 - `git status --short` 是否明确允许未跟踪 `.idea/` 留在实现范围之外？
 
 ### 11. 后续扩展
 
-- 任务 11 到任务 18 引入线程 CPU、Checktime、SP 文件健康度、Barrier token、`nativePollOnce` 和 Binder 疑似时，是否能复用当前 `AnrSnapshot` 和 `AnrReport` 模型？
+- 任务 11 到任务 18 引入线程 CPU、Checktime、Barrier token、`nativePollOnce` 和 Binder 疑似时，是否能复用当前 `AnrSnapshot` 和 `AnrReport` 模型？
 - 高风险增强能力是否作为增强证据和灰度治理实现，不改变保守归因口径？
-- 服务端聚类需要的字段是否已经有雏形：归因码、栈、Pending target、Barrier token、SP 归因？
+- 服务端聚类需要的字段是否已经有雏形：归因码、栈、Pending target、Barrier token 和 Binder 证据签名？
 - 如果未来要发布 AAR，是否还需要补 consumer keep rules、README 接入文档和版本号策略？
 - 如果宿主有远程配置系统，`AnrMonitorConfig` 是否容易扩展为动态更新？
 
@@ -4320,7 +4144,7 @@ git status --short
 
 ### 第一轮：规格一致性审核
 
-审核结论：通过。计划已经修正为全量覆盖计划，阶段一到阶段四只表示交付顺序，任务 1 到任务 20 覆盖 01 到 05 文档的全部核心能力。
+审核结论：通过。计划已经修正为全量覆盖计划，阶段一到阶段四只表示交付顺序，任务 1 到任务 20 覆盖 01 到 04 文档的全部核心能力；第 5 篇只作为外部实战分析案例，不进入 SDK 能力设计。
 
 已确认覆盖的规格点：
 
@@ -4329,11 +4153,11 @@ git status --short
 - 主线程消息时间线：任务 3 和 任务 4 覆盖环形缓冲、当前消息、历史消息、Wall/Cpu。
 - Watchdog 和主线程栈：任务 5 覆盖疑似 ANR 心跳检测和主线程 Java 栈。
 - Pending 队列：任务 6 覆盖反射快照、失败降级、深度截断和 Barrier 队头证据。
-- 基础归因：任务 7 覆盖当前慢、历史慢、消息风暴、Barrier、SP load/apply 和 unknown。
+- 基础归因：任务 7 覆盖当前慢、历史慢、消息风暴、Barrier 和 unknown。
 - 本地报告：任务 8 覆盖 JSON schema 和 app 私有目录落盘。
 - 示例验收：任务 9 和 任务 10 覆盖 demo 接入、手动场景和验收记录。
 - 慢栈和资源证据：任务 11、任务 12、任务 13 覆盖慢消息采样、线程 CPU、Checktime 和环境采集。
-- 系统确认和专项治理：任务 14、任务 15、任务 16、任务 17 覆盖 confirmed ANR、SP 全量治理、Barrier token、nativePollOnce 和 Binder 疑似。
+- 系统确认和专项治理：任务 14、任务 16、任务 17 覆盖 confirmed ANR、Barrier token、nativePollOnce 和 Binder 疑似；任务 15 负责移除不属于 SDK 需求的 SharedPreferences 专项能力。
 - 工程闭环：任务 18、任务 19、任务 20 覆盖报告治理、SDK 自监控、全量验收和服务端消费协议。
 
 已保持的边界：
@@ -4341,7 +4165,7 @@ git status --short
 - 没有承诺端侧确认所有 ANR 根因。
 - 没有把当前 Trace 当作唯一根因。
 - 没有把所有 `NativePollOnce` 都归为 Barrier。
-- SP 绕过等待进入任务 15，但默认关闭，并要求灰度白名单、黑名单和回滚策略。
+- SharedPreferences 治理不作为 SDK 基础需求；任务 15 已移除相关 API、配置、归因码、报告字段和 Demo 入口。
 - 外部系统负载和跨进程死锁进入任务 13、任务 17，但输出为环境证据或疑似结论，不强行确认为业务根因。
 
 第一轮审核建议：
@@ -4386,17 +4210,17 @@ git status --short
 
 评审时建议固定的主线：
 
-1. 先讲全量目标：覆盖 01 到 05 的核心输入，用过程化证据提升 ANR 归因可信度。
+1. 先讲全量目标：覆盖 01 到 04 的核心需求输入，用过程化证据提升 ANR 归因可信度；第 5 篇是外部实战分析样例，不进入 SDK 需求。
 2. 再讲基础链路：模块、API、Looper 时间线、Watchdog、主线程栈、本地报告。
 3. 再讲诊断增强：Pending、慢栈采样、线程 CPU、Checktime、系统环境、confirmed ANR。
-4. 再讲专项治理：Barrier、SP、Binder/跨进程疑似、QueuedWork 灰度治理和报告自监控。
+4. 再讲专项能力：Barrier、Binder/跨进程疑似、报告自监控；SharedPreferences 治理由存储治理专项承接，不属于 ANR SDK。
 5. 最后讲验收闭环：单测、编译、demo 场景、全量验收记录和服务端消费协议。
 
 评审中需要避免的表达：
 
 - 不说“阶段一能定位所有 ANR”，应说“阶段一能输出基础证据链和保守归因”。
 - 不说“Pending 失败就是 SDK 失败”，应说“Pending 是增强证据，失败要显式降级”。
-- 不说“SP apply demo 等于稳定复现 SP_APPLY_WAIT”，应说“SP 监控包含栈识别、文件健康度、包装 API 和灰度治理，稳定专项复现通过任务 19 验收”。
+- 不说“SP apply demo 是 SDK 验收入口”，应说“第 5 篇只是外部实战分析样例，不产生 SDK API、归因码或 Demo 入口”。
 - 不说“Barrier hook 已覆盖”，应说“Barrier 能力包含 Pending 队头识别、token 配对和 nativePollOnce 增强证据，高风险部分按灰度策略启用”。
 - 不把 demo app 当生产接入样板，demo 是验证入口，生产接入还需要远程开关、采样和上传策略。
 
@@ -4405,7 +4229,7 @@ git status --short
 - 开始实现前，执行者应先确认当前分支状态，避免把 `.idea/` 等无关文件混入提交。
 - 如果采用 Subagent-Driven，每个 task 的 agent 只处理该 task 文件范围，并在交接中报告测试命令和结果。
 - 如果采用 Inline Execution，建议每 2 个 task 做一次中间 review，尤其在任务 5、任务 7、任务 9、任务 15、任务 18、任务 20 后停下来检查行为。
-- 任务 20 完成后再进入代码实现收口和服务端联调，不再把线程 CPU、Checktime、SP 文件健康度、报告清理和自监控视为计划外补项。
+- 任务 20 完成后再进入代码实现收口和服务端联调，不再把线程 CPU、Checktime、报告清理和自监控视为计划外补项；任务 15 的移除守护测试必须保留，防止 SP 专项能力回归。
 
 ## 中文化后二次举一反三提问
 
@@ -4444,7 +4268,7 @@ git status --short
 ### 5. 归因保守性
 
 - `SYNC_BARRIER_STUCK` 是否必须依赖 Pending 队头 Barrier 和同步消息等待超阈值，而不是只凭 `NativePollOnce`？
-- `SP_LOAD_WAIT` 和 `SP_APPLY_WAIT` 是否只在栈命中强证据时输出高置信度？
+- SDK 是否已经移除 `SP_LOAD_WAIT` 和 `SP_APPLY_WAIT`，避免把第五篇案例反向固化为端侧归因码？
 - `CURRENT_MESSAGE_SLOW` 是否要求当前消息 Wall/Cpu 对齐，避免把等待型卡顿误判为业务计算慢？
 - `MESSAGE_STORM` 是否基于 Pending 或历史消息重复特征，而不是因为当前消息短就误判？
 - 未命中强证据时是否输出 `UNKNOWN_INSUFFICIENT_EVIDENCE` 和缺失证据，而不是强行定责？
@@ -4452,9 +4276,9 @@ git status --short
 ### 6. 验收和评审
 
 - 验收记录是否要求写入真实命令结果，而不是只保留理论预期？
-- demo 场景是否明确 Current Slow、Message Storm、SP Apply Burst 的复现稳定性差异？
+- demo 场景是否明确 Current Slow、Message Storm、Current Busy 和 Binder Like Wait 的复现稳定性差异，并确认第五篇案例未进入 Demo 验收？
 - 如果设备不支持 `run-as`，验收记录是否允许切换到 debug emulator，而不是卡死在单一设备？
-- 评审时是否明确线程 CPU 排名、Checktime、SP 文件健康度、Hook 风险能力、QueuedWork 绕过都已经在任务 11 到任务 20 中覆盖？
+- 评审时是否明确线程 CPU 排名、Checktime、Hook 风险能力已经在任务 11 到任务 20 中覆盖，而 SharedPreferences 治理不属于 ANR SDK？
 - 任务 20 是否给出服务端消费协议和全量追溯，避免实现完成后仍缺少聚类、看板和 owner hint 口径？
 
 ## 中文化后三轮审核
@@ -4501,7 +4325,7 @@ git status --short
 - `MainLooperPrinterInstaller` 读取 `Looper#mLogging` 属于反射路径，失败时需要诊断，不应影响 SDK 其它能力。
 - `PendingQueueSnapshotter` 反射字段可能受 ROM 影响，验收应接受 `available=false` 的降级报告。
 - `LocalAnrReportWriter` 阶段一没有清理策略，不能作为线上长期开启的最终实现。
-- `SharedPreferences Apply Burst` demo 不能稳定等价于系统生命周期 `SP_APPLY_WAIT`，文档已经把稳定专项复现放到任务 19 的全量验收。
+- `SharedPreferences Apply Burst` demo 已从当前实现移除，第五篇只作为外部案例复盘材料。
 
 第二轮审核结论：
 
@@ -4515,9 +4339,9 @@ git status --short
 
 推荐评审表达：
 
-1. 先说明全量目标：覆盖 01 到 05 的核心输入，输出过程化证据，不承诺端侧确认所有复杂根因。
+1. 先说明全量目标：覆盖 01 到 04 的核心需求输入，输出过程化证据，不承诺端侧确认所有复杂根因；第 5 篇仅作为外部实战分析样例。
 2. 再说明 阶段一：模块、API、配置、消息时间线、Watchdog、主线程栈、本地 JSON。
-3. 再说明 阶段二：Pending 快照、Barrier 疑似、SP 栈命中、基础归因、demo 验收。
+3. 再说明 阶段二：Pending 快照、Barrier 疑似、基础归因、demo 验收；SP 栈命中只作为实战分析辅助。
 4. 再说明工程安全：反射降级、重复快照抑制、隐私脱敏、`.idea/` 不提交、高风险能力按灰度开关启用。
 5. 最后说明执行策略：逐任务 TDD、每任务提交、任务 5/7/9 后重点 review。
 
@@ -4525,7 +4349,7 @@ git status --short
 
 - 为什么线程 CPU 和 Checktime 放在任务 12、任务 13：因为它们依赖基础快照模型，需要在任务 1 到任务 10 稳定后接入。
 - 为什么 Hook、SIGQUIT、nativePollOnce 和 Barrier token 配对要灰度：因为它们兼容风险更高，必须有开关、降级和验收记录。
-- 为什么 SP 绕过需要默认关闭：因为 `QueuedWork` 绕过会改变系统等待语义，只能在任务 15 的白名单、黑名单和回滚策略下启用。
+- 为什么不做 SharedPreferences 专项治理：因为第 5 篇是监控后的实战分析，治理应由存储专项承接，ANR SDK 不应通过 `QueuedWork` 绕过改变系统等待语义。
 - 为什么 Pending 失败也算可用报告：因为报告必须表达缺失证据，不能因为一个 collector 失败就丢掉当前/历史/栈证据。
 - 为什么需要验收记录：因为 SDK 监控类能力不能只靠编译通过，需要证明真实 demo 能产出 JSON 和归因字段。
 
@@ -4535,7 +4359,7 @@ git status --short
 - 下一步可以直接选择 Subagent-Driven 或 Inline Execution 开始实现。
 - 如果用户要求提交，应只提交 `docs/superpowers/plans/2026-06-05-anr-monitor-sdk-full.md`，不要把未跟踪 `.idea/` 混入提交。
 
-## 全量范围修正后举一反三提问
+## 2026-06-08 需求边界纠偏后举一反三提问
 
 ### 1. 输入文档覆盖追问
 
@@ -4543,19 +4367,19 @@ git status --short
 - 02 文档的 Raster 思路是否已经落到过去消息、当前消息、Pending 队列、慢消息堆栈采样、Wall/Cpu、Checktime 和报告协议？
 - 03 文档的案例归因是否已经覆盖当前慢、历史慢、累计慢、消息风暴、进程内 IO、外部系统负载、Binder/跨进程疑似？
 - 04 文档的 Barrier 专项是否同时覆盖 Pending 队头识别、Barrier token、同步消息被挡、nativePollOnce 证据和灰度风险？
-- 05 文档的 SharedPreferences 专项是否同时覆盖 `SP_LOAD_WAIT`、`SP_APPLY_WAIT`、文件健康度、包装 API、写盘耗时、QueuedWork 灰度绕过和一致性风险？
+- 05 文档是否被明确标记为 SharedPreferences ANR 实战分析样例，而不是 SDK 基础需求来源？
 
 ### 2. 任务链路闭环追问
 
 - 任务 1 到任务 10 是否只是首个可运行里程碑，而不是最终 SDK 范围？
 - 任务 11 到任务 13 是否把“慢栈采样 + 线程 CPU + Checktime + 环境”接入到同一份 `AnrSnapshot` 和 `AnrReport`？
 - 任务 14 是否把系统 confirmed ANR 和组件阈值纳入模型，避免 SDK 只停留在 suspect ANR？
-- 任务 15 到任务 17 是否分别形成 SP、Barrier、Binder 三个专项证据分支，而不是只在归因规则里写标签？
+- 任务 15 是否被修正为移除 SharedPreferences 专项能力，任务 16、任务 17 是否分别形成 Barrier、Binder 两个核心专项证据分支？
 - 任务 18 到任务 20 是否补齐线上运行必需的报告治理、自监控、全量验收和服务端消费协议？
 
 ### 3. 风险能力追问
 
-- `QueuedWork.waitToFinish` 绕过是否默认关闭，且必须经过文件白名单、黑名单、ROM/版本限制、快速回滚和一致性监控？
+- `QueuedWork.waitToFinish` 绕过是否已从 SDK 设计中移除，避免改变 Android 系统等待语义？
 - Barrier token 和 nativePollOnce 监控是否被定义为增强证据，不能替代 Pending 队列证据直接下结论？
 - Binder/跨进程阻塞是否坚持“疑似”口径，避免线上端侧证据不足时强行确认死锁？
 - 外部系统负载是否依赖 Checktime、Load、线程 CPU、主线程 Wall/Cpu 组合证据，而不是单点归因？
@@ -4563,25 +4387,25 @@ git status --short
 
 ### 4. 数据协议追问
 
-- 报告是否能表达证据链：系统 Reason -> 当前 Trace -> 当前消息 -> 历史消息 -> Pending -> 线程 CPU -> Checktime -> SP/Barrier/Binder -> 归因？
-- JSON schema 是否为慢栈采样、线程 CPU、Checktime、SP 健康度、Barrier token、Binder 疑似、SDK 自监控预留字段？
-- 服务端聚类维度是否包含归因码、ANR 类型、当前栈 hash、历史慢消息栈 hash、Pending target/callback hash、SP 文件名、Barrier token、设备/ROM/版本？
+- 报告是否能表达证据链：系统 Reason -> 当前 Trace -> 当前消息 -> 历史消息 -> Pending -> 线程 CPU -> Checktime -> Barrier/Binder -> 归因，SP 只作为可选实战复盘附加证据？
+- JSON schema 是否为慢栈采样、线程 CPU、Checktime、Barrier token、Binder 疑似、SDK 自监控预留字段，并把 SP 健康度标为可选？
+- 服务端聚类维度是否包含归因码、ANR 类型、当前栈 hash、历史慢消息栈 hash、Pending target/callback hash、Barrier token、Binder 证据签名、设备/ROM/版本？
 - 隐私策略是否覆盖 Message obj、Intent/Bundle 内容、SP key/value、线程名、文件名、类名和栈帧？
 - 报告保留策略是否限制文件数量、文件大小、重试次数和低置信事件丢弃策略？
 
 ### 5. 验收追问
 
-- `docs-anr/101-ANR监控SDK全量验收记录.md` 是否覆盖所有 01 到 05 的输入能力，而不只是 阶段一 demo？
-- 是否有单元测试覆盖纯 Kotlin 归因、采样、Checktime、线程 CPU、SP 健康度、Barrier token、Binder 分类、报告保留策略？
-- 是否有 demo 或 instrumentation 场景覆盖当前慢、历史慢、消息风暴、SP load/apply、Barrier、Binder-like wait、busy loop？
+- `docs-anr/101-ANR监控SDK全量验收记录.md` 是否覆盖所有 01 到 04 的需求输入，并把 05 标为实战分析样例？
+- 是否有单元测试覆盖纯 Kotlin 归因、采样、Checktime、线程 CPU、Barrier token、Binder 分类、报告保留策略，SP 健康度测试只作为可选能力验证？
+- 是否有 demo 或 instrumentation 场景覆盖当前慢、历史慢、消息风暴、Barrier、Binder-like wait、busy loop，SP load/apply 只作为可选实战分析样例？
 - 是否有性能验收覆盖常驻 CPU、主线程单消息额外耗时、快照耗时、报告大小和采样频率？
 - 是否有兼容验收覆盖 API 23 到 35、常见 ROM、前后台、多进程、冷启动、热启动和低内存场景？
 
-## 全量范围修正后三轮审核
+## 2026-06-08 需求边界纠偏后三轮审核
 
 ### 第一轮：覆盖完整性审核
 
-审核结论：通过。当前计划已经是以任务 1 到任务 20 覆盖 01 到 05 输入内容的全量 SDK 实施计划。
+审核结论：通过。当前计划已经是以任务 1 到任务 20 覆盖 01 到 04 输入内容的全量 SDK 实施计划；第 5 篇只作为 SP ANR 实战分析样例。
 
 已确认覆盖：
 
@@ -4589,11 +4413,11 @@ git status --short
 - 02 文档：任务 4、任务 6、任务 11、任务 12、任务 13、任务 18 覆盖 Raster 三段时间线、慢栈采样、Wall/Cpu、线程 CPU、Checktime 和报告治理。
 - 03 文档：任务 7、任务 12、任务 13、任务 17 覆盖案例归因中的当前慢、历史慢、消息风暴、进程内资源、外部负载和 Binder 疑似。
 - 04 文档：任务 6、任务 16 覆盖 Barrier 队头、token、同步消息阻塞和 nativePollOnce 增强证据。
-- 05 文档：任务 7、任务 15 覆盖 SP load/apply 归因、文件健康度、包装 API 和 QueuedWork 灰度治理。
+- 05 文档：任务 15 已移除 SharedPreferences 专项 API、配置、归因码、报告字段和 Demo 入口；通用证据链可辅助人工复盘。
 
 第一轮审核结论：
 
-- 全量目标已写入标题、目标、范围检查和追溯矩阵。
+- 全量目标已写入标题、目标、范围检查和追溯矩阵，并明确 05 不是需求输入。
 - 任务 11 到任务 20 明确补齐后续阶段能力。
 - 未发现把后续阶段当作可裁剪范围的剩余口径。
 
@@ -4606,12 +4430,12 @@ git status --short
 - 第一批执行任务 1 到任务 5，目标是 SDK 模块、API、消息时间线、Watchdog、主线程栈可编译可测试。
 - 第二批执行任务 6 到任务 10，目标是 Pending、基础归因、本地报告和 demo 验收形成首个可运行闭环。
 - 第三批执行任务 11 到任务 14，目标是慢栈采样、线程 CPU、Checktime、环境和 confirmed ANR 接入统一报告。
-- 第四批执行任务 15 到任务 18，目标是 SP、Barrier、Binder 和报告治理专项能力落地。
+- 第四批执行任务 15 到任务 18，目标是完成 SharedPreferences 专项移除守护、Barrier、Binder 和报告治理专项能力落地。
 - 第五批执行任务 19 到任务 20，目标是全量验收记录和服务端消费协议闭环。
 
 高风险点：
 
-- 任务 15 的 QueuedWork 绕过只能默认关闭，不能在 demo 或测试中默认启用。
+- 任务 15 的守护测试必须禁止 SharedPreferences 专项 API、配置、归因码、报告字段和 Demo 入口回归。
 - 任务 16 的 nativePollOnce 和 Barrier token 监控必须允许降级，不能影响正常消息调度。
 - 任务 17 的 Binder 分类只能输出疑似，不能作为强确认归因。
 - 任务 18 的报告治理必须防止本地文件无限增长。
@@ -4625,13 +4449,13 @@ git status --short
 
 ### 第三轮：评审表达审核
 
-审核结论：通过。修正后的文档可以清晰回答“SDK 是否覆盖 01 到 05 全部内容”这个评审问题。
+审核结论：通过。修正后的文档可以清晰回答“SDK 覆盖哪些需求、第五篇如何定位”这个评审问题。
 
 建议评审话术：
 
-1. 本计划覆盖全量能力，阶段一到阶段四只是交付顺序，最终 SDK 覆盖 01 到 05 的全部核心输入。
+1. 本计划覆盖全量能力，阶段一到阶段四只是交付顺序，最终 SDK 覆盖 01 到 04 的全部核心需求输入，第 5 篇是外部实战分析样例。
 2. 任务 1 到任务 10 先建立可运行闭环，任务 11 到任务 20 补齐线上诊断、专项治理、报告治理和服务端消费。
-3. 复杂能力不缺席，但会灰度：QueuedWork 绕过、Barrier token、nativePollOnce 这类风险能力必须有开关、白名单和回滚。
+3. 复杂能力不缺席，但会灰度：Barrier token、nativePollOnce 这类风险能力必须有开关、白名单和回滚；`QueuedWork` 绕过不属于 ANR SDK。
 4. 端侧不强行确认所有根因：外部系统负载、Binder/跨进程阻塞输出疑似和缺失证据，保留线下复核入口。
 5. 验收不只看编译通过，还要看 `100` 阶段一验收、`101` 全量验收和 `102` 服务端消费协议。
 
@@ -4641,15 +4465,16 @@ git status --short
 - 后续应把任务 11 到任务 20 视为全量 SDK 的必要组成部分。
 - 如果需要执行实现，建议从任务 1 开始按批次推进，而不是直接跳到专项能力。
 
-## 01 到 05 全量覆盖专项复核
+## 01 到 04 需求覆盖与 05 实战样例专项复核
 
-本轮复核结论：通过。当前计划覆盖 01 到 05 的全部核心内容，但覆盖口径必须明确为“SDK 能力级覆盖”，不是承诺端侧在所有 Android 版本和 ROM 上都能直接拿到完整系统 Trace、Logcat、Kernel、Meminfo、Perfetto 等特权或线下证据。端侧不可稳定采集的内容，必须通过可得性分级、缺失证据、线下复核入口和服务端协议覆盖，不能在报告里伪装成强证据。
+本轮复核结论：通过。当前计划覆盖 01 到 04 的全部核心需求内容；第 5 篇是 SharedPreferences ANR 实战分析样例，不能反推为基础 SDK 需求。覆盖口径必须明确为“SDK 能力级覆盖”，不是承诺端侧在所有 Android 版本和 ROM 上都能直接拿到完整系统 Trace、Logcat、Kernel、Meminfo、Perfetto 等特权或线下证据。端侧不可稳定采集的内容，必须通过可得性分级、缺失证据、线下复核入口和服务端协议覆盖，不能在报告里伪装成强证据。
 
 覆盖等级说明：
 
 - A：端侧 SDK 必须直接实现并进入 `AnrSnapshot` / `AnrReport`。
 - B：端侧 SDK 必须记录可得性、失败原因、缺失证据或摘要字段，并保留线下复核入口。
 - C：端侧 SDK 必须提供治理策略、灰度开关、回滚策略或服务端消费口径。
+- 示例：第 5 篇仅用于实战分析或可选治理验证，不参与基础需求覆盖等级。
 
 | 输入文档 | 核心内容 | 覆盖等级 | 计划落点 | 本轮判断 |
 | --- | --- | --- | --- | --- |
@@ -4664,19 +4489,17 @@ git status --short
 | 04 Barrier 导致主线程假死 | Pending 队头 `target == null`、同步消息被 Barrier 阻挡、普通消息 Block 时长 | A | 任务 6、7、16 | 已覆盖 |
 | 04 Barrier 导致主线程假死 | Barrier token 配对、`nativePollOnce(timeoutMillis)` 进入/退出/反复 `-1` 证据 | A/B | 任务 16、18、20 | 已覆盖；高风险采集必须灰度和可降级 |
 | 04 Barrier 导致主线程假死 | UI 刷新链路 Barrier 生命周期评审和泄漏治理 | C | 任务 16、19、20 | 已覆盖 |
-| 05 告别 SharedPreference 等待 | `SP_LOAD_WAIT`、`SP_APPLY_WAIT` 两套归因 | A | 任务 7、15、19、20 | 已覆盖 |
-| 05 告别 SharedPreference 等待 | SP 文件名、大小、key 数、首次加载耗时、apply/commit 次数、调用栈、写盘耗时、Pending finisher 队列 | A/B | 任务 15、18、20 | 已覆盖；执行任务 15 时这些字段不能省略 |
-| 05 告别 SharedPreference 等待 | `QueuedWork.waitToFinish` 绕过、关键文件排除、版本/ROM 白名单、回滚和一致性监控 | C | 任务 15、18、19、20 | 已覆盖；默认必须关闭 |
+| 05 告别 SharedPreference 等待 | SharedPreferences ANR 实战复盘案例 | 示例 | 任务 15、19、20 | 不产生 SDK 专项 API、配置、归因码、报告字段、Demo 入口或服务端字段 |
 
 ### 本轮举一反三提问
 
 - 如果评审问“覆盖全部内容是否意味着端侧要采集完整 Kernel/Logcat/Perfetto”，回答是否明确为“不是，端侧记录可得性和缺失证据，线下证据通过复核入口和服务端协议承接”？
 - 如果任务 13 只实现 `loadAverage1m` 和存储空间，是否足够覆盖 01/02/03 的系统环境要求？不够，执行时还必须表达 CPU/IO/内存证据可得性、采集失败原因和降级字段。
-- 如果任务 15 只做 SP 文件大小排序，是否足够覆盖第 5 篇？不够，执行时还必须补齐 load/apply 两类归因字段、调用点、写入耗时、pending finisher 队列和灰度绕过策略。
+- 如果任务 15 移除 SP 专项能力，是否影响基础 SDK 需求完成？不影响，因为第 5 篇不是基础需求；通用证据链仍可辅助人工复盘。
 - 如果任务 16 只看 Pending 队头 Barrier，是否足够覆盖第 4 篇？不够，执行时还必须补齐 token 生命周期和 `nativePollOnce(timeoutMillis)` 增强证据，但这些能力必须允许关闭和降级。
 - 如果任务 17 识别 Binder 栈，是否能直接判定跨进程死锁？不能，只能输出 `BINDER_BLOCK_SUSPECTED`、证据链和线下 Trace/Perfetto 复核入口。
-- 如果报告 JSON 没有“缺失证据”和“证据可得性”，是否还能说覆盖 01 到 05？不能，任务 18 和任务 20 必须把缺失证据作为一等字段。
-- 如果验收只跑 阶段一 demo，是否能证明覆盖 01 到 05？不能，必须完成任务 19 的全量验收记录和任务 20 的服务端消费协议。
+- 如果报告 JSON 没有“缺失证据”和“证据可得性”，是否还能说覆盖 01 到 04？不能，任务 18 和任务 20 必须把缺失证据作为一等字段。
+- 如果验收只跑 阶段一 demo，是否能证明覆盖 01 到 04？不能，必须完成任务 19 的全量验收记录和任务 20 的服务端消费协议。
 
 ### 本轮三轮审核
 
@@ -4686,7 +4509,7 @@ git status --short
 
 必须保持的口径：
 
-- 01 到 05 的核心能力都要进入计划任务。
+- 01 到 04 的核心能力都要进入计划任务；05 只能作为外部实战分析样例。
 - 端侧能直接采集的能力必须实现。
 - 端侧不能稳定采集的系统证据必须记录可得性、缺失原因和线下复核入口。
 - 高风险治理能力必须默认关闭，并通过灰度、白名单、回滚和一致性监控落地。
@@ -4698,21 +4521,21 @@ git status --short
 执行硬约束：
 
 - 任务 13 不能只保存设备型号和 load average，还要表达系统负载、内存、IO、外部证据可得性和采集失败原因。
-- 任务 15 不能只做 SP 文件健康扫描，还要覆盖 `SP_LOAD_WAIT`、`SP_APPLY_WAIT`、调用栈、线程、写盘耗时、pending finisher、生命周期等待和 QueuedWork 灰度策略。
+- 任务 15 是边界纠偏任务；必须移除 SharedPreferences 专项能力，并保留守护测试防止回归。
 - 任务 16 不能只做 token map，还要记录 `nativePollOnce` 的 timeout、进入/退出时间、调用次数，以及反复 `timeoutMillis=-1` 与 Pending 队列的对齐关系。
 - 任务 18 不能只做报告数量保留，还要覆盖 gzip、重试、采样、限频、隐私、缺失证据和 SDK 自监控指标。
 - 任务 20 不能只写服务端聚类维度，还要同步 `AnrReport` schema、缺失证据、owner hint、线下复核入口和治理建议。
 
 #### 第三轮：评审结论审核
 
-审核结论：通过。可以在评审中回答“是否覆盖 01 到 05 的所有内容”：覆盖，且覆盖方式分为端侧直接实现、端侧降级证据、线下复核入口和治理闭环四层。
+审核结论：通过。可以在评审中回答“是否覆盖 01 到 04 的所有需求内容”：覆盖，且覆盖方式分为端侧直接实现、端侧降级证据、线下复核入口和治理闭环四层；05 是外部实战分析案例。
 
 评审回答建议：
 
 1. 这份计划覆盖全量能力，文件名已经改为 `2026-06-05-anr-monitor-sdk-full.md`，正文也已修正为全量实施计划。
-2. 01 到 05 的文章内容已经映射到任务 1 到任务 20，其中任务 11 到任务 20 是全量能力的必要组成部分。
+2. 01 到 04 的文章内容已经映射到任务 1 到任务 20，其中任务 11 到任务 20 是全量能力的必要组成部分；05 只作为外部实战分析样例。
 3. 对 Kernel/Logcat/Perfetto、外部系统负载、跨进程死锁这类端侧不可强确认内容，SDK 不做虚假强归因，而是输出证据可得性、疑似结论和复核入口。
-4. 对 Barrier、QueuedWork 绕过、nativePollOnce 这类高风险能力，计划覆盖但默认关闭或可降级。
+4. 对 Barrier、nativePollOnce 这类高风险能力，计划覆盖但默认关闭或可降级；`QueuedWork` 绕过不属于 SDK。
 5. 覆盖是否完成最终以任务 19 的全量验收记录和任务 20 的服务端消费协议为准，不能只以编译通过或 阶段一 demo 通过为准。
 
 ## 2026-06-07 代码 Review 修复记录
@@ -4724,7 +4547,7 @@ git status --short
 - 慢消息栈采样接入 [MainLooperTimelineCollector]、[AnrSnapshot] 和 JSON 报告，`sampleStackIds` 可回查 `stackSamples`。
 - 当前消息 CPU 读取改为目标线程 CPU，避免 Watchdog 线程误污染主线程忙等证据。
 - 新增 [ReportRetryDispatcher]，让失败报告按退避时间真正重试上传，而不是只保留队列元信息。
-- SharedPreferences `pendingFinisherCount` 改为当次观测口径，记录后释放全局近似值，避免历史 `apply()` 次数累积成当前 pending 数。
+- 2026-06-08 已进一步移除 SharedPreferences 专项模型、采集、归因和报告字段，避免第 5 篇案例回流为 SDK 需求。
 
 验证命令：
 

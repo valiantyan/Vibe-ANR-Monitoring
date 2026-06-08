@@ -38,9 +38,6 @@ enum class AnrPrivacyMode {
  * @property captureSystemEnvironment 是否采集系统负载、内存、存储和进程 I/O 证据。
  * @property captureThreadCpu 是否采集当前进程线程 CPU TopN 证据。
  * @property capturePendingQueue 是否采集 Pending 队列证据。
- * @property captureSpHealth 是否采集 SharedPreferences 健康度证据。
- * @property spTopFileCount SP 健康度最多输出的高风险文件数量。
- * @property spRecentOperationCount SP 包装入口最多输出的最近操作数量。
  * @property captureBarrierEvidence 是否采集 Barrier token 和 [nativePollOnce] 增强证据，默认关闭以控制 hook 风险。
  * @property barrierTokenStuckThresholdMs Barrier token 未移除超过该阈值才输出为卡住证据。
  * @property barrierEvidenceMaxRecords Barrier token 和 [nativePollOnce] 最近证据最大输出数量。
@@ -53,12 +50,6 @@ enum class AnrPrivacyMode {
  * @property reportUploadMinIntervalMs 两次上报入队之间的最小间隔。
  * @property reportRetryInitialDelayMs 上报失败后的首次重试延迟。
  * @property reportRetryMaxDelayMs 上报失败后的最大重试延迟。
- * @property enableQueuedWorkBypass 是否启用 [android.app.QueuedWork] 绕过能力，默认关闭避免一致性风险。
- * @property queuedWorkBypassAllowedFiles 允许绕过的 SP 文件白名单。
- * @property queuedWorkBypassBlockedFiles 禁止绕过的 SP 文件黑名单。
- * @property queuedWorkBypassAllowedManufacturers 允许绕过的 ROM 厂商白名单，空集合表示不限制。
- * @property queuedWorkBypassBlockedManufacturers 禁止绕过的 ROM 厂商黑名单。
- * @property queuedWorkBypassRollbackEnabled 绕过治理回滚开关，开启后白名单也不生效。
  * @property privacyMode 栈和类名脱敏模式。
  */
 data class AnrMonitorConfig(
@@ -80,9 +71,6 @@ data class AnrMonitorConfig(
     val captureSystemEnvironment: Boolean = true,
     val captureThreadCpu: Boolean = true,
     val capturePendingQueue: Boolean = true,
-    val captureSpHealth: Boolean = true,
-    val spTopFileCount: Int = 5,
-    val spRecentOperationCount: Int = 20,
     val captureBarrierEvidence: Boolean = false,
     val barrierTokenStuckThresholdMs: Long = 5_000L,
     val barrierEvidenceMaxRecords: Int = 20,
@@ -95,12 +83,6 @@ data class AnrMonitorConfig(
     val reportUploadMinIntervalMs: Long = 60_000L,
     val reportRetryInitialDelayMs: Long = 1_000L,
     val reportRetryMaxDelayMs: Long = 60_000L,
-    val enableQueuedWorkBypass: Boolean = false,
-    val queuedWorkBypassAllowedFiles: Set<String> = emptySet(),
-    val queuedWorkBypassBlockedFiles: Set<String> = emptySet(),
-    val queuedWorkBypassAllowedManufacturers: Set<String> = emptySet(),
-    val queuedWorkBypassBlockedManufacturers: Set<String> = emptySet(),
-    val queuedWorkBypassRollbackEnabled: Boolean = false,
     val privacyMode: AnrPrivacyMode = AnrPrivacyMode.SAFE,
 ) {
     /**

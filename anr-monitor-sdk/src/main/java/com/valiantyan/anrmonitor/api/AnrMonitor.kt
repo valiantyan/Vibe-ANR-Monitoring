@@ -1,8 +1,6 @@
 package com.valiantyan.anrmonitor.api
 
 import android.content.Context
-import android.content.SharedPreferences
-import com.valiantyan.anrmonitor.collector.sharedprefs.MonitoredSharedPreferences
 import com.valiantyan.anrmonitor.internal.AnrMonitorRuntime
 
 /**
@@ -110,40 +108,6 @@ object AnrMonitor {
         activeSession?.stop()
         activeSession = null
         runtime = null
-    }
-
-    /**
-     * 包装 SharedPreferences 打开动作，用于记录首次加载耗时和后续写入证据。
-     *
-     * @param fileName SP 文件名，建议与磁盘 XML 文件名一致。
-     * @param opener 原始 SP 打开动作，例如 [Context.getSharedPreferences]。
-     * @return 被监控的 [SharedPreferences]。
-     */
-    fun openSharedPreferences(
-        fileName: String,
-        opener: () -> SharedPreferences,
-    ): SharedPreferences {
-        return MonitoredSharedPreferences.open(
-            fileName = fileName,
-            opener = opener,
-        )
-    }
-
-    /**
-     * 包装已有 SharedPreferences 实例，用于记录 apply 和 commit 写入证据。
-     *
-     * @param fileName SP 文件名，建议与磁盘 XML 文件名一致。
-     * @param sharedPreferences 原始 [SharedPreferences]。
-     * @return 被监控的 [SharedPreferences]。
-     */
-    fun monitorSharedPreferences(
-        fileName: String,
-        sharedPreferences: SharedPreferences,
-    ): SharedPreferences {
-        return MonitoredSharedPreferences.wrap(
-            fileName = fileName,
-            delegate = sharedPreferences,
-        )
     }
 
     /**

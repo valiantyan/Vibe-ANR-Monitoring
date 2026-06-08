@@ -23,28 +23,6 @@ import org.junit.Test
  */
 class AttributionAnalyzerTest {
     /**
-     * 主线程栈包含 SP 首次加载等待时，优先输出 [AnrAttributionCode.SP_LOAD_WAIT]。
-     */
-    @Test
-    fun analyzeReturnsSpLoadWaitWhenStackContainsAwaitLoadedLocked(): Unit {
-        val result = AttributionAnalyzer().analyze(
-            snapshot = snapshot(
-                current = message(
-                    seq = 1L,
-                    wallMs = 6_000L,
-                    cpuMs = 20L,
-                ),
-                history = emptyList(),
-                pending = emptyList(),
-                frames = listOf("android.app.SharedPreferencesImpl.awaitLoadedLocked(SharedPreferencesImpl.java:300)"),
-            ),
-        )
-
-        assertEquals(AnrAttributionCode.SP_LOAD_WAIT, result.primaryCode)
-        assertEquals(Confidence.HIGH, result.confidence)
-    }
-
-    /**
      * Pending 队头同步屏障阻塞同步消息时，归因为 Barrier 假死。
      */
     @Test

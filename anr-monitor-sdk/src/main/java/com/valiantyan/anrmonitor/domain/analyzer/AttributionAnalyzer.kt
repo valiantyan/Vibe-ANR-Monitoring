@@ -10,9 +10,6 @@ import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
 import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
-import com.valiantyan.anrmonitor.domain.model.SharedPreferencesFileStat
-import com.valiantyan.anrmonitor.domain.model.SharedPreferencesOperationRecord
-import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 
 /**
@@ -24,19 +21,12 @@ class AttributionAnalyzer(
     private val thresholds: AttributionThresholds = AttributionThresholds(),
 ) {
     /**
-     * 对单次 [AnrSnapshot] 做基础归因，优先识别资料中确定性更高的 SP 和 Barrier 模式。
+     * 对单次 [AnrSnapshot] 做基础归因，优先识别确定性更高的 Barrier、消息堆积和跨进程疑似模式。
      *
      * @param snapshot 疑似 ANR 现场快照。
      * @return 可直接进入报告编码和上传链路的归因结果。
      */
     fun analyze(snapshot: AnrSnapshot): AttributionResult {
-        val spResult: AttributionResult? = analyzeSharedPreferences(snapshot = snapshot)
-        if (spResult != null) {
-            return withThreadCpuEvidence(
-                result = spResult,
-                snapshot = snapshot,
-            )
-        }
         val pendingSummary: PendingQueueSummary = PendingQueueAnalyzer.analyze(
             messages = snapshot.pendingQueue.messages,
         )
@@ -81,48 +71,6 @@ class AttributionAnalyzer(
         return withThreadCpuEvidence(
             result = unknownResult(snapshot = snapshot),
             snapshot = snapshot,
-        )
-    }
-
-    // 识别 SharedPreferences 加载等待和 apply 落盘等待，二者在主线程栈中证据最直接。
-    private fun analyzeSharedPreferences(snapshot: AnrSnapshot): AttributionResult? {
-        val frames: List<String> = snapshot.mainThreadStack.frames
-        val joinedFrames: String = frames.joinToString(separator = "\n")
-        if (joinedFrames.contains(other = "SharedPreferencesImpl.awaitLoadedLocked")) {
-            return result(
-                code = AnrAttributionCode.SP_LOAD_WAIT,
-                confidence = Confidence.HIGH,
-                evidence = listOf("main stack contains SharedPreferencesImpl.awaitLoadedLocked") +
-                    sharedPreferencesEvidence(snapshot = snapshot.sharedPreferencesSnapshot),
-                suggestion = "将首次读取前置到后台线程，拆分过大的 shared_prefs 文件。",
-            )
-        }
-        if (joinedFrames.contains(other = "QueuedWork.waitToFinish") || joinedFrames.contains(other = "writtenToDiskLatch.await")) {
-            return result(
-                code = AnrAttributionCode.SP_APPLY_WAIT,
-                confidence = Confidence.HIGH,
-                evidence = listOf("main stack contains QueuedWork.waitToFinish or writtenToDiskLatch.await") +
-                    sharedPreferencesEvidence(snapshot = snapshot.sharedPreferencesSnapshot),
-                suggestion = "治理生命周期边界前的高频 apply，强一致数据不要跳过等待。",
-            )
-        }
-        return null
-    }
-
-    // 从 SP 专项快照提取文件健康和最近写入证据，只增强证据不改变主因。
-    private fun sharedPreferencesEvidence(snapshot: SharedPreferencesSnapshot): List<String> {
-        if (!snapshot.available) {
-            return listOf("sharedPreferences unavailable: ${snapshot.failureReason}")
-        }
-        val topFile: SharedPreferencesFileStat? = snapshot.topFiles.firstOrNull()
-        val recentOperation: SharedPreferencesOperationRecord? = snapshot.recentOperations.lastOrNull()
-        return listOfNotNull(
-            topFile?.let { stat: SharedPreferencesFileStat ->
-                "sp file ${stat.fileName} size=${stat.sizeBytes} keyCount=${stat.keyCount}"
-            },
-            recentOperation?.let { record: SharedPreferencesOperationRecord ->
-                "sp recent ${record.operationType.name} file=${record.fileName} cost=${record.costMs}ms pendingFinisher=${record.pendingFinisherCount}"
-            },
         )
     }
 
@@ -231,9 +179,6 @@ class AttributionAnalyzer(
         }
         if (snapshot.historyMessages.isEmpty()) {
             missingEvidence += "history messages empty"
-        }
-        if (!snapshot.sharedPreferencesSnapshot.available) {
-            missingEvidence += "sharedPreferences unavailable: ${snapshot.sharedPreferencesSnapshot.failureReason}"
         }
         if (!snapshot.barrierEvidenceSnapshot.available) {
             missingEvidence += "barrier evidence unavailable: ${snapshot.barrierEvidenceSnapshot.failureReason}"

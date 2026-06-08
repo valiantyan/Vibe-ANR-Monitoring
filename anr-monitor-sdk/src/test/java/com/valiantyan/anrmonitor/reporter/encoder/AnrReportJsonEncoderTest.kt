@@ -18,11 +18,6 @@ import com.valiantyan.anrmonitor.domain.model.NativePollOnceRecord
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.ProcessIoSnapshot
 import com.valiantyan.anrmonitor.domain.model.SdkDiagnostics
-import com.valiantyan.anrmonitor.domain.model.QueuedWorkBypassState
-import com.valiantyan.anrmonitor.domain.model.SharedPreferencesFileStat
-import com.valiantyan.anrmonitor.domain.model.SharedPreferencesOperationRecord
-import com.valiantyan.anrmonitor.domain.model.SharedPreferencesOperationType
-import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
 import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
 import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
@@ -79,6 +74,7 @@ class AnrReportJsonEncoderTest {
 
         assertTrue(json.contains("\"schemaVersion\":1"))
         assertTrue(json.contains("\"primary\":\"UNKNOWN_INSUFFICIENT_EVIDENCE\""))
+        assertFalse(json.contains("\"sharedPreferences\""))
         assertFalse(json.contains("obj="))
     }
 
@@ -275,95 +271,6 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"condition\":2"))
         assertTrue(json.contains("\"shortMsg\":\"Input dispatching timed out\""))
         assertTrue(json.contains("\"primary\":\"UNKNOWN_INSUFFICIENT_EVIDENCE\""))
-    }
-
-    /**
-     * SharedPreferences 专项证据需要进入 JSON，供评审查看文件健康、写入成本和治理状态。
-     */
-    @Test
-    fun encodeIncludesSharedPreferencesEvidence(): Unit {
-        val report: AnrReport = AnrReport(
-            schemaVersion = 1,
-            snapshot = AnrSnapshot(
-                eventId = "event-1",
-                eventType = AnrEventType.SUSPECT_ANR,
-                appId = "demo",
-                environment = "test",
-                timeUptimeMs = 123L,
-                currentMessage = null,
-                historyMessages = emptyList(),
-                pendingQueue = PendingQueueSnapshot.unavailable(
-                    maxDepth = 200,
-                    failureReason = "reflection failed",
-                ),
-                mainThreadStack = StackTraceSnapshot(
-                    stackId = "main",
-                    threadName = "main",
-                    frames = listOf("android.app.QueuedWork.waitToFinish(QueuedWork.java:180)"),
-                ),
-                sharedPreferencesSnapshot = SharedPreferencesSnapshot(
-                    available = true,
-                    topFiles = listOf(
-                        SharedPreferencesFileStat(
-                            fileName = "settings.xml",
-                            sizeBytes = 2_048L,
-                            keyCount = 80,
-                            firstLoadCostMs = 450L,
-                            applyCount = 2,
-                            commitCount = 1,
-                            lastWriteCostMs = 90L,
-                        ),
-                    ),
-                    recentOperations = listOf(
-                        SharedPreferencesOperationRecord(
-                            fileName = "settings.xml",
-                            operationType = SharedPreferencesOperationType.APPLY,
-                            costMs = 32L,
-                            timestampUptimeMs = 1_200L,
-                            threadName = "main",
-                            stackFrames = listOf("com.example.MainActivity.onStop(MainActivity.kt:30)"),
-                            success = true,
-                            pendingFinisherCount = 3,
-                        ),
-                    ),
-                    pendingFinisherCount = 3,
-                    queuedWorkBypass = QueuedWorkBypassState(
-                        enabled = false,
-                        allowedFiles = emptySet(),
-                        blockedFiles = setOf("auth.xml"),
-                        rollbackEnabled = false,
-                    ),
-                    failureReason = null,
-                ),
-            ),
-            attribution = AttributionResult(
-                primaryCode = AnrAttributionCode.SP_APPLY_WAIT,
-                secondaryCodes = emptyList(),
-                confidence = Confidence.HIGH,
-                evidenceItems = listOf("main stack contains QueuedWork.waitToFinish"),
-                missingEvidence = emptyList(),
-                actionSuggestions = emptyList(),
-            ),
-            diagnostics = SdkDiagnostics(
-                pendingAvailable = false,
-                reportBuildCostMs = 12L,
-                collectorFailures = emptyList(),
-            ),
-        )
-
-        val json: String = AnrReportJsonEncoder().encode(report = report)
-
-        assertTrue(json.contains("\"sharedPreferences\""))
-        assertTrue(json.contains("\"fileName\":\"settings.xml\""))
-        assertTrue(json.contains("\"sizeBytes\":2048"))
-        assertTrue(json.contains("\"keyCount\":80"))
-        assertTrue(json.contains("\"firstLoadCostMs\":450"))
-        assertTrue(json.contains("\"applyCount\":2"))
-        assertTrue(json.contains("\"commitCount\":1"))
-        assertTrue(json.contains("\"operationType\":\"APPLY\""))
-        assertTrue(json.contains("\"pendingFinisherCount\":3"))
-        assertTrue(json.contains("\"queuedWorkBypass\""))
-        assertTrue(json.contains("\"rollbackEnabled\":false"))
     }
 
     /**

@@ -10,33 +10,26 @@
         android:id="@+id/currentSlowButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Current Slow Message" />
+        android:text="@string/demo_current_slow" />
 
     <Button
         android:id="@+id/messageStormButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Message Storm" />
-
-    <Button
-        android:id="@+id/spApplyButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="SharedPreferences Apply Burst" />
+        android:text="@string/demo_message_storm" />
 
     <Button
         android:id="@+id/currentBusyButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Current Busy Loop" />
+        android:text="@string/demo_current_busy" />
 
     <Button
         android:id="@+id/binderLikeButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Binder Like Wait" />
+        android:text="@string/demo_binder_like_lock" />
 </LinearLayout>
