@@ -15,7 +15,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | 输入事件当前慢消息 | 点击按钮后主线程阻塞 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.stackFrames` |
 | 2 | 主线程 CPU 忙等 | 点击“当前消息忙等”后主线程 busy loop 6 秒 | `CURRENT_MESSAGE_SLOW` | `mainThread.current.wallMs`、`mainThread.current.cpuMs`、`threadCpu.topThreads`、`MainThreadCpuBusyScenario.run` |
-| 3 | 消息风暴 | 大量投递同类主线程消息 | `MESSAGE_STORM` | `pendingQueue.messages` 重复 target |
+| 3 | 消息风暴 | 点击“消息风暴”后投递大量同类主线程消息 | `MESSAGE_STORM` | `attribution.evidence`、`pendingQueue.messages` 重复 `MessageStormHandler` / `StormRunnable`、`MessageStormScenario.run` |
 | 4 | Sync Barrier 泄漏 | 插入 Barrier 后不移除 | `SYNC_BARRIER_STUCK` | `pendingQueue.messages[0].isBarrierLike`、`barrierEvidence.stuckTokens`、`nativePollOnceRecords` |
 | 5 | 主线程锁等待 | 子线程持锁，主线程等待锁 | 当前慢消息加等待栈证据 | `mainThread.stackFrames` 中锁等待业务帧 |
 | 6 | BroadcastReceiver 超时 | 发送显式广播，Receiver 阻塞 | Broadcast 组件超时 | `systemAnr.anrType`、Receiver 相关 ActivityThread 消息 |
@@ -145,6 +145,57 @@ barrierEvidence.stuckTokens = []
 
 验收结论：主线程 CPU 忙等场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，当前消息 wall time 超过阈值，当前消息 CPU 耗时和线程 CPU 排名都支持“主线程持续计算”，主线程栈能定位到 `MainThreadCpuBusyScenario.run` 和 `DefaultCpuBusyAction.burn`，因此可以和 `Thread.sleep` 类型的等待阻塞场景区分开。
 
+## 第三批次：消息风暴
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“消息风暴”。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `attribution.primary`，预期为 `MESSAGE_STORM`。再看 `attribution.evidence`，应包含 `pending repeated target count=...`。接着打开 `pendingQueue.messages`，确认多条 Pending 消息的 `targetClass` 包含 `MessageStormHandler`，或 `callbackClass` 包含 `StormRunnable`。最后看 `mainThread.stackFrames`，应能看到 `MessageStormScenario.run`，说明本次消息风暴来自 Demo 按钮场景。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `binderBlock.suspected` 不应该为 true。
+- 如果 `attribution.primary` 变成 `CURRENT_MESSAGE_SLOW`，优先检查 `pendingQueue.available` 是否为 true，以及 `pendingQueue.messages` 中是否真的采到了超过 20 条同类消息。
+
+### 首次验收记录
+
+验收时间：待执行
+
+验收设备：待执行
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s <device-id> logcat -c
+adb -s <device-id> shell input tap <message-storm-button-x> <message-storm-button-y>
+adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json
+```
+
+关键 JSON 字段：
+
+```text
+event.eventType = SUSPECT_ANR
+attribution.primary = MESSAGE_STORM
+attribution.evidence contains pending repeated target count
+pendingQueue.messages contains repeated MessageStormHandler or StormRunnable
+mainThread.stackFrames contains MessageStormScenario.run
+binderBlock.suspected = false
+barrierEvidence.stuckTokens = []
+```
+
+验收结论：待执行。
+
 ## 后续批次顺序
 
-后续按消息风暴、锁等待、Broadcast、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
+后续按锁等待、Broadcast、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
