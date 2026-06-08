@@ -625,7 +625,7 @@ git commit -m "接入 ContentProvider 阻塞按钮"
 **Files:**
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 
-- [ ] **Step 1: Add button row**
+- [x] **Step 1: Add button row**
 
 Modify the Demo button table in `docs-anr/103-ANR监控SDK使用说明.md` by adding this row after `Service 超时`:
 
@@ -633,7 +633,7 @@ Modify the Demo button table in `docs-anr/103-ANR监控SDK使用说明.md` by ad
 | `ContentProvider 阻塞` | 查询显式应用内 Provider，`query()` 主线程阻塞 12 秒 | `mainThread.stackFrames` 包含 `BlockingContentProvider.query`、`ContentResolver.query` 或 `ContentProvider.Transport.query`、当前消息耗时 |
 ```
 
-- [ ] **Step 2: Add ContentProvider section**
+- [x] **Step 2: Add ContentProvider section**
 
 Add this section after the existing “Service 超时场景” section and before “## 9. 线上接入清单”:
 
@@ -685,7 +685,7 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 - 修复后重新点击“ContentProvider 阻塞”按钮验证：`mainThread.stackFrames` 不应再出现 Provider 阻塞栈，`mainThread.current.wallMs` 应低于疑似 ANR 阈值。
 ````
 
-- [ ] **Step 3: Check docs diff**
+- [x] **Step 3: Check docs diff**
 
 Run:
 
@@ -695,7 +695,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md

@@ -652,6 +652,7 @@ Demo 页面按钮：
 | `Sync Barrier 泄漏 ANR` | 反射插入 Sync Barrier 并故意不移除 | `SYNC_BARRIER_STUCK`、队头 `isBarrierLike=true`、`stuckTokens` token 对齐 |
 | `BroadcastReceiver 超时` | 发送显式应用内广播，Receiver 主线程阻塞 12 秒 | `systemAnr.anrType=BROADCAST_*`、`BroadcastTimeoutReceiver.onReceive`、当前消息耗时 |
 | `Service 超时` | 启动显式应用内 Service，`onStartCommand()` 主线程阻塞 25 秒 | `mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`、`systemAnr.anrType=SERVICE` 或 Service 相关 ActivityThread 消息 |
+| `ContentProvider 阻塞` | 查询显式应用内 Provider，`query()` 主线程阻塞 12 秒 | `mainThread.stackFrames` 包含 `BlockingContentProvider.query`、`ContentResolver.query` 或 `ContentProvider.Transport.query`、当前消息耗时 |
 
 验证步骤：
 
@@ -885,6 +886,52 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 - Service 收到启动请求后只做参数校验、状态切换和任务分发，把耗时工作交给后台线程、协程、WorkManager、JobScheduler 或前台服务中的后台执行链路。
 - 如果必须等待后台任务结果，应改成异步回调或状态通知，不要让主线程等待 `Future.get()`、`CountDownLatch.await()`、`Thread.sleep()` 或长时间 synchronized 锁。
 - 修复后重新点击“Service 超时”按钮验证：`mainThread.stackFrames` 不应再出现业务 Service 阻塞栈，`mainThread.current.wallMs` 应低于疑似 ANR 阈值。
+
+### ContentProvider 阻塞场景
+
+这个场景用于验证：如果 ContentProvider 的查询逻辑在主线程执行耗时阻塞，SDK 是否能把根因定位到具体 Provider，而不是只看到当前消息慢或系统组件调度。
+
+操作步骤：
+
+1. 安装 Debug 包并打开 Demo App。
+2. 点击“ContentProvider 阻塞”。
+3. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+4. 从设备拉取最新 JSON：
+
+```bash
+adb shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json > content-provider-block.json
+```
+
+重点看这些字段：
+
+| 字段 | 期望现象 | 含义 |
+| --- | --- | --- |
+| `event.eventType` | `SUSPECT_ANR` 或 `CONFIRMED_ANR` | SDK 已经捕获到 ANR 现场 |
+| `mainThread.current.wallMs` | 大于 `3000` | 主线程当前消息执行时间过长 |
+| `mainThread.stackFrames` | 包含 `BlockingContentProvider.query` 和 `ContentProviderBlocker.block` | 业务根因入口是 Provider 查询中阻塞 |
+| `mainThread.stackFrames` | 包含 `ContentResolver.query` 或 `ContentProvider.Transport.query` | 说明调用链经过 Provider 查询 |
+| `systemAnr.isConfirmedAnr` | 可能为 `true` 或 `false` | `false` 代表 SDK 先抓到疑似 ANR，`true` 代表系统也确认了 ANR |
+| `systemAnr.anrType` | 系统确认后优先期望 `PROVIDER`，也可能是 `UNKNOWN` | `PROVIDER` 是最理想组件证据；`UNKNOWN` 时仍按栈定位业务根因 |
+| `systemAnr.componentTimeoutMs` | Provider 类型确认后通常为 `10000` | 用来解释系统 Provider 超时预算 |
+| `barrierEvidence.stuckTokens` | 空数组或不是主因 | 排除 Sync Barrier 泄漏 |
+| `binderBlock.suspected` | `false` | 排除 Binder / 跨进程阻塞 |
+
+判断结论模板：
+
+```text
+本次 ANR 是 ContentProvider 查询阻塞。业务根因证据是主线程栈包含 BlockingContentProvider.query 和 ContentProviderBlocker.block，调用链中出现 ContentResolver.query 或 ContentProvider.Transport.query，当前消息执行时间超过阈值。Barrier 和 Binder 证据不构成本次主因，因此根因是 Provider 在 query() 中执行了耗时阻塞逻辑。
+```
+
+如果 `systemAnr.isConfirmedAnr=false`，不要直接否定这份报告。Debug 配置下 SDK 会在 3 秒左右先生成疑似 ANR，而系统 Provider 相关确认可能更晚。如果 `systemAnr.isConfirmedAnr=true` 且 `systemAnr.anrType=PROVIDER`，说明系统也确认了 Provider 组件超时；如果系统版本没有输出明确 Provider 类型，仍先按 `mainThread.stackFrames` 定位业务根因，再结合系统 traces 复核组件类型。
+
+修复方向：
+
+- `query()`、`insert()`、`update()`、`delete()`、`openFile()` 中不要执行长时间同步 IO、同步网络、锁等待或大计算。
+- Provider 只做参数校验、权限校验和轻量查询分发，耗时工作应下沉到后台线程、缓存预热或异步任务。
+- 如果 Provider 是跨进程访问入口，要把超时预算看得更严格，因为调用方可能正在主线程等待返回。
+- 对数据库查询增加索引、分页、取消能力和慢查询日志，避免一次 Provider 查询扫描大量数据。
+- 修复后重新点击“ContentProvider 阻塞”按钮验证：`mainThread.stackFrames` 不应再出现 Provider 阻塞栈，`mainThread.current.wallMs` 应低于疑似 ANR 阈值。
 
 ## 9. 线上接入清单
 
