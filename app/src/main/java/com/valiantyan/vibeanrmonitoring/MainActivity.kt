@@ -3,6 +3,7 @@ package com.valiantyan.vibeanrmonitoring
 import android.os.Bundle
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenario
 import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
@@ -26,6 +27,11 @@ class MainActivity : AppCompatActivity() {
         SyncBarrierLeakScenario(context = this)
     }
 
+    // BroadcastReceiver 超时场景，按钮只负责发送广播，真正阻塞入口在 Receiver。
+    private val broadcastTimeoutScenario: BroadcastTimeoutScenario by lazy {
+        BroadcastTimeoutScenario(context = this)
+    }
+
     /**
      * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
@@ -46,6 +52,9 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.syncBarrierLeakButton).setOnClickListener {
             runSyncBarrierLeak()
+        }
+        findViewById<Button>(R.id.broadcastTimeoutButton).setOnClickListener {
+            broadcastTimeoutScenario.run()
         }
     }
 
