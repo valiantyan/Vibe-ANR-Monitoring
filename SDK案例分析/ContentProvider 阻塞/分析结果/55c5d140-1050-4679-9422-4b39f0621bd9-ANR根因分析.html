@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>55c5d140 ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      line-height: 1.3;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    h2 {
+      margin-top: 28px;
+      font-size: 22px;
+      border-left: 4px solid var(--primary);
+      padding-left: 10px;
+    }
+
+    h3 {
+      margin-top: 22px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f9;
+      color: #24334d;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    ul {
+      padding-left: 22px;
+    }
+
+    .subtitle {
+      color: #d6e4ff;
+      max-width: 960px;
+      margin-top: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06);
+    }
+
+    .result {
+      border-left: 5px solid var(--danger);
+    }
+
+    .evidence {
+      border-left: 5px solid var(--primary);
+    }
+
+    .exclude {
+      border-left: 5px solid var(--ok);
+    }
+
+    .warn {
+      border-left: 5px solid var(--warn);
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .badge-danger {
+      background: #fee4e2;
+      color: var(--danger);
+    }
+
+    .badge-warn {
+      background: #fff4d6;
+      color: var(--warn);
+    }
+
+    .badge-ok {
+      background: #dcfae6;
+      color: var(--ok);
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 14px 0;
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .step-number {
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .quote {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：ContentProvider 阻塞</h1>
+    <p class="subtitle">分析对象：<code>55c5d140-1050-4679-9422-4b39f0621bd9.json</code>。这份报告的核心结论是：点击事件触发了主线程上的 <code>ContentResolver.query()</code>，Provider 的 <code>query()</code> 内部执行了阻塞等待，导致当前主线程消息长时间无法结束。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>最终结论</h2>
+        <p><span class="badge badge-danger">根因</span>主线程在处理按钮点击消息时，同步调用 <code>BlockingContentProvider.query()</code>，Provider 内部执行 <code>Thread.sleep()</code>，导致点击消息耗时达到 <code>3488ms</code>。</p>
+        <p><span class="badge badge-warn">性质</span>这是一次 <code>ContentProvider 阻塞</code>引发的当前消息慢处理，属于主线程同步等待类 ANR 风险。</p>
+      </div>
+      <div class="card evidence">
+        <h2>最关键证据</h2>
+        <p><code>mainThread.current.callbackClass</code> 是 <code>android.view.View$PerformClick</code>，说明正在处理点击事件。</p>
+        <p><code>mainThread.stackFrames</code> 出现 <code>ContentResolver.query()</code>、<code>BlockingContentProvider.query()</code> 和 <code>Thread.sleep()</code>，业务链路闭合。</p>
+      </div>
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p><code>binderBlock.suspected=false</code>，没有足够证据说明是 Binder 互等。</p>
+        <p><code>barrierEvidence.alignedWithPendingBarrier=false</code> 且 <code>stuckTokens=[]</code>，不是 Sync Barrier 泄漏主因。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>1. 先看报告身份</h2>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>值</th>
+          <th>怎么理解</th>
+        </tr>
+        <tr>
+          <td><code>event.eventId</code></td>
+          <td><code>55c5d140-1050-4679-9422-4b39f0621bd9</code></td>
+          <td>本次 ANR 现场的唯一编号，后续对日志、对文件都用它。</td>
+        </tr>
+        <tr>
+          <td><code>event.eventType</code></td>
+          <td><code>SUSPECT_ANR</code></td>
+          <td>SDK 提前抓到疑似 ANR 现场。即使系统还没弹出 ANR，也应该分析。</td>
+        </tr>
+        <tr>
+          <td><code>event.appId</code></td>
+          <td><code>vibe-anr-demo</code></td>
+          <td>报告来自 Demo 应用。</td>
+        </tr>
+        <tr>
+          <td><code>systemAnr.isConfirmedAnr</code></td>
+          <td><code>false</code></td>
+          <td>系统尚未确认 ANR；这不影响 SDK 报告作为卡顿现场使用。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>2. 再看 SDK 初始归因</h2>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>值</th>
+          <th>说明</th>
+        </tr>
+        <tr>
+          <td><code>attribution.primary</code></td>
+          <td><code>CURRENT_MESSAGE_SLOW</code></td>
+          <td>SDK 判断主因是当前正在执行的主线程消息耗时过长。</td>
+        </tr>
+        <tr>
+          <td><code>attribution.confidence</code></td>
+          <td><code>LOW</code></td>
+          <td>置信度偏低，不能只抄结论，必须继续用主线程栈复核。</td>
+        </tr>
+        <tr>
+          <td><code>attribution.evidence</code></td>
+          <td><code>current message wall=3488ms cpu=0ms</code></td>
+          <td>当前消息墙钟耗时很高，但 CPU 耗时接近 0，说明更像等待或睡眠，不像 CPU 忙等。</td>
+        </tr>
+        <tr>
+          <td><code>attribution.suggestions</code></td>
+          <td>优化当前消息对应业务逻辑</td>
+          <td>方向正确，但还需要从栈里找到具体业务入口。</td>
+        </tr>
+      </table>
+      <p class="quote">读法提醒：<code>confidence=LOW</code> 不代表结论错误，只代表自动归因证据不够强。这里主线程栈给出了非常明确的业务调用链，因此可以继续收敛到具体代码。</p>
+    </section>
+
+    <section>
+      <h2>3. 看主线程当前消息</h2>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>值</th>
+          <th>判断</th>
+        </tr>
+        <tr>
+          <td><code>mainThread.current.seq</code></td>
+          <td><code>68</code></td>
+          <td>第 68 条主线程消息正在执行，还没有结束。</td>
+        </tr>
+        <tr>
+          <td><code>targetClass</code></td>
+          <td><code>android.view.ViewRootImpl$ViewRootHandler</code></td>
+          <td>这是一条 UI 相关消息。</td>
+        </tr>
+        <tr>
+          <td><code>callbackClass</code></td>
+          <td><code>android.view.View$PerformClick@505d90</code></td>
+          <td>这条消息来自按钮点击事件。</td>
+        </tr>
+        <tr>
+          <td><code>wallMs</code></td>
+          <td><code>3488ms</code></td>
+          <td>点击事件已经占用主线程约 3.5 秒。</td>
+        </tr>
+        <tr>
+          <td><code>cpuMs</code></td>
+          <td><code>0ms</code></td>
+          <td>不是主线程疯狂计算，而是主线程在等待、睡眠或被阻塞。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. 用主线程栈定位具体代码</h2>
+      <p>从栈顶往下看，先找到第一个业务包名，再顺着调用链往上还原发生了什么。</p>
+      <pre><code>java.lang.Thread.sleep(Native Method)
+java.lang.Thread.sleep(Thread.java:450)
+java.lang.Thread.sleep(Thread.java:355)
+com.valiantyan.vibeanrmonitoring.scenario.ContentProviderBlocker$ThreadSleepBlockingAction.block(ContentProviderBlocker.kt:27)
+com.valiantyan.vibeanrmonitoring.scenario.ContentProviderBlocker.block(ContentProviderBlocker.kt:17)
+com.valiantyan.vibeanrmonitoring.BlockingContentProvider.query(BlockingContentProvider.kt:41)
+android.content.ContentProvider$Transport.query(ContentProvider.java:281)
+android.content.ContentResolver.query(ContentResolver.java:1235)
+com.valiantyan.vibeanrmonitoring.scenario.ContextContentProviderCaller.query(ContentProviderCaller.kt:43)
+com.valiantyan.vibeanrmonitoring.scenario.ContentProviderBlockScenario.run(ContentProviderBlockScenario.kt:45)
+com.valiantyan.vibeanrmonitoring.MainActivity.onCreate$lambda$7(MainActivity.kt:75)
+android.view.View$PerformClick.run(View.java:29071)</code></pre>
+      <table>
+        <tr>
+          <th>栈帧</th>
+          <th>含义</th>
+        </tr>
+        <tr>
+          <td><code>View$PerformClick.run</code></td>
+          <td>用户点击按钮后，主线程开始执行点击回调。</td>
+        </tr>
+        <tr>
+          <td><code>MainActivity.onCreate$lambda$7</code></td>
+          <td>Demo 中按钮点击监听触发场景代码。</td>
+        </tr>
+        <tr>
+          <td><code>ContentProviderBlockScenario.run</code></td>
+          <td>进入 ContentProvider 阻塞场景。</td>
+        </tr>
+        <tr>
+          <td><code>ContextContentProviderCaller.query</code></td>
+          <td>主线程同步调用 <code>ContentResolver.query()</code>。</td>
+        </tr>
+        <tr>
+          <td><code>BlockingContentProvider.query</code></td>
+          <td>Provider 的查询逻辑开始在主线程调用链中执行。</td>
+        </tr>
+        <tr>
+          <td><code>ContentProviderBlocker.block</code> / <code>Thread.sleep</code></td>
+          <td>真正造成阻塞的位置：Provider 查询内部睡眠等待。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>5. 看 Pending 队列确认影响范围</h2>
+      <p>当前点击消息一直没有结束，后面的 UI 消息开始排队。</p>
+      <table>
+        <tr>
+          <th>队列位置</th>
+          <th>消息</th>
+          <th>已阻塞</th>
+          <th>说明</th>
+        </tr>
+        <tr>
+          <td><code>messages[0]</code></td>
+          <td><code>targetClass=null</code>，<code>isBarrierLike=true</code></td>
+          <td><code>3485ms</code></td>
+          <td>队头出现疑似 Sync Barrier，但专项证据未证明它是主因，不能把根因写成 Barrier。</td>
+        </tr>
+        <tr>
+          <td><code>messages[1]</code></td>
+          <td><code>View$UnsetPressedState</code></td>
+          <td><code>3430ms</code></td>
+          <td>按钮点击后的 UI 状态恢复消息被延后执行。</td>
+        </tr>
+        <tr>
+          <td><code>messages[2]</code></td>
+          <td><code>GestureDetector$GestureHandler</code></td>
+          <td><code>3279ms</code></td>
+          <td>输入手势相关消息被延后。</td>
+        </tr>
+        <tr>
+          <td><code>messages[4]</code></td>
+          <td><code>AnrWatchdog</code></td>
+          <td><code>3008ms</code></td>
+          <td>SDK 自身投递到主线程的检测消息也被延后，说明主线程确实被占住。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>6. 排除其他常见误判</h2>
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>不是 Sync Barrier 泄漏主因</h3>
+          <p><code>barrierEvidence.alignedWithPendingBarrier=false</code>，<code>stuckTokens=[]</code>，<code>nativePollOnceRecords=[]</code>。虽然 Pending 队头有疑似 Barrier，但没有形成“Barrier 与 nativePollOnce 对齐、token 长时间不释放”的证据链。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>不是 Binder 互等主因</h3>
+          <p><code>binderBlock.suspected=false</code>，<code>mainThreadInBinder=false</code>，<code>binderThreadWaitsMain=false</code>。报告没有显示主线程卡在 Binder 调用，也没有显示 Binder 线程等待主线程。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>不是 CPU 忙等主因</h3>
+          <p><code>mainThread.current.cpuMs=0</code>，栈顶是 <code>Thread.sleep</code>，不是循环计算或高 CPU 消耗。<code>threadCpu.topThreads</code> 中 CPU 较高的是 <code>RenderThread</code>，不是这次根因。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>7. 新人可直接复用的分析步骤</h2>
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>先看 <code>event</code> 和 <code>systemAnr</code></h3>
+          <p>确认这是 <code>SUSPECT_ANR</code>，系统还未确认 ANR，但 SDK 已经保存了卡顿现场。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>看 <code>attribution.primary</code></h3>
+          <p>得到初始方向：<code>CURRENT_MESSAGE_SLOW</code>，说明先查当前主线程消息。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>看 <code>mainThread.current</code></h3>
+          <p>发现当前消息是 <code>View$PerformClick</code>，耗时 <code>3488ms</code>，说明点击回调没有及时返回。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>看 <code>mainThread.stackFrames</code></h3>
+          <p>找到业务栈：<code>MainActivity</code> -> <code>ContentProviderBlockScenario</code> -> <code>ContentResolver.query</code> -> <code>BlockingContentProvider.query</code> -> <code>Thread.sleep</code>。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <h3>看专项证据排除干扰</h3>
+          <p>确认 <code>barrierEvidence</code> 和 <code>binderBlock</code> 都没有形成主因证据链，最终根因收敛到 Provider 查询阻塞。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8. 修复方案</h2>
+      <h3>短期修复</h3>
+      <ul>
+        <li>不要在主线程同步调用可能阻塞的 <code>ContentResolver.query()</code>。</li>
+        <li>如果必须查询 Provider，把查询移到后台线程，完成后再把轻量结果切回主线程刷新 UI。</li>
+        <li>给 Provider 查询增加超时、取消和失败兜底，避免调用方无限等待。</li>
+        <li>点击按钮后先禁用重复点击或展示加载状态，避免主线程已经卡住时继续堆积输入事件。</li>
+      </ul>
+
+      <h3>长期治理</h3>
+      <ul>
+        <li>Provider 的 <code>query()</code>、<code>insert()</code>、<code>update()</code>、<code>delete()</code> 内不要做长时间 I/O、网络请求、锁等待或主动睡眠。</li>
+        <li>如果 Provider 内部依赖远端服务或跨进程资源，要设计缓存、降级和异步预热，避免 UI 线程请求时被拖住。</li>
+        <li>对所有主线程 Provider 调用加代码扫描或 lint 约束，把风险前移到代码评审阶段。</li>
+        <li>在 SDK 上报平台中把 <code>ContentProvider</code> 阻塞栈归类为独立场景，聚合统计调用方、Provider 类名和阻塞耗时。</li>
+      </ul>
+
+      <h3>修复后验证</h3>
+      <ul>
+        <li>再次点击 Demo 的 <code>ContentProvider 阻塞</code>按钮，不应继续生成同类 <code>CURRENT_MESSAGE_SLOW</code> 报告。</li>
+        <li>如果仍生成报告，主线程栈不应再出现 <code>BlockingContentProvider.query</code> 和 <code>Thread.sleep</code>。</li>
+        <li><code>mainThread.current.wallMs</code> 应显著下降，Pending 队列中的 UI 消息不应持续积压。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>9. 可写进问题单的根因描述</h2>
+      <div class="card warn">
+        <p>本次 ANR 风险由主线程点击事件内同步查询 ContentProvider 引起。SDK 报告显示当前主线程消息为 <code>View$PerformClick</code>，已执行 <code>3488ms</code> 且 <code>cpuMs=0</code>，主线程栈停在 <code>ContentResolver.query()</code> 调用链内，最终进入 <code>BlockingContentProvider.query()</code> 并执行 <code>Thread.sleep()</code>。Pending 队列中 UI 和 Watchdog 消息已被延后 3 秒以上。Barrier、Binder 和 CPU 忙等证据不足，因此根因应判定为 ContentProvider 查询逻辑阻塞主线程。</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
