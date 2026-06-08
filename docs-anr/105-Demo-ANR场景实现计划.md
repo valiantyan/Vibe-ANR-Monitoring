@@ -104,6 +104,47 @@ barrierEvidence.stuckTokens = []
 - `binderBlock.suspected` 不应该为 true。
 - `mainThread.current.cpuMs` 如果接近 0，应优先检查是否点错了“当前消息慢”按钮，或当前设备 CPU 证据采集是否失败。
 
+### 首次验收记录
+
+验收时间：2026-06-08 16:56 CST
+
+验收设备：`emulator-5554`
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 logcat -c
+adb -s emulator-5554 shell input tap 540 1212
+adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/65ec033f-7411-4fe4-a5b2-2d92dee348ef.json
+```
+
+关键日志：
+
+```text
+W VibeAnrApplication: suspect ANR captured: 65ec033f-7411-4fe4-a5b2-2d92dee348ef
+W VibeAnrApplication: ANR report written: 65ec033f-7411-4fe4-a5b2-2d92dee348ef
+```
+
+关键 JSON 字段：
+
+```text
+event.eventType = SUSPECT_ANR
+attribution.primary = CURRENT_MESSAGE_SLOW
+mainThread.current.wallMs = 3152
+mainThread.current.cpuMs = 2957
+threadCpu.topThreads[0].threadName = beanrmonitoring
+threadCpu.topThreads[0].totalCpuMs = 9540
+mainThread.stackFrames contains MainThreadCpuBusyScenario$DefaultCpuBusyAction.burn
+mainThread.stackFrames contains MainThreadCpuBusyScenario.run
+binderBlock.suspected = false
+barrierEvidence.stuckTokens = []
+```
+
+验收结论：主线程 CPU 忙等场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，当前消息 wall time 超过阈值，当前消息 CPU 耗时和线程 CPU 排名都支持“主线程持续计算”，主线程栈能定位到 `MainThreadCpuBusyScenario.run` 和 `DefaultCpuBusyAction.burn`，因此可以和 `Thread.sleep` 类型的等待阻塞场景区分开。
+
 ## 后续批次顺序
 
 后续按消息风暴、锁等待、Broadcast、Service、Provider、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。

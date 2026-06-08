@@ -443,7 +443,7 @@ git commit -m "更新主线程CPU忙等场景矩阵"
 **Files:**
 - No production files modified.
 
-- [ ] **Step 1: Run all relevant automated checks**
+- [x] **Step 1: Run all relevant automated checks**
 
 Run:
 
@@ -453,7 +453,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 2: Install debug app**
+- [x] **Step 2: Install debug app**
 
 Run:
 
@@ -464,7 +464,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Expected: `adb devices` shows the intended device, and install prints `Success`.
 
-- [ ] **Step 3: Clear logcat**
+- [x] **Step 3: Clear logcat**
 
 Run:
 
@@ -474,7 +474,7 @@ adb logcat -c
 
 Expected: command exits with code `0`.
 
-- [ ] **Step 4: Manually trigger scenario**
+- [x] **Step 4: Manually trigger scenario**
 
 Open the app on the device and tap `当前消息忙等`. During the 6 second busy loop, tap the screen again once or twice to make the input timeout window easier to observe.
 
@@ -491,7 +491,7 @@ W VibeAnrApplication: suspect ANR captured: <event-id>
 W VibeAnrApplication: ANR report written: <event-id>
 ```
 
-- [ ] **Step 5: Pull JSON reports**
+- [x] **Step 5: Pull JSON reports**
 
 Run:
 
@@ -503,7 +503,7 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 
 Expected: at least one JSON report is available in `files/anr-monitor-reports`. Replace `<eventId>` with the newest file name printed by the `ls` command. The SDK writes reports to the app private `filesDir`, so do not use an external storage directory as the primary path.
 
-- [ ] **Step 6: Validate JSON root cause**
+- [x] **Step 6: Validate JSON root cause**
 
 Open the latest JSON report and verify these values:
 
@@ -524,7 +524,7 @@ Expected human conclusion:
 当前消息忙等场景验收通过：SDK 捕获到疑似 ANR，归因为 CURRENT_MESSAGE_SLOW，当前消息 wall time 超过阈值，当前消息 CPU 和线程 CPU 证据支持主线程持续计算，主线程栈能定位到 MainThreadCpuBusyScenario.run 或 DefaultCpuBusyAction.burn，说明 JSON 可以区分 CPU 忙等和 Thread.sleep 等待阻塞。
 ```
 
-- [ ] **Step 7: Commit manual acceptance record if docs changed**
+- [x] **Step 7: Commit manual acceptance record if docs changed**
 
 If manual validation notes are added to docs, commit them:
 
