@@ -29,6 +29,11 @@
             android:name=".ServiceTimeoutService"
             android:exported="false" />
 
+        <provider
+            android:name=".BlockingContentProvider"
+            android:authorities="${applicationId}.blocking-provider"
+            android:exported="false" />
+
         <receiver
             android:name=".BroadcastTimeoutReceiver"
             android:exported="false">

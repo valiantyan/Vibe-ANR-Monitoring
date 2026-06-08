@@ -432,7 +432,7 @@ git commit -m "新增 ContentProvider 阻塞场景类"
 **Files:**
 - Modify: `app/src/main/AndroidManifest.xml`
 
-- [ ] **Step 1: Register non-exported Provider**
+- [x] **Step 1: Register non-exported Provider**
 
 Modify `app/src/main/AndroidManifest.xml` by adding this provider block after `ServiceTimeoutService` and before `BroadcastTimeoutReceiver`:
 
@@ -460,7 +460,7 @@ The relevant application section should contain:
             android:exported="false">
 ```
 
-- [ ] **Step 2: Verify manifest processing**
+- [x] **Step 2: Verify manifest processing**
 
 Run:
 
@@ -470,7 +470,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add app/src/main/AndroidManifest.xml
