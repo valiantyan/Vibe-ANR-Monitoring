@@ -3,6 +3,7 @@ package com.valiantyan.vibeanrmonitoring
 import android.os.Bundle
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import com.valiantyan.vibeanrmonitoring.scenario.BinderCrossProcessBlockScenario
 import com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ContentProviderBlockScenario
 import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
@@ -23,6 +24,9 @@ class MainActivity : AppCompatActivity() {
 
     // 当前消息 CPU 忙等场景，用独立类承载根因入口，便于和 Thread.sleep 等待类场景区分。
     private val mainThreadCpuBusyScenario: MainThreadCpuBusyScenario = MainThreadCpuBusyScenario()
+
+    // Binder 跨进程阻塞场景，点击时主线程同步调用远端 AIDL。
+    private lateinit var binderCrossProcessBlockScenario: BinderCrossProcessBlockScenario
 
     // Sync Barrier 泄漏场景，单独封装反射和 token 记录逻辑。
     private val syncBarrierLeakScenario: SyncBarrierLeakScenario by lazy {
@@ -50,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?): Unit {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        binderCrossProcessBlockScenario = BinderCrossProcessBlockScenario(context = this)
         findViewById<Button>(R.id.currentSlowButton).setOnClickListener {
             currentSlowInputScenario.run()
         }
@@ -60,7 +65,7 @@ class MainActivity : AppCompatActivity() {
             mainThreadCpuBusyScenario.run()
         }
         findViewById<Button>(R.id.binderLikeButton).setOnClickListener {
-            waitBinderLikeLock()
+            binderCrossProcessBlockScenario.run()
         }
         findViewById<Button>(R.id.syncBarrierLeakButton).setOnClickListener {
             runSyncBarrierLeak()
@@ -76,12 +81,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // 模拟同步跨进程调用中的等待窗口，用于手动观察等待类主线程栈证据。
-    private fun waitBinderLikeLock(): Unit {
-        val lock: Any = Any()
-        synchronized(lock) {
-            Thread.sleep(6_000L)
+    /**
+     * Activity 销毁时释放 Binder 远端服务绑定。
+     */
+    override fun onDestroy(): Unit {
+        if (::binderCrossProcessBlockScenario.isInitialized) {
+            binderCrossProcessBlockScenario.release()
         }
+        super.onDestroy()
     }
 
     // 泄漏 Sync Barrier，用于验证 nativePollOnce 表象背后的队列根因。

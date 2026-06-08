@@ -843,7 +843,7 @@ git commit -m "限制 Demo SDK 只在主进程启动"
 - Modify: `app/src/main/res/values/strings.xml`
 - Modify: `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 
-- [ ] **Step 1: Update button text**
+- [x] **Step 1: Update button text**
 
 Modify `app/src/main/res/values/strings.xml`:
 
@@ -851,7 +851,7 @@ Modify `app/src/main/res/values/strings.xml`:
     <string name="demo_binder_like_lock">Binder 跨进程阻塞</string>
 ```
 
-- [ ] **Step 2: Wire MainActivity to the scenario**
+- [x] **Step 2: Wire MainActivity to the scenario**
 
 Modify `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt` so these changes are present:
 
@@ -896,7 +896,7 @@ Add this lifecycle method before `runSyncBarrierLeak()`:
     }
 ```
 
-- [ ] **Step 3: Compile app**
+- [x] **Step 3: Compile app**
 
 Run:
 
@@ -906,7 +906,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/src/main/res/values/strings.xml app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt
