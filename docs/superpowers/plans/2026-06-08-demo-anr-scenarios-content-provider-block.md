@@ -484,7 +484,7 @@ git commit -m "注册 ContentProvider 阻塞测试组件"
 - Modify: `app/src/main/res/layout/activity_main.xml`
 - Modify: `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 
-- [ ] **Step 1: Add Chinese button text**
+- [x] **Step 1: Add Chinese button text**
 
 Modify `app/src/main/res/values/strings.xml` by adding this line after `demo_service_timeout`:
 
@@ -500,7 +500,7 @@ The final file should include:
     <string name="demo_content_provider_block">ContentProvider 阻塞</string>
 ```
 
-- [ ] **Step 2: Make layout scrollable and add button**
+- [x] **Step 2: Make layout scrollable and add button**
 
 Replace `app/src/main/res/layout/activity_main.xml` with this complete scrollable layout:
 
@@ -576,7 +576,7 @@ Replace `app/src/main/res/layout/activity_main.xml` with this complete scrollabl
 </ScrollView>
 ```
 
-- [ ] **Step 3: Wire scenario in MainActivity**
+- [x] **Step 3: Wire scenario in MainActivity**
 
 Modify `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`.
 
@@ -603,7 +603,7 @@ Add this click listener after `serviceTimeoutButton`:
         }
 ```
 
-- [ ] **Step 4: Verify app compiles**
+- [x] **Step 4: Verify app compiles**
 
 Run:
 
@@ -613,7 +613,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/src/main/res/values/strings.xml app/src/main/res/layout/activity_main.xml app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt

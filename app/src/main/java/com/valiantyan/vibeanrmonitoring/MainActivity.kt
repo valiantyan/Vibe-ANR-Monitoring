@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenario
+import com.valiantyan.vibeanrmonitoring.scenario.ContentProviderBlockScenario
 import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
@@ -38,6 +39,11 @@ class MainActivity : AppCompatActivity() {
         ServiceTimeoutScenario(context = this)
     }
 
+    // ContentProvider 阻塞场景，按钮只负责发起查询，真正阻塞入口在 Provider.query。
+    private val contentProviderBlockScenario: ContentProviderBlockScenario by lazy {
+        ContentProviderBlockScenario(context = this)
+    }
+
     /**
      * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
@@ -64,6 +70,9 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.serviceTimeoutButton).setOnClickListener {
             serviceTimeoutScenario.run()
+        }
+        findViewById<Button>(R.id.contentProviderBlockButton).setOnClickListener {
+            contentProviderBlockScenario.run()
         }
     }
 
