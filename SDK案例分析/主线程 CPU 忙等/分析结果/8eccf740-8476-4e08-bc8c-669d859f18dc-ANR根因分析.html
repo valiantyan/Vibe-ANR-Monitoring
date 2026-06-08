@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>8eccf740 ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      line-height: 1.3;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    h2 {
+      margin-top: 28px;
+      font-size: 22px;
+      border-left: 4px solid var(--primary);
+      padding-left: 10px;
+    }
+
+    h3 {
+      margin-top: 22px;
+      font-size: 18px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f9;
+      color: #24334d;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    ul {
+      padding-left: 22px;
+    }
+
+    .subtitle {
+      color: #d6e4ff;
+      max-width: 920px;
+      margin-top: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06);
+    }
+
+    .result {
+      border-left: 5px solid var(--danger);
+    }
+
+    .evidence {
+      border-left: 5px solid var(--primary);
+    }
+
+    .exclude {
+      border-left: 5px solid var(--ok);
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .badge-danger {
+      background: #fee4e2;
+      color: var(--danger);
+    }
+
+    .badge-warn {
+      background: #fff4d6;
+      color: var(--warn);
+    }
+
+    .badge-ok {
+      background: #dcfae6;
+      color: var(--ok);
+    }
+
+    .step {
+      display: flex;
+      gap: 12px;
+      margin: 14px 0;
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .step-number {
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .quote {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：主线程 CPU 忙等</h1>
+    <p class="subtitle">分析对象：<code>8eccf740-8476-4e08-bc8c-669d859f18dc.json</code>。这份报告的重点是区分“主线程在等待”和“主线程一直在计算”。本次证据显示，点击回调进入主线程 busy loop，导致当前消息超过疑似 ANR 阈值。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>最终结论</h2>
+        <p><span class="badge badge-danger">根因</span>按钮点击消息在主线程持续执行 CPU 密集型循环，导致主线程无法及时处理后续输入、绘制和 Watchdog 消息。</p>
+        <p>具体业务入口是 <code>MainThreadCpuBusyScenario.run(MainThreadCpuBusyScenario.kt:29)</code>，直接耗 CPU 的位置是 <code>DefaultCpuBusyAction.burn(MainThreadCpuBusyScenario.kt:37)</code>。</p>
+      </div>
+
+      <div class="card evidence">
+        <h2>最关键证据</h2>
+        <p><span class="badge badge-warn">SDK 归因</span><code>attribution.primary = CURRENT_MESSAGE_SLOW</code></p>
+        <p><span class="badge badge-warn">当前消息耗时</span><code>wallMs = 3086ms</code>，超过 3000ms 阈值。</p>
+        <p><span class="badge badge-warn">CPU 忙等特征</span><code>cpuMs = 3070ms</code>，几乎等于墙钟耗时。</p>
+      </div>
+
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p><span class="badge badge-ok">非 Barrier</span><code>barrierEvidence.stuckTokens = []</code></p>
+        <p><span class="badge badge-ok">非 Binder</span><code>binderBlock.suspected = false</code></p>
+        <p><span class="badge badge-ok">非系统调度</span><code>checktime.severeDelayCount = 0</code></p>
+      </div>
+    </section>
+
+    <section>
+      <h2>1. 先确认这是什么报告</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>字段</th>
+            <th>值</th>
+            <th>怎么理解</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>event.eventId</code></td>
+            <td><code>8eccf740-8476-4e08-bc8c-669d859f18dc</code></td>
+            <td>这份 JSON 的唯一编号，后续查日志或案例都用它。</td>
+          </tr>
+          <tr>
+            <td><code>event.eventType</code></td>
+            <td><code>SUSPECT_ANR</code></td>
+            <td>SDK 提前保存的疑似 ANR 现场，不等同于系统已经弹出 ANR 对话框。</td>
+          </tr>
+          <tr>
+            <td><code>systemAnr.isConfirmedAnr</code></td>
+            <td><code>false</code></td>
+            <td>系统还没有确认 ANR。本次分析主要依赖 SDK 抓到的主线程现场。</td>
+          </tr>
+          <tr>
+            <td><code>schemaVersion</code></td>
+            <td><code>1</code></td>
+            <td>JSON 协议版本，用于确认字段含义。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>2. 先读 SDK 摘要，拿到初始方向</h2>
+      <p>SDK 给出的主归因是 <code>CURRENT_MESSAGE_SLOW</code>，意思是：采集时主线程正在处理一条消息，这条消息已经执行太久。</p>
+      <pre>{
+  "primary": "CURRENT_MESSAGE_SLOW",
+  "confidence": "MEDIUM",
+  "evidence": [
+    "current message wall=3086ms cpu=3070ms",
+    "top thread beanrmonitoring cpu=3810ms"
+  ]
+}</pre>
+      <p>这里不能只停在 <code>CURRENT_MESSAGE_SLOW</code>。它只说明“当前消息慢”，还要继续判断慢的原因是等待、锁、I/O、Binder，还是 CPU 忙等。本次 <code>wallMs</code> 和 <code>cpuMs</code> 非常接近，这是 CPU 忙等的强信号。</p>
+    </section>
+
+    <section>
+      <h2>3. 看主线程当前消息，确认卡住的是哪条消息</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>字段</th>
+            <th>值</th>
+            <th>分析结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>mainThread.current.messageType</code></td>
+            <td><code>looper_dispatch</code></td>
+            <td>主线程正在分发一条 Looper 消息。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current.targetClass</code></td>
+            <td><code>android.view.ViewRootImpl$ViewRootHandler</code></td>
+            <td>这条消息来自 ViewRoot，和界面输入、点击、刷新链路有关。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current.callbackClass</code></td>
+            <td><code>android.view.View$PerformClick</code></td>
+            <td>这是一次按钮点击回调，不是后台任务或系统空闲等待。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current.wallMs</code></td>
+            <td><code>3086ms</code></td>
+            <td>当前点击消息执行超过 3 秒，触发 SDK 疑似 ANR 采集。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current.cpuMs</code></td>
+            <td><code>3070ms</code></td>
+            <td>CPU 耗时几乎等于墙钟耗时，说明主线程不是在睡眠等待，而是在持续消耗 CPU。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. 看主线程栈，找到业务入口</h2>
+      <p>主线程栈从上往下读，最上面通常是当前正在执行的位置。本次栈顶直接落在 Demo 的 CPU 忙等动作里。</p>
+      <pre>com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario$DefaultCpuBusyAction.burn(MainThreadCpuBusyScenario.kt:37)
+com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario.run(MainThreadCpuBusyScenario.kt:29)
+com.valiantyan.vibeanrmonitoring.MainActivity.onCreate$lambda$2(MainActivity.kt:42)
+com.valiantyan.vibeanrmonitoring.MainActivity$$ExternalSyntheticLambda2.onClick(D8$$SyntheticClass:0)
+android.view.View.performClick(View.java:7498)
+android.view.View$PerformClick.run(View.java:29071)
+android.os.Handler.dispatchMessage(Handler.java:99)
+android.os.Looper.loopOnce(Looper.java:233)</pre>
+      <p>这条调用链说明：用户点击按钮后进入 <code>MainActivity</code> 的点击回调，然后调用 <code>MainThreadCpuBusyScenario.run</code>，最后在 <code>DefaultCpuBusyAction.burn</code> 中持续计算。根因已经能定位到业务代码入口。</p>
+    </section>
+
+    <section>
+      <h2>5. 用 CPU 排名确认“忙等”不是误判</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>排名</th>
+            <th>线程</th>
+            <th>CPU 耗时</th>
+            <th>含义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><code>beanrmonitoring</code></td>
+            <td><code>3810ms</code></td>
+            <td>这是应用主线程名的截断显示，CPU 排名第一。</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><code>RenderThread</code></td>
+            <td><code>1270ms</code></td>
+            <td>渲染线程有消耗，但不是主因。</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><code>mali-cmar-backe</code></td>
+            <td><code>310ms</code></td>
+            <td>GPU 相关线程有少量消耗，不构成本次 ANR 根因。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>如果是 <code>Thread.sleep</code> 或锁等待，通常会出现 <code>wallMs</code> 很高但 <code>cpuMs</code> 很低。这里 <code>wallMs=3086ms</code>，<code>cpuMs=3070ms</code>，再加上主线程 CPU 排名第一，证据链指向 CPU 忙等。</p>
+    </section>
+
+    <section>
+      <h2>6. 看 Pending 队列，确认后续消息已经被拖住</h2>
+      <p>Pending 队列不是根因入口，但能证明主线程忙等期间，后面的消息已经开始排队。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>队列位置</th>
+            <th>消息</th>
+            <th>已阻塞时间</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>index = 0</code></td>
+            <td><code>View$UnsetPressedState</code></td>
+            <td><code>3076ms</code></td>
+            <td>按钮按压态恢复消息已经排队 3 秒多，说明点击消息没有及时结束。</td>
+          </tr>
+          <tr>
+            <td><code>index = 1</code></td>
+            <td><code>AnrWatchdog</code></td>
+            <td><code>3009ms</code></td>
+            <td>Watchdog 投递到主线程的消息也被挡住，符合主线程正在执行长任务。</td>
+          </tr>
+          <tr>
+            <td><code>index = 2</code></td>
+            <td><code>GestureDetector</code></td>
+            <td><code>2844ms</code></td>
+            <td>输入手势相关消息也在等待，解释了为什么这种问题会发展成输入 ANR。</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>注意：队头 <code>isBarrierLike = false</code>，所以这不是 Sync Barrier 把同步消息挡住的场景。</p>
+    </section>
+
+    <section>
+      <h2>7. 排除 Barrier、Binder 和系统环境干扰</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>排查项</th>
+            <th>关键字段</th>
+            <th>本次结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Sync Barrier</td>
+            <td><code>barrierEvidence.stuckTokens = []</code><br><code>alignedWithPendingBarrier = false</code><br><code>nativePollOnceRecords = []</code></td>
+            <td>没有 Barrier token 泄漏，也没有 nativePollOnce 无限等待证据。</td>
+          </tr>
+          <tr>
+            <td>Binder 阻塞</td>
+            <td><code>binderBlock.suspected = false</code><br><code>mainThreadInBinder = false</code></td>
+            <td>主线程不是卡在跨进程 Binder 调用上。</td>
+          </tr>
+          <tr>
+            <td>SDK 调度延迟</td>
+            <td><code>checktime.maxDelayMs = 2</code><br><code>severeDelayCount = 0</code></td>
+            <td>Watchdog 自身没有严重调度延迟，报告可信。</td>
+          </tr>
+          <tr>
+            <td>内存和存储</td>
+            <td><code>availableBytes = 3790180352</code><br><code>availableStorageBytes = 183663058944</code></td>
+            <td>没有看到低内存或存储不足导致的主因。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>8. 一步一步写出根因</h2>
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>先写现象</h3>
+          <p>这是一份 <code>SUSPECT_ANR</code> 报告，SDK 归因为 <code>CURRENT_MESSAGE_SLOW</code>，表示主线程正在执行的点击消息超过阈值。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>再写证据</h3>
+          <p>当前消息 <code>wallMs=3086ms</code>，<code>cpuMs=3070ms</code>，主线程 CPU 排名第一，说明主线程一直在消耗 CPU。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>然后写业务入口</h3>
+          <p>主线程栈命中 <code>MainThreadCpuBusyScenario.run</code> 和 <code>DefaultCpuBusyAction.burn</code>，调用链来自 <code>MainActivity</code> 的点击回调。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>最后写排除项</h3>
+          <p>Barrier、Binder、系统调度、低内存和存储不足都没有成为主因，因此根因收敛到主线程 CPU 密集型逻辑。</p>
+        </div>
+      </div>
+      <div class="quote">
+        <strong>可直接用于评审的根因描述：</strong>
+        <p>本次 ANR 是“主线程 CPU 忙等”导致的当前消息慢。用户点击按钮后，主线程进入 <code>MainThreadCpuBusyScenario.run</code>，并在 <code>DefaultCpuBusyAction.burn</code> 中持续计算，导致当前点击消息执行 <code>3086ms</code>。同时 <code>cpuMs=3070ms</code>，主线程位于 CPU 排名第一，说明主线程不是等待阻塞，而是在持续消耗 CPU。Pending 队列中后续输入和 Watchdog 消息已排队超过 3 秒；Barrier 和 Binder 证据均不成立，因此根因是点击回调中存在主线程 CPU 密集型逻辑。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>9. 修复方案</h2>
+      <h3>立即修复</h3>
+      <ul>
+        <li>不要在点击回调、生命周期回调、绘制回调中执行长时间计算。</li>
+        <li>把 <code>DefaultCpuBusyAction.burn</code> 这类 CPU 密集型逻辑移到后台线程、协程 <code>Dispatchers.Default</code> 或业务线程池。</li>
+        <li>主线程只负责发起任务、展示 loading、接收结果并刷新 UI。</li>
+      </ul>
+
+      <h3>拆分和降级</h3>
+      <ul>
+        <li>如果计算必须分多步完成，把大任务拆成小批次，每批结束后让出主线程。</li>
+        <li>给耗时任务增加取消能力，页面退出或重复点击时取消旧任务。</li>
+        <li>对按钮做防重复点击，避免同类 CPU 任务被连续触发。</li>
+      </ul>
+
+      <h3>上线前验证</h3>
+      <ul>
+        <li>修复后重新点击“当前消息忙等”对应业务入口，确认不再生成 <code>CURRENT_MESSAGE_SLOW</code> 报告。</li>
+        <li>确认主线程 <code>wallMs</code> 不再超过阈值，<code>cpuMs</code> 不再接近墙钟耗时。</li>
+        <li>确认 <code>threadCpu.topThreads</code> 中主线程不再长期排名第一。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
