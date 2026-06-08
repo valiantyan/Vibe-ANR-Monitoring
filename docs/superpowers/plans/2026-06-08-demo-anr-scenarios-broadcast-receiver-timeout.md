@@ -689,7 +689,7 @@ git commit -m "更新 BroadcastReceiver 超时场景矩阵"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Run full verification commands**
+- [x] **Step 1: Run full verification commands**
 
 Run:
 
@@ -699,7 +699,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 2: Install debug build**
+- [x] **Step 2: Install debug build**
 
 Run:
 
@@ -716,7 +716,7 @@ Expected:
 - install succeeds.
 - app starts on Demo screen.
 
-- [ ] **Step 3: Trigger BroadcastReceiver timeout**
+- [x] **Step 3: Trigger BroadcastReceiver timeout**
 
 Tap the new button. If using the existing emulator layout and the button is below the first five buttons, use a coordinate near the lower part of the screen after the app opens:
 
@@ -739,7 +739,7 @@ If the system confirms the ANR before the app is killed or recovered, this log m
 W VibeAnrApplication: confirmed ANR report: <eventId>
 ```
 
-- [ ] **Step 4: Pull latest JSON**
+- [x] **Step 4: Pull latest JSON**
 
 Run:
 
@@ -754,7 +754,7 @@ If the device stores upper-case extension, use:
 adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.JSON > broadcast-timeout-<event-id>.JSON
 ```
 
-- [ ] **Step 5: Inspect key JSON fields**
+- [x] **Step 5: Inspect key JSON fields**
 
 Run:
 
@@ -776,7 +776,7 @@ Expected evidence:
 "stuckTokens":[]
 ```
 
-- [ ] **Step 6: Record acceptance result**
+- [x] **Step 6: Record acceptance result**
 
 Append this acceptance block to the sixth batch section in `docs-anr/105-Demo-ANR场景实现计划.md`, replacing `<...>` with real values:
 
@@ -816,7 +816,7 @@ barrierEvidence.stuckTokens = []
 验收结论：BroadcastReceiver 超时场景验收通过。SDK 能捕获疑似或系统确认 ANR，JSON 能把系统广播组件超时和业务 Receiver 阻塞入口分开表达；根因可以明确写为“`BroadcastTimeoutReceiver.onReceive` 在主线程执行耗时阻塞，导致广播完成通知无法及时返回”。
 ````
 
-- [ ] **Step 7: Run final formatting check**
+- [x] **Step 7: Run final formatting check**
 
 Run:
 
@@ -826,7 +826,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md
 
 Expected: command exits with code `0`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md

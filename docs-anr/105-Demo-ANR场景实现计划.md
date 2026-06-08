@@ -271,12 +271,57 @@ barrierEvidence.stuckTokens = []
 
 ### 验收记录
 
-- [ ] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenarioTest` 通过。
-- [ ] `./gradlew :app:compileDebugKotlin :app:mergeDebugResources` 通过。
-- [ ] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
-- [ ] 真机或模拟器点击“BroadcastReceiver 超时”后生成 JSON。
-- [ ] JSON 中 `mainThread.stackFrames` 能定位到 `BroadcastTimeoutReceiver.onReceive`。
-- [ ] 如果系统确认 ANR，JSON 中 `systemAnr.anrType` 为 `BROADCAST_FOREGROUND` 或 `BROADCAST_BACKGROUND`。
+- [x] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenarioTest` 通过。
+- [x] `./gradlew :app:compileDebugKotlin :app:mergeDebugResources` 通过。
+- [x] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
+- [x] 真机或模拟器点击“BroadcastReceiver 超时”后生成 JSON。
+- [x] JSON 中 `mainThread.stackFrames` 能定位到 `BroadcastTimeoutReceiver.onReceive`。
+- [x] 本次系统未确认 ANR，`systemAnr.anrType=UNKNOWN`；业务根因仍可由主线程栈定位。
+
+### 首次验收记录
+
+验收时间：2026-06-08 19:16 CST
+
+验收设备：`emulator-5554`
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 logcat -c
+adb -s emulator-5554 shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity
+adb -s emulator-5554 shell input tap 540 1632
+adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/aaf4e3c0-37bd-4ed2-a579-e721ccbe420a.json
+```
+
+关键日志：
+
+```text
+W VibeAnrApplication: suspect ANR captured: aaf4e3c0-37bd-4ed2-a579-e721ccbe420a
+W VibeAnrApplication: ANR report written: aaf4e3c0-37bd-4ed2-a579-e721ccbe420a
+```
+
+关键 JSON 字段：
+
+```text
+event.eventType = SUSPECT_ANR
+attribution.primary = CURRENT_MESSAGE_SLOW
+attribution.confidence = LOW
+systemAnr.isConfirmedAnr = false
+systemAnr.anrType = UNKNOWN
+systemAnr.componentTimeoutMs = null
+mainThread.current.targetClass = android.app.ActivityThread$H
+mainThread.current.what = 113
+mainThread.current.wallMs = 3352
+mainThread.current.cpuMs = 0
+mainThread.stackFrames contains BroadcastTimeoutReceiver.onReceive
+binderBlock.suspected = false
+barrierEvidence.stuckTokens = []
+```
+
+验收结论：BroadcastReceiver 超时场景验收通过。SDK 能捕获疑似 ANR，JSON 能把系统广播组件状态和业务 Receiver 阻塞入口分开表达。本次系统尚未确认 ANR，因此 `systemAnr.anrType=UNKNOWN`、`componentTimeoutMs=null` 属于可接受结果；业务根因可以明确写为“`BroadcastTimeoutReceiver.onReceive` 在主线程执行耗时阻塞，导致 ActivityThread Receiver 消息执行超过疑似 ANR 阈值”。
 
 ## 后续批次顺序
 
