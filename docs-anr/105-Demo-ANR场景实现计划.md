@@ -430,34 +430,63 @@ binderBlock.suspected = false
 
 ### 首次验收记录
 
-验收时间：执行 Task 6 时填写具体时间。
+验收时间：2026-06-08 20:31 CST
 
-验收设备：执行 Task 6 时填写设备序列号。
+验收设备：`emulator-5554`
 
 执行命令：
 
 ```bash
 ./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
-adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s <device-id> logcat -c
-adb -s <device-id> shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity
-adb -s <device-id> shell input tap <content-provider-button-x> <content-provider-button-y>
-adb -s <device-id> logcat -d -s VibeAnrApplication
-adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json
+adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s emulator-5554 logcat -c
+adb -s emulator-5554 shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity
+adb -s emulator-5554 shell input tap 540 1800
+adb -s emulator-5554 logcat -d -s VibeAnrApplication AnrMonitor
+adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/767fe4bd-dc6b-4f70-b2ca-179b0b104d49.json
 ```
 
 验收清单：
 
-- [ ] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
-- [ ] 真机或模拟器点击“ContentProvider 阻塞”后生成 JSON。
-- [ ] JSON 中 `mainThread.stackFrames` 包含 `BlockingContentProvider.query`。
-- [ ] JSON 中 `mainThread.stackFrames` 包含 `ContentProviderBlocker.block`。
-- [ ] JSON 中 `mainThread.current.wallMs >= 3000`。
+- [x] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
+- [x] 真机或模拟器点击“ContentProvider 阻塞”后生成 JSON。
+- [x] JSON 中 `mainThread.stackFrames` 包含 `BlockingContentProvider.query`。
+- [x] JSON 中 `mainThread.stackFrames` 包含 `ContentProviderBlocker.block`。
+- [x] JSON 中 `mainThread.current.wallMs >= 3000`。
 - [ ] 如果系统已确认 ANR，`systemAnr.anrType=PROVIDER`。
-- [ ] Barrier 和 Binder 证据均不是本次主因。
+- [x] Barrier 和 Binder 证据均不是本次主因。
 
-验收结论：执行 Task 6 后填写。期望结论为“ContentProvider 阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 能把 Provider 查询调用链和业务 Provider 阻塞入口分开表达；如果系统确认 ANR，`systemAnr.anrType=PROVIDER` 可作为组件超时证据；根因可以明确写为 `BlockingContentProvider.query` 在主线程执行耗时阻塞，导致 Provider 查询无法及时返回。”
+关键日志：
+
+```text
+W VibeAnrApplication: suspect ANR captured: 767fe4bd-dc6b-4f70-b2ca-179b0b104d49
+W VibeAnrApplication: ANR report written: 767fe4bd-dc6b-4f70-b2ca-179b0b104d49
+```
+
+关键 JSON 字段：
+
+```text
+event.eventType = SUSPECT_ANR
+attribution.primary = CURRENT_MESSAGE_SLOW
+attribution.confidence = LOW
+systemAnr.isConfirmedAnr = false
+systemAnr.anrType = UNKNOWN
+systemAnr.componentTimeoutMs = null
+mainThread.current.wallMs = 3459
+mainThread.current.cpuMs = 0
+mainThread.stackFrames contains ContentProviderBlocker.block
+mainThread.stackFrames contains BlockingContentProvider.query
+mainThread.stackFrames contains ContentProvider$Transport.query
+mainThread.stackFrames contains ContentResolver.query
+barrierEvidence.alignedWithPendingBarrier = false
+barrierEvidence.stuckTokens = []
+binderBlock.suspected = false
+```
+
+本次采样先命中 SDK 疑似 ANR 阈值，系统尚未确认 Provider ANR；因此 `systemAnr.anrType=UNKNOWN` 和 `componentTimeoutMs=null` 属于可接受结果。验收过程中发现 Pending 队头可能存在系统绘制产生的临时 Sync Barrier，已补充归因回归测试并收紧 Barrier 主因规则：只有主线程停在 `MessageQueue.nativePollOnce`，或 Barrier token 与 Pending 队头对齐，或存在 stuck token 时，才把 Barrier 提升为主因。
+
+验收结论：ContentProvider 阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 能把 Provider 查询调用链和业务 Provider 阻塞入口分开表达；本次根因可以明确写为“`BlockingContentProvider.query` 在主线程执行耗时阻塞，内部调用 `ContentProviderBlocker.block`，导致 Provider 查询无法及时返回”。Barrier 和 Binder 证据均不是本次主因。
 
 ## 后续批次顺序
 

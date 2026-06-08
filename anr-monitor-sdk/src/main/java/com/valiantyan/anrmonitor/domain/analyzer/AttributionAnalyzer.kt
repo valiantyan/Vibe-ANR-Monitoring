@@ -33,6 +33,7 @@ class AttributionAnalyzer(
         val barrierResult: AttributionResult? = analyzeBarrier(
             summary = pendingSummary,
             barrierEvidenceSnapshot = snapshot.barrierEvidenceSnapshot,
+            mainThreadFrames = snapshot.mainThreadStack.frames,
         )
         if (barrierResult != null) {
             return withThreadCpuEvidence(
@@ -78,9 +79,17 @@ class AttributionAnalyzer(
     private fun analyzeBarrier(
         summary: PendingQueueSummary,
         barrierEvidenceSnapshot: BarrierEvidenceSnapshot,
+        mainThreadFrames: List<String>,
     ): AttributionResult? {
         val firstBlockedMs: Long = summary.firstSynchronousBlockedMs ?: return null
         if (!summary.hasBarrierHead || firstBlockedMs < thresholds.suspectAnrMs) {
+            return null
+        }
+        if (!hasStrongBarrierEvidence(
+                barrierEvidenceSnapshot = barrierEvidenceSnapshot,
+                mainThreadFrames = mainThreadFrames,
+            )
+        ) {
             return null
         }
         return result(
@@ -92,6 +101,16 @@ class AttributionAnalyzer(
             ) + barrierEvidence(snapshot = barrierEvidenceSnapshot),
             suggestion = "检查 postSyncBarrier/removeSyncBarrier 配对和 UI 调度清理逻辑。",
         )
+    }
+
+    // 队头临时 Barrier 常见于绘制调度，只有主线程在 nativePollOnce 或 token 对齐时才提升为主因。
+    private fun hasStrongBarrierEvidence(
+        barrierEvidenceSnapshot: BarrierEvidenceSnapshot,
+        mainThreadFrames: List<String>,
+    ): Boolean {
+        return mainThreadFrames.any { frame: String -> frame.contains(other = NATIVE_POLL_ONCE_FRAME) } ||
+            barrierEvidenceSnapshot.alignedWithPendingBarrier ||
+            barrierEvidenceSnapshot.stuckTokens.isNotEmpty()
     }
 
     // 提取 Barrier 增强证据，只辅助审查，不替代 Pending 队列主因。
@@ -222,5 +241,12 @@ class AttributionAnalyzer(
             missingEvidence = emptyList(),
             actionSuggestions = listOf(suggestion),
         )
+    }
+
+    private companion object {
+        /**
+         * 主线程栈里用于确认 Sync Barrier 真正挡住 Looper 取消息的稳定片段。
+         */
+        private const val NATIVE_POLL_ONCE_FRAME: String = "MessageQueue.nativePollOnce"
     }
 }

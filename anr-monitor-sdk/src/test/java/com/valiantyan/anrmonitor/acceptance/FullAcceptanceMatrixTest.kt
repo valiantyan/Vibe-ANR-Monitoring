@@ -19,11 +19,18 @@ class FullAcceptanceMatrixTest {
         val activityText: String = rootDir.resolve(
             "app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt",
         ).readText()
-        val scenarioFile: File = rootDir.resolve(
-            "app/src/main/java/com/valiantyan/vibeanrmonitoring/SyncBarrierLeakScenario.kt",
+        val manifestText: String = rootDir.resolve("app/src/main/AndroidManifest.xml").readText()
+        val syncBarrierScenarioFile: File = rootDir.resolve(
+            "app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/SyncBarrierLeakScenario.kt",
         )
         val serviceFile: File = rootDir.resolve(
             "app/src/main/java/com/valiantyan/vibeanrmonitoring/BarrierLeakService.kt",
+        )
+        val barrierComponentStarterFile: File = rootDir.resolve(
+            "app/src/main/java/com/valiantyan/vibeanrmonitoring/scenario/BarrierLeakComponentStarter.kt",
+        )
+        val contentProviderFile: File = rootDir.resolve(
+            "app/src/main/java/com/valiantyan/vibeanrmonitoring/BlockingContentProvider.kt",
         )
         assertContains(layoutText, "android:id=\"@+id/currentBusyButton\"")
         assertContains(layoutText, "android:text=\"@string/demo_current_busy\"")
@@ -31,20 +38,33 @@ class FullAcceptanceMatrixTest {
         assertContains(layoutText, "android:text=\"@string/demo_binder_like_lock\"")
         assertContains(layoutText, "android:id=\"@+id/syncBarrierLeakButton\"")
         assertContains(layoutText, "android:text=\"@string/demo_sync_barrier_leak\"")
+        assertContains(layoutText, "android:id=\"@+id/contentProviderBlockButton\"")
+        assertContains(layoutText, "android:text=\"@string/demo_content_provider_block\"")
         assertContains(stringsText, "<string name=\"demo_sync_barrier_leak\">Sync Barrier 泄漏 ANR</string>")
+        assertContains(stringsText, "<string name=\"demo_content_provider_block\">ContentProvider 阻塞</string>")
         assertContains(activityText, "R.id.currentBusyButton")
-        assertContains(activityText, "runBusyLoop()")
+        assertContains(activityText, "mainThreadCpuBusyScenario.run()")
         assertContains(activityText, "R.id.binderLikeButton")
         assertContains(activityText, "waitBinderLikeLock()")
         assertContains(activityText, "R.id.syncBarrierLeakButton")
         assertContains(activityText, "runSyncBarrierLeak()")
-        assertContains(activityText, "Math.sqrt(42.0)")
+        assertContains(activityText, "R.id.contentProviderBlockButton")
+        assertContains(activityText, "contentProviderBlockScenario.run()")
         assertContains(activityText, "Thread.sleep(6_000L)")
-        assertTrue("缺少 Sync Barrier 泄漏场景: ${scenarioFile.path}", scenarioFile.exists())
+        assertTrue("缺少 Sync Barrier 泄漏场景: ${syncBarrierScenarioFile.path}", syncBarrierScenarioFile.exists())
         assertTrue("缺少 Barrier 泄漏测试 Service: ${serviceFile.path}", serviceFile.exists())
-        assertContains(scenarioFile.readText(), "postSyncBarrier")
-        assertContains(scenarioFile.readText(), "AnrBarrierDebug.recordPostSyncBarrier")
-        assertContains(scenarioFile.readText(), "BarrierLeakService")
+        assertTrue(
+            "缺少 Barrier 泄漏组件启动器: ${barrierComponentStarterFile.path}",
+            barrierComponentStarterFile.exists(),
+        )
+        assertTrue("缺少 ContentProvider 阻塞测试 Provider: ${contentProviderFile.path}", contentProviderFile.exists())
+        assertContains(syncBarrierScenarioFile.readText(), "postSyncBarrier")
+        assertContains(syncBarrierScenarioFile.readText(), "recordPostSyncBarrier")
+        assertContains(barrierComponentStarterFile.readText(), "BarrierLeakService")
+        assertContains(contentProviderFile.readText(), "BlockingContentProvider")
+        assertContains(contentProviderFile.readText(), "ContentProviderBlocker")
+        assertContains(manifestText, "android:name=\".BlockingContentProvider\"")
+        assertContains(manifestText, "android:authorities=\"\${applicationId}.blocking-provider\"")
     }
 
     /**

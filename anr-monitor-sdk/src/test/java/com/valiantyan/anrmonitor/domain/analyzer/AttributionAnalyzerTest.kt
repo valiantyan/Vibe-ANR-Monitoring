@@ -143,6 +143,58 @@ class AttributionAnalyzerTest {
     }
 
     /**
+     * 当前消息栈明确卡在业务代码时，不能只因 Pending 队头临时 Barrier 就误判成 Barrier 泄漏。
+     */
+    @Test
+    fun analyzeReturnsCurrentSlowWhenCurrentStackIsBlockedDespiteTransientBarrierHead(): Unit {
+        val result = AttributionAnalyzer(
+            thresholds = AttributionThresholds(
+                suspectAnrMs = 3_000L,
+            ),
+        ).analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 1L,
+                    wallMs = 3_082L,
+                    cpuMs = 0L,
+                ),
+                history = emptyList(),
+                pending = listOf(
+                    pending(
+                        index = 0,
+                        isBarrierLike = true,
+                        blockedMs = 3_082L,
+                        targetClass = null,
+                    ),
+                    pending(
+                        index = 1,
+                        isBarrierLike = false,
+                        blockedMs = 3_026L,
+                        targetClass = "android.view.ViewRootImpl\$ViewRootHandler",
+                    ),
+                ),
+                frames = listOf(
+                    "java.lang.Thread.sleep(Native Method)",
+                    "com.valiantyan.vibeanrmonitoring.scenario.ContentProviderBlocker.block(ContentProviderBlocker.kt:17)",
+                    "com.valiantyan.vibeanrmonitoring.BlockingContentProvider.query(BlockingContentProvider.kt:41)",
+                    "android.content.ContentProvider\$Transport.query(ContentProvider.java:296)",
+                    "android.content.ContentResolver.query(ContentResolver.java:1231)",
+                ),
+                barrierEvidenceSnapshot = BarrierEvidenceSnapshot(
+                    available = true,
+                    stuckTokens = emptyList(),
+                    recentNativePollOnceRecords = emptyList(),
+                    repeatedInfinitePollCount = 0,
+                    alignedWithPendingBarrier = false,
+                    failureReason = null,
+                ),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.CURRENT_MESSAGE_SLOW, result.primaryCode)
+    }
+
+    /**
      * 线程 CPU TopN 是补充证据，应进入归因 evidence 但不覆盖主因编码。
      */
     @Test

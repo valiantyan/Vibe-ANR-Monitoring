@@ -816,7 +816,7 @@ git commit -m "更新 ContentProvider 阻塞场景矩阵"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Run full local verification**
+- [x] **Step 1: Run full local verification**
 
 Run:
 
@@ -826,7 +826,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 2: Install debug app**
+- [x] **Step 2: Install debug app**
 
 Run:
 
@@ -837,7 +837,7 @@ adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
 
 Expected: install succeeds.
 
-- [ ] **Step 3: Trigger ContentProvider block scenario**
+- [x] **Step 3: Trigger ContentProvider block scenario**
 
 Run:
 
@@ -852,7 +852,7 @@ Expected: the app becomes unresponsive for about 12 seconds.
 
 Use the `uiautomator dump` output to choose the real button coordinates for “ContentProvider 阻塞”. The layout should already be scrollable after Task 3; if the button is still below the visible viewport on a small device, scroll to the bottom before tapping.
 
-- [ ] **Step 4: Inspect logcat**
+- [x] **Step 4: Inspect logcat**
 
 Run:
 
@@ -862,7 +862,7 @@ adb -s <device-id> logcat -d -s VibeAnrApplication AnrMonitor
 
 Expected: log contains `suspect ANR captured: <event-id>` and `ANR report written: <event-id>`.
 
-- [ ] **Step 5: Pull latest JSON**
+- [x] **Step 5: Pull latest JSON**
 
 Run:
 
@@ -873,7 +873,7 @@ adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/an
 
 Expected: JSON file is written to `/tmp/content-provider-block.json`.
 
-- [ ] **Step 6: Verify JSON root-cause evidence**
+- [x] **Step 6: Verify JSON root-cause evidence**
 
 Run:
 
@@ -891,7 +891,7 @@ Expected:
 - `barrierEvidence.stuckTokens` is empty or not used as primary evidence.
 - `binderBlock.suspected` is `false`.
 
-- [ ] **Step 7: Fill acceptance record**
+- [x] **Step 7: Fill acceptance record**
 
 Modify the “第八批次：ContentProvider 阻塞” section in `docs-anr/105-Demo-ANR场景实现计划.md`:
 
@@ -901,7 +901,7 @@ Modify the “第八批次：ContentProvider 阻塞” section in `docs-anr/105-
 - Mark passed checklist items as `- [x]`.
 - Replace the acceptance conclusion sentence with the actual JSON-backed conclusion.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md
