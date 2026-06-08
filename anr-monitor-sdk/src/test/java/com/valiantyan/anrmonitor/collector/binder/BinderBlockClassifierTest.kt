@@ -36,21 +36,33 @@ class BinderBlockClassifierTest {
     }
 
     /**
-     * 只有主线程进入 Binder transact 时，仍不能判定跨进程阻塞疑似。
+     * 只有主线程进入 Binder transact 时，仍应输出跨进程阻塞疑似，但缺少本进程 Binder 线程等待增强证据。
      */
     @Test
-    fun classifyDoesNotSuspectWhenOnlyMainThreadIsInBinder(): Unit {
+    fun classifyReturnsSuspectedWhenOnlyMainThreadContainsBinderProxy(): Unit {
         val classifier = BinderBlockClassifier()
 
         val result = classifier.classify(
-            mainFrames = listOf("android.os.BinderProxy.transactNative(Native Method)"),
-            binderThreadFrames = listOf("com.example.Service.handle(Service.kt:20)"),
+            mainFrames = listOf(
+                "android.os.BinderProxy.transactNative(Native Method)",
+                "android.os.BinderProxy.transact(BinderProxy.java:662)",
+                "com.valiantyan.vibeanrmonitoring.scenario.BinderCrossProcessBlockScenario.run(BinderCrossProcessBlockScenario.kt:42)",
+            ),
+            binderThreadFrames = emptyList(),
         )
 
         assertTrue(result.available)
-        assertFalse(result.suspected)
+        assertTrue(result.suspected)
         assertTrue(result.mainThreadInBinder)
         assertFalse(result.binderThreadWaitsMain)
+        assertEquals(
+            listOf(
+                "android.os.BinderProxy.transactNative(Native Method)",
+                "android.os.BinderProxy.transact(BinderProxy.java:662)",
+            ),
+            result.mainThreadEvidence,
+        )
+        assertEquals(emptyList<String>(), result.binderThreadEvidence)
     }
 
     /**

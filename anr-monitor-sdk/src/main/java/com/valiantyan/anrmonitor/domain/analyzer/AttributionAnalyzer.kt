@@ -184,10 +184,15 @@ class AttributionAnalyzer(
 
     // 提取 Binder 疑似证据，字段命名避免把 suspected 误读为 confirmed。
     private fun binderEvidence(snapshot: BinderBlockSnapshot): List<String> {
-        return listOf(
-            "main thread blocked in Binder transact",
-            "binder thread waits main or lock",
-        ) + snapshot.mainThreadEvidence.take(n = 1) + snapshot.binderThreadEvidence.take(n = 1)
+        val evidence: MutableList<String> = mutableListOf("main thread blocked in Binder transact")
+        if (snapshot.binderThreadWaitsMain) {
+            evidence += "binder thread waits main or lock"
+        } else {
+            evidence += "local binder thread wait evidence unavailable"
+        }
+        evidence += snapshot.mainThreadEvidence.take(n = 1)
+        evidence += snapshot.binderThreadEvidence.take(n = 1)
+        return evidence
     }
 
     // 在关键证据不足时返回明确的 unknown，帮助后续评审定位采集短板。

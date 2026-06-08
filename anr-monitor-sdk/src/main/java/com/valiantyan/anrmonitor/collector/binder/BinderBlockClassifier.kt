@@ -25,7 +25,7 @@ class BinderBlockClassifier {
         }
         return BinderBlockSnapshot(
             available = true,
-            suspected = mainEvidence.isNotEmpty() && binderEvidence.isNotEmpty(),
+            suspected = mainEvidence.isNotEmpty(),
             mainThreadInBinder = mainEvidence.isNotEmpty(),
             binderThreadWaitsMain = binderEvidence.isNotEmpty(),
             mainThreadEvidence = mainEvidence,
@@ -51,7 +51,7 @@ class BinderBlockClassifier {
         ).suspected
     }
 
-    // 主线程命中 Binder transact 只说明阻塞在 IPC 调用里，仍需 Binder 线程等待证据配合。
+    // 主线程命中 Binder transact 即可输出跨进程阻塞疑似，Binder 线程等待只作为增强证据。
     private fun isMainThreadBinderFrame(frame: String): Boolean {
         return MAIN_BINDER_PATTERNS.any { pattern: String -> frame.contains(other = pattern) }
     }

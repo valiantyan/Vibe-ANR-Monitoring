@@ -135,7 +135,7 @@ Replace the existing test named `classifyDoesNotSuspectWhenOnlyMainThreadIsInBin
 
 The file already imports `assertFalse`; keep it because the new test still verifies `binderThreadWaitsMain=false`.
 
-- [ ] **Step 2: Add analyzer evidence regression**
+- [x] **Step 2: Add analyzer evidence regression**
 
 Append this test to `anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzerTest.kt` after `analyzeReturnsBinderBlockSuspectedWhenBinderEvidenceMatches`:
 
@@ -177,7 +177,7 @@ import org.junit.Assert.assertFalse
     }
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run:
 
@@ -187,7 +187,7 @@ Run:
 
 Expected: FAIL because current `BinderBlockClassifier` only returns `suspected=true` when both main-thread Binder evidence and local Binder-thread wait evidence exist, and current analyzer evidence always contains `binder thread waits main or lock`.
 
-- [ ] **Step 4: Update BinderBlockClassifier**
+- [x] **Step 4: Update BinderBlockClassifier**
 
 Modify `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/binder/BinderBlockClassifier.kt` inside `classify()`:
 
@@ -205,7 +205,7 @@ Modify `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/binder
 
 Keep the existing comment that this is only疑似 evidence. Update the old test comment from “仍不能判定跨进程阻塞疑似” to “仍应输出跨进程阻塞疑似，但缺少本进程 Binder 线程等待增强证据”。Do not rename `binderThreadWaitsMain`; it remains a stronger supporting signal, not a required condition.
 
-- [ ] **Step 5: Update AttributionAnalyzer Binder evidence**
+- [x] **Step 5: Update AttributionAnalyzer Binder evidence**
 
 Modify `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt` inside `binderEvidence()`:
 
@@ -225,7 +225,7 @@ Modify `anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/
 
 This wording is intentionally conservative: main-thread Binder is enough for `BINDER_BLOCK_SUSPECTED`, but lack of local Binder-thread wait evidence must be visible to humans reading JSON.
 
-- [ ] **Step 6: Run Binder classifier tests**
+- [x] **Step 6: Run Binder classifier tests**
 
 Run:
 
@@ -235,7 +235,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 7: Run attribution and encoder regression tests**
+- [x] **Step 7: Run attribution and encoder regression tests**
 
 Run:
 
@@ -245,7 +245,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/collector/binder/BinderBlockClassifierTest.kt anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/binder/BinderBlockClassifier.kt anr-monitor-sdk/src/test/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzerTest.kt anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/analyzer/AttributionAnalyzer.kt

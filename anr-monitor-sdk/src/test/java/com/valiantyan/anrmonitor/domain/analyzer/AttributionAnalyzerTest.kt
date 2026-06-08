@@ -15,6 +15,7 @@ import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -345,6 +346,39 @@ class AttributionAnalyzerTest {
         assertEquals(Confidence.MEDIUM, result.confidence)
         assertTrue(result.evidenceItems.contains("main thread blocked in Binder transact"))
         assertTrue(result.evidenceItems.contains("binder thread waits main or lock"))
+    }
+
+    /**
+     * 真实跨进程阻塞常只能在主进程看到主线程 Binder 栈，不能凭空宣称本进程 Binder 线程等待。
+     */
+    @Test
+    fun analyzeReturnsBinderBlockSuspectedWithoutClaimingMissingBinderThreadWait(): Unit {
+        val result = AttributionAnalyzer().analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 1L,
+                    wallMs = 6_000L,
+                    cpuMs = 0L,
+                ),
+                history = emptyList(),
+                pending = emptyList(),
+                frames = listOf("android.os.BinderProxy.transactNative(Native Method)"),
+                binderBlockSnapshot = BinderBlockSnapshot(
+                    available = true,
+                    suspected = true,
+                    mainThreadInBinder = true,
+                    binderThreadWaitsMain = false,
+                    mainThreadEvidence = listOf("android.os.BinderProxy.transactNative(Native Method)"),
+                    binderThreadEvidence = emptyList(),
+                    failureReason = null,
+                ),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.BINDER_BLOCK_SUSPECTED, result.primaryCode)
+        assertTrue(result.evidenceItems.contains("main thread blocked in Binder transact"))
+        assertTrue(result.evidenceItems.contains("local binder thread wait evidence unavailable"))
+        assertFalse(result.evidenceItems.contains("binder thread waits main or lock"))
     }
 
     private fun snapshot(
