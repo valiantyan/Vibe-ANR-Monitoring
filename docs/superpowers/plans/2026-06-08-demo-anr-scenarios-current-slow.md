@@ -158,7 +158,7 @@ git commit -m "新增 Demo ANR 场景实现计划"
 **Files:**
 - Modify: `app/build.gradle.kts`
 
-- [ ] **Step 1: 确认当前 app 单元测试任务可执行**
+- [x] **Step 1: 确认当前 app 单元测试任务可执行**
 
 Run:
 
@@ -168,7 +168,7 @@ Run:
 
 Expected: PASS. 如果当前没有测试用例，Gradle 仍应成功完成 `testDebugUnitTest`。
 
-- [ ] **Step 2: 给 app 模块加入 JUnit 依赖**
+- [x] **Step 2: 给 app 模块加入 JUnit 依赖**
 
 Modify `app/build.gradle.kts` dependencies block to this exact content:
 
@@ -183,7 +183,7 @@ dependencies {
 }
 ```
 
-- [ ] **Step 3: 验证测试任务仍然通过**
+- [x] **Step 3: 验证测试任务仍然通过**
 
 Run:
 
@@ -193,7 +193,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/build.gradle.kts
