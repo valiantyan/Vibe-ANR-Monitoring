@@ -1,5 +1,7 @@
 package com.valiantyan.anrmonitor.collector.stack
 
+import com.valiantyan.anrmonitor.domain.model.StackSampleRecord
+
 /**
  * 慢消息中的栈采样聚合结果，用于把同一执行热点压缩成稳定证据。
  *
@@ -68,6 +70,19 @@ class SlowMessageStackSampler(
         return samplesBySeq.remove(seq)?.values?.toList().orEmpty()
     }
 
+    /**
+     * 返回指定消息当前已采集的栈样本，不移除内部状态，供疑似 ANR 快照关联当前消息。
+     *
+     * @param seq 主线程消息序号。
+     * @return 当前消息内按栈指纹聚合后的采样记录。
+     */
+    @Synchronized
+    fun snapshotSampleRecords(seq: Long): List<StackSampleRecord> {
+        return samplesBySeq[seq]?.values
+            ?.map { sample: StackSample -> sample.toRecord() }
+            .orEmpty()
+    }
+
     // 统计当前消息已经采集的次数，命中次数之和才代表真实采样成本。
     private fun getTotalHitCount(samples: Map<String, StackSample>): Int {
         return samples.values.sumOf { sample: StackSample -> sample.hitCount }
@@ -76,5 +91,14 @@ class SlowMessageStackSampler(
     // 使用完整栈帧内容生成稳定指纹，便于报告侧按 [stackHash] 关联消息。
     private fun getStackHash(frames: List<String>): String {
         return frames.joinToString(separator = "\n").hashCode().toString()
+    }
+
+    // 将采样器内部模型转换为报告领域模型，避免上层依赖采样桶实现。
+    private fun StackSample.toRecord(): StackSampleRecord {
+        return StackSampleRecord(
+            stackId = stackHash,
+            frames = frames,
+            hitCount = hitCount,
+        )
     }
 }

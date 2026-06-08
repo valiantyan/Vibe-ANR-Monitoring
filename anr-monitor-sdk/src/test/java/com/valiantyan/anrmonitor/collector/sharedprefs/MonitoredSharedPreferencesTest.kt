@@ -68,8 +68,33 @@ class MonitoredSharedPreferencesTest {
         assertEquals(1, records[0].pendingFinisherCount)
         assertEquals(SharedPreferencesOperationType.COMMIT, records[1].operationType)
         assertEquals(70L, records[1].costMs)
-        assertEquals(1, records[1].pendingFinisherCount)
+        assertEquals(0, records[1].pendingFinisherCount)
         assertTrue(records[1].stackFrames.first().contains("MainActivity.onStop"))
+    }
+
+    /**
+     * apply 操作记录可保留当次 pending 证据，但全局 pending 数不能长期累计成历史 apply 次数。
+     */
+    @Test
+    fun applyDoesNotLeakPendingFinisherCountAfterOperationRecord(): Unit {
+        val clock = MutableClock(value = 3_000L)
+        val recorder = SharedPreferencesOperationRecorder(maxRecords = 10)
+        val preferences = MonitoredSharedPreferences.wrap(
+            fileName = "settings.xml",
+            delegate = FakeSharedPreferences(clock = clock),
+            recorder = recorder,
+            clock = clock,
+            threadNameProvider = { "main" },
+            stackTraceProvider = { listOf("com.example.MainActivity.onStop(MainActivity.kt:30)") },
+            pendingFinisherReader = recorder::pendingFinisherCount,
+        )
+
+        preferences.edit().putString("feature", "enabled").apply()
+
+        val record = recorder.recentOperations(maxCount = 1).first()
+
+        assertEquals(1, record.pendingFinisherCount)
+        assertEquals(0, recorder.pendingFinisherCount())
     }
 
     private class MutableClock(

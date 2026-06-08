@@ -2525,7 +2525,7 @@ class LocalAnrReportWriter(
 
 预期：两个命令都 PASS。
 
-- [ ] **步骤 5：提交报告编码器**
+- [x] **步骤 5：提交报告编码器**
 
 运行：
 
@@ -4714,3 +4714,22 @@ git status --short
 3. 对 Kernel/Logcat/Perfetto、外部系统负载、跨进程死锁这类端侧不可强确认内容，SDK 不做虚假强归因，而是输出证据可得性、疑似结论和复核入口。
 4. 对 Barrier、QueuedWork 绕过、nativePollOnce 这类高风险能力，计划覆盖但默认关闭或可降级。
 5. 覆盖是否完成最终以任务 19 的全量验收记录和任务 20 的服务端消费协议为准，不能只以编译通过或 阶段一 demo 通过为准。
+
+## 2026-06-07 代码 Review 修复记录
+
+本轮针对三轮代码 review 发现的问题做全量修复，修复范围包括：
+
+- `session.stop()` 后清理 [AnrMonitor] 活跃会话，允许后续重新安装新的 runtime。
+- [MainLooperPrinterInstaller] 返回安装句柄，runtime 停止时恢复安装前的 [Printer]，避免旧采集器闭包残留。
+- 慢消息栈采样接入 [MainLooperTimelineCollector]、[AnrSnapshot] 和 JSON 报告，`sampleStackIds` 可回查 `stackSamples`。
+- 当前消息 CPU 读取改为目标线程 CPU，避免 Watchdog 线程误污染主线程忙等证据。
+- 新增 [ReportRetryDispatcher]，让失败报告按退避时间真正重试上传，而不是只保留队列元信息。
+- SharedPreferences `pendingFinisherCount` 改为当次观测口径，记录后释放全局近似值，避免历史 `apply()` 次数累积成当前 pending 数。
+
+验证命令：
+
+```bash
+./gradlew :anr-monitor-sdk:testDebugUnitTest
+```
+
+当前结果：PASS。

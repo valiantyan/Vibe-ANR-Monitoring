@@ -15,6 +15,7 @@ import com.valiantyan.anrmonitor.domain.model.QueuedWorkBypassState
 import com.valiantyan.anrmonitor.domain.model.SharedPreferencesFileStat
 import com.valiantyan.anrmonitor.domain.model.SharedPreferencesOperationRecord
 import com.valiantyan.anrmonitor.domain.model.SharedPreferencesSnapshot
+import com.valiantyan.anrmonitor.domain.model.StackSampleRecord
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 
 /**
@@ -82,6 +83,7 @@ class AnrReportJsonEncoder {
             "\"current\":${messageOrNull(record = report.snapshot.currentMessage)}",
             "\"history\":${messages(records = report.snapshot.historyMessages)}",
             "\"stackFrames\":${strings(values = report.snapshot.mainThreadStack.frames)}",
+            "\"stackSamples\":${stackSamples(samples = report.snapshot.stackSamples)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }
@@ -241,6 +243,24 @@ class AnrReportJsonEncoder {
             "\"cpuMs\":${record.cpuMs}",
             "\"count\":${record.count}",
             "\"sampleStackIds\":${strings(values = record.sampleStackIds)}",
+        )
+    }
+
+    // 编码慢消息栈采样记录，让 sampleStackIds 能回查具体栈帧和命中次数。
+    private fun stackSamples(samples: List<StackSampleRecord>): String {
+        return samples.joinToString(
+            separator = ",",
+            prefix = "[",
+            postfix = "]",
+        ) { sample: StackSampleRecord -> "{${stackSampleFields(sample = sample).joinToString(separator = ",")}}" }
+    }
+
+    // 生成单个栈采样字段。
+    private fun stackSampleFields(sample: StackSampleRecord): List<String> {
+        return listOf(
+            "\"stackId\":${string(sample.stackId)}",
+            "\"frames\":${strings(values = sample.frames)}",
+            "\"hitCount\":${sample.hitCount}",
         )
     }
 

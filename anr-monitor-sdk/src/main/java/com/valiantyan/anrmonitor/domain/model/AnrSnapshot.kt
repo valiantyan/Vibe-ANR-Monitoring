@@ -14,6 +14,7 @@ package com.valiantyan.anrmonitor.domain.model
  * @property historyMessages 疑似 ANR 前的历史消息窗口。
  * @property pendingQueue Pending 队列快照。
  * @property mainThreadStack 主线程 Java 栈快照。
+ * @property stackSamples 慢消息期间采集到的主线程栈样本。
  * @property threadCpuRecords 进程内线程 CPU TopN 证据。
  * @property checktimeSummary Watchdog Checktime 调度延迟证据。
  * @property environmentSnapshot 系统负载、内存、存储和进程 I/O 环境证据。
@@ -33,6 +34,7 @@ data class AnrSnapshot(
     val historyMessages: List<MessageRecord>,
     val pendingQueue: PendingQueueSnapshot,
     val mainThreadStack: StackTraceSnapshot,
+    val stackSamples: List<StackSampleRecord> = emptyList(),
     val threadCpuRecords: List<ThreadCpuRecord> = emptyList(),
     val checktimeSummary: ChecktimeSummary = ChecktimeSummary.empty(),
     val environmentSnapshot: SystemEnvironmentSnapshot = SystemEnvironmentSnapshot.unavailable(

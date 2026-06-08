@@ -21,6 +21,7 @@ import com.valiantyan.anrmonitor.collector.sharedprefs.QueuedWorkBypassPolicy
 import com.valiantyan.anrmonitor.collector.sharedprefs.SharedPreferencesHealthScanner
 import com.valiantyan.anrmonitor.collector.sharedprefs.SharedPreferencesOperationRecorder
 import com.valiantyan.anrmonitor.collector.stack.MainThreadStackCollector
+import com.valiantyan.anrmonitor.collector.stack.SlowMessageStackSampler
 import com.valiantyan.anrmonitor.collector.threadcpu.ThreadCpuSnapshotter
 import com.valiantyan.anrmonitor.collector.watchdog.AnrWatchdog
 import com.valiantyan.anrmonitor.collector.watchdog.HeartbeatState
@@ -44,6 +45,7 @@ import com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoder
 import com.valiantyan.anrmonitor.reporter.local.LocalAnrReportWriter
 import com.valiantyan.anrmonitor.reporter.retry.ReportEnqueueResult
 import com.valiantyan.anrmonitor.reporter.retry.ReportRetentionPolicy
+import com.valiantyan.anrmonitor.reporter.retry.ReportRetryDispatcher
 import com.valiantyan.anrmonitor.reporter.retry.ReportRetryQueue
 import java.io.IOException
 import java.util.UUID
@@ -78,12 +80,24 @@ internal class AnrMonitorRuntime(
     // Looper 历史消息缓冲区，疑似 ANR 时作为前序消息证据。
     private val historyBuffer: MessageRingBuffer = MessageRingBuffer(capacity = config.historyBufferSize)
 
+    // 主线程 Java 栈采集器，同时供疑似 ANR 快照和慢消息采样复用。
+    private val stackCollector: MainThreadStackCollector = MainThreadStackCollector()
+
+    // 慢消息栈采样器，按配置限制单消息采样次数。
+    private val slowMessageStackSampler: SlowMessageStackSampler = SlowMessageStackSampler(
+        maxSamplesPerMessage = config.maxStackSamplesPerMessage,
+        frameProvider = { stackCollector.capture().frames },
+    )
+
     // 主 Looper 消息时间线采集器。
     private val timelineCollector: MainLooperTimelineCollector = MainLooperTimelineCollector(
         clock = clock,
         threadCpuClock = MainThreadCpuClock(),
         sanitizer = sanitizer,
         historyBuffer = historyBuffer,
+        slowMessageMs = config.slowMessageMs,
+        stackSampleIntervalMs = config.stackSampleIntervalMs,
+        slowMessageSampler = slowMessageStackSampler,
     )
 
     // Pending 队列快照器，用于同步屏障和消息堆积证据。
@@ -91,9 +105,6 @@ internal class AnrMonitorRuntime(
         clock = clock,
         sanitizer = sanitizer,
     )
-
-    // 主线程 Java 栈采集器。
-    private val stackCollector: MainThreadStackCollector = MainThreadStackCollector()
 
     // 线程 CPU TopN 采集器，用于补充进程内资源证据。
     private val threadCpuSnapshotter: ThreadCpuSnapshotter = ThreadCpuSnapshotter()
@@ -172,8 +183,23 @@ internal class AnrMonitorRuntime(
         selfMonitor = sdkSelfMonitor,
     )
 
+    // 上传重试调度器，负责消费到期队列并重新调用宿主 uploader。
+    private val reportRetryDispatcher: ReportRetryDispatcher = ReportRetryDispatcher(
+        retryQueue = reportRetryQueue,
+        clock = clock,
+        uploader = uploader::upload,
+    )
+
     // 运行态开关，保证 start/stop 幂等。
     private val isRunning: AtomicBoolean = AtomicBoolean(false)
+
+    // Looper Printer 安装句柄，停止时用于恢复宿主安装前状态。
+    @Volatile
+    private var looperPrinterHandle: MainLooperPrinterInstaller.InstallHandle? = null
+
+    // 上传重试后台线程，只有开启上传时才启动。
+    @Volatile
+    private var uploadRetryThread: Thread? = null
 
     // 最近一次疑似 ANR 报告时间，用于按阈值限频。
     @Volatile
@@ -195,8 +221,9 @@ internal class AnrMonitorRuntime(
         if (!config.enabled || !isRunning.compareAndSet(false, true)) {
             return
         }
-        MainLooperPrinterInstaller().install(printer = timelineCollector)
+        looperPrinterHandle = MainLooperPrinterInstaller().install(printer = timelineCollector)
         watchdog.start()
+        startUploadRetryLoop()
     }
 
     /**
@@ -207,6 +234,9 @@ internal class AnrMonitorRuntime(
             return
         }
         watchdog.stop()
+        looperPrinterHandle?.uninstall()
+        looperPrinterHandle = null
+        stopUploadRetryLoop()
     }
 
     /**
@@ -269,6 +299,7 @@ internal class AnrMonitorRuntime(
             historyMessages = timelineCollector.historyMessages(),
             pendingQueue = pendingQueue,
             mainThreadStack = mainThreadStack,
+            stackSamples = timelineCollector.stackSamples(),
             threadCpuRecords = captureThreadCpuRecords(),
             checktimeSummary = captureChecktimeSummary(),
             environmentSnapshot = captureEnvironmentSnapshot(),
@@ -390,22 +421,55 @@ internal class AnrMonitorRuntime(
             return
         }
         val fileName: String = "${report.snapshot.eventId}.json.gz"
-        val enqueueResult: ReportEnqueueResult = reportRetryQueue.enqueue(
+        val enqueueResult: ReportEnqueueResult = reportRetryDispatcher.enqueueReport(
             fileName = fileName,
             payloadText = reportEncoder.encode(report = report),
-            nowUptimeMs = clock.uptimeMillis(),
+            report = report,
         )
         if (enqueueResult is ReportEnqueueResult.Skipped) {
             return
         }
         val result: UploadResult = uploader.upload(report = report)
-        reportRetryQueue.recordUploadResult(
+        reportRetryDispatcher.recordUploadResult(
             fileName = fileName,
             result = result,
-            nowUptimeMs = clock.uptimeMillis(),
         )
         if (result is UploadResult.Failure) {
             listener.onMonitorError(error = IllegalStateException(result.reason))
+        }
+    }
+
+    // 上传开启时启动重试循环，避免失败报告只停留在内存队列里。
+    private fun startUploadRetryLoop(): Unit {
+        if (!config.uploadEnabled || uploadRetryThread != null) {
+            return
+        }
+        uploadRetryThread = Thread(::runUploadRetryLoop, UPLOAD_RETRY_THREAD_NAME).apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    // 停止上传重试循环，避免卸载后后台线程继续持有 runtime。
+    private fun stopUploadRetryLoop(): Unit {
+        uploadRetryThread?.interrupt()
+        uploadRetryThread = null
+    }
+
+    // 周期性消费已到期的失败报告；上传器异常由调度器转成失败结果。
+    private fun runUploadRetryLoop(): Unit {
+        while (isRunning.get() && config.uploadEnabled) {
+            reportRetryDispatcher.flushDueReports(maxCount = DEFAULT_RETRY_BATCH_SIZE)
+            sleepUploadRetryInterval()
+        }
+    }
+
+    // 等待下一轮重试；停止时保留中断状态，让线程自然退出循环。
+    private fun sleepUploadRetryInterval(): Unit {
+        try {
+            Thread.sleep(config.reportRetryInitialDelayMs.coerceAtLeast(minimumValue = MIN_RETRY_LOOP_SLEEP_MS))
+        } catch (error: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 
@@ -414,5 +478,20 @@ internal class AnrMonitorRuntime(
          * 单次报告最多保留的线程 CPU 记录数，避免报告被线程数量放大。
          */
         private const val DEFAULT_THREAD_CPU_MAX_COUNT: Int = 5
+
+        /**
+         * 单轮最多重试报告数量。
+         */
+        private const val DEFAULT_RETRY_BATCH_SIZE: Int = 3
+
+        /**
+         * 上传重试后台线程名。
+         */
+        private const val UPLOAD_RETRY_THREAD_NAME: String = "vibe-anr-upload-retry"
+
+        /**
+         * 重试循环最小睡眠间隔，避免误配 0ms 导致空转。
+         */
+        private const val MIN_RETRY_LOOP_SLEEP_MS: Long = 1_000L
     }
 }

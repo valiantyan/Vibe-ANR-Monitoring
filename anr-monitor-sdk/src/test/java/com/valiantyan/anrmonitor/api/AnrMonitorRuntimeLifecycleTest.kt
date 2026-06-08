@@ -71,6 +71,34 @@ class AnrMonitorRuntimeLifecycleTest {
     }
 
     /**
+     * 宿主直接停止会话后，再次安装也必须创建新会话，避免返回已停止的旧句柄。
+     */
+    @Test
+    fun sessionStopClearsActiveSessionAndAllowsReinstall(): Unit {
+        val firstRuntime = FakeRuntimeHandle()
+        val secondRuntime = FakeRuntimeHandle()
+        val config = AnrMonitorConfig(
+            appId = "demo",
+            environment = "debug",
+        )
+        val firstSession: AnrMonitorSession = AnrMonitor.installRuntimeForTesting(
+            config = config,
+            runtimeHandle = firstRuntime,
+        )
+
+        firstSession.stop()
+        val secondSession: AnrMonitorSession = AnrMonitor.installRuntimeForTesting(
+            config = config,
+            runtimeHandle = secondRuntime,
+        )
+
+        assertFalse(firstSession.isRunning)
+        assertTrue(secondSession.isRunning)
+        assertEquals(1, firstRuntime.stopCount)
+        assertEquals(1, secondRuntime.startCount)
+    }
+
+    /**
      * 测试用 runtime，只记录启动和停止次数以验证单例生命周期。
      */
     private class FakeRuntimeHandle : AnrMonitor.RuntimeHandle {

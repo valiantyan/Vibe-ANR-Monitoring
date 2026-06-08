@@ -128,12 +128,14 @@ internal class MonitoredSharedPreferencesEditor(
         val startUptimeMs: Long = clock.uptimeMillis()
         try {
             delegate.apply()
-            recorder.recordPendingFinisherScheduled()
+            val pendingFinisherCount: Int = recorder.recordPendingFinisherScheduled()
             recordOperation(
                 operationType = SharedPreferencesOperationType.APPLY,
                 startUptimeMs = startUptimeMs,
                 success = true,
+                pendingFinisherReader = { pendingFinisherCount },
             )
+            recorder.recordPendingFinisherObserved()
         } catch (error: RuntimeException) {
             recordOperation(
                 operationType = SharedPreferencesOperationType.APPLY,
@@ -149,6 +151,7 @@ internal class MonitoredSharedPreferencesEditor(
         operationType: SharedPreferencesOperationType,
         startUptimeMs: Long,
         success: Boolean,
+        pendingFinisherReader: () -> Int? = this.pendingFinisherReader,
     ): Unit {
         SharedPreferencesOperationReporter.recordOperation(
             fileName = fileName,

@@ -48,6 +48,18 @@ class SharedPreferencesOperationRecorder(
     }
 
     /**
+     * 结束 wrapper 对一次 pending finisher 的观测窗口，避免把历史 apply 次数当作当前 pending 数。
+     *
+     * @return 更新后的 pending finisher 近似数量。
+     */
+    fun recordPendingFinisherObserved(): Int {
+        synchronized(lock) {
+            pendingFinisherCount = (pendingFinisherCount - 1).coerceAtLeast(minimumValue = 0)
+            return pendingFinisherCount
+        }
+    }
+
+    /**
      * 读取最近 SP 操作，保持时间顺序。
      *
      * @param maxCount 最大返回数量。

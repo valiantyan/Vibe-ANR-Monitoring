@@ -78,16 +78,28 @@ object AnrMonitor {
         config: AnrMonitorConfig,
         runtimeHandle: RuntimeHandle,
     ): AnrMonitorSession {
-        val session = AnrMonitorSession(
+        lateinit var session: AnrMonitorSession
+        session = AnrMonitorSession(
             config = config,
             stopAction = {
                 runtimeHandle.stop()
+                clearSessionIfCurrent(session = session)
             },
         )
         runtime = runtimeHandle
         activeSession = session
         runtimeHandle.start()
         return session
+    }
+
+    // 只清理当前活跃会话，避免旧句柄 stop 误清掉新安装的 runtime。
+    @Synchronized
+    private fun clearSessionIfCurrent(session: AnrMonitorSession): Unit {
+        if (activeSession !== session) {
+            return
+        }
+        activeSession = null
+        runtime = null
     }
 
     /**
