@@ -29,6 +29,11 @@
             android:name=".ServiceTimeoutService"
             android:exported="false" />
 
+        <service
+            android:name=".RemoteBlockingService"
+            android:exported="false"
+            android:process=":remote" />
+
         <provider
             android:name=".BlockingContentProvider"
             android:authorities="${applicationId}.blocking-provider"

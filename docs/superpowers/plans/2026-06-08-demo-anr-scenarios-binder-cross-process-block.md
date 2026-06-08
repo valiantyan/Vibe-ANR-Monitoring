@@ -711,7 +711,7 @@ git commit -m "新增 Binder 跨进程阻塞场景类"
 - Modify: `app/src/main/AndroidManifest.xml`
 - Modify: `app/src/main/java/com/valiantyan/vibeanrmonitoring/VibeAnrApplication.kt`
 
-- [ ] **Step 1: Register remote Service**
+- [x] **Step 1: Register remote Service**
 
 Modify `app/src/main/AndroidManifest.xml` inside `<application>` after `ServiceTimeoutService`:
 
@@ -722,7 +722,7 @@ Modify `app/src/main/AndroidManifest.xml` inside `<application>` after `ServiceT
             android:process=":remote" />
 ```
 
-- [ ] **Step 2: Add main-process guard in Application**
+- [x] **Step 2: Add main-process guard in Application**
 
 Modify `app/src/main/java/com/valiantyan/vibeanrmonitoring/VibeAnrApplication.kt` so the file content becomes:
 
@@ -820,7 +820,7 @@ class VibeAnrApplication : Application() {
 }
 ```
 
-- [ ] **Step 3: Compile app**
+- [x] **Step 3: Compile app**
 
 Run:
 
@@ -830,7 +830,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/src/main/AndroidManifest.xml app/src/main/java/com/valiantyan/vibeanrmonitoring/VibeAnrApplication.kt

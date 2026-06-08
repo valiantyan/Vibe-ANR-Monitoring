@@ -1,6 +1,7 @@
 package com.valiantyan.vibeanrmonitoring
 
 import android.app.Application
+import android.os.Build
 import android.util.Log
 import com.valiantyan.anrmonitor.api.AnrEventListener
 import com.valiantyan.anrmonitor.api.AnrMonitor
@@ -9,7 +10,7 @@ import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 
 /**
- * Demo 应用入口，在 debug 环境启动 ANR SDK 并把关键事件写入 logcat。
+ * Demo 应用入口，在 debug 主进程启动 ANR SDK 并把关键事件写入 logcat。
  */
 class VibeAnrApplication : Application() {
     /**
@@ -17,6 +18,10 @@ class VibeAnrApplication : Application() {
      */
     override fun onCreate(): Unit {
         super.onCreate()
+        if (!isMainProcess()) {
+            Log.w(TAG, "skip ANR monitor in process=${currentProcessName()}")
+            return
+        }
         AnrMonitor.install(
             context = this,
             config = AnrMonitorConfig(
@@ -29,6 +34,7 @@ class VibeAnrApplication : Application() {
                 watchdogIntervalMs = 500L,
                 captureBarrierEvidence = true,
                 barrierTokenStuckThresholdMs = 2_000L,
+                captureBinderEvidence = true,
             ),
             listener = object : AnrEventListener {
                 /**
@@ -53,6 +59,33 @@ class VibeAnrApplication : Application() {
                 }
             },
         )
+    }
+
+    /**
+     * 判断当前进程是否为应用主进程，避免远端 Binder 进程也安装 SDK。
+     */
+    private fun isMainProcess(): Boolean {
+        return currentProcessName() == packageName
+    }
+
+    /**
+     * 获取当前进程名，Android P 以下回退到 [android.app.ActivityManager] 查询。
+     */
+    private fun currentProcessName(): String {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            return getProcessName()
+        }
+        val pid: Int = android.os.Process.myPid()
+        val activityManager: android.app.ActivityManager? = getSystemService(
+            android.app.ActivityManager::class.java,
+        )
+        return activityManager
+            ?.runningAppProcesses
+            ?.firstOrNull { processInfo: android.app.ActivityManager.RunningAppProcessInfo ->
+                processInfo.pid == pid
+            }
+            ?.processName
+            ?: packageName
     }
 
     private companion object {
