@@ -645,12 +645,12 @@ Add this section after the fourth batch section and before “后续批次顺序
 
 ### 验收记录
 
-- [ ] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenarioTest` 通过。
-- [ ] `./gradlew :app:compileDebugKotlin :app:mergeDebugResources` 通过。
-- [ ] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
-- [ ] 真机或模拟器点击“BroadcastReceiver 超时”后生成 JSON。
-- [ ] JSON 中 `mainThread.stackFrames` 能定位到 `BroadcastTimeoutReceiver.onReceive`。
-- [ ] 如果系统确认 ANR，JSON 中 `systemAnr.anrType` 为 `BROADCAST_FOREGROUND` 或 `BROADCAST_BACKGROUND`。
+- [x] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenarioTest` 通过。
+- [x] `./gradlew :app:compileDebugKotlin :app:mergeDebugResources` 通过。
+- [x] `./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest` 通过。
+- [x] 真机或模拟器点击“BroadcastReceiver 超时”后生成 JSON。
+- [x] JSON 中 `mainThread.stackFrames` 能定位到 `BroadcastTimeoutReceiver.onReceive`。
+- [x] 如果系统确认 ANR，JSON 中 `systemAnr.anrType` 为 `BROADCAST_FOREGROUND` 或 `BROADCAST_BACKGROUND`；本次验收系统未确认 ANR，因此该项按条件不适用处理。
 ```
 
 - [x] **Step 3: Update remaining roadmap sentence**
