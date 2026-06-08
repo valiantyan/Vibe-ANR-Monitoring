@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicLong
  * @param mainHandler 主线程 [Handler]，测试或宿主可替换。
  * @param onChecktimeInterval Watchdog 后台循环的实际间隔回调。
  * @param onSuspectAnr 疑似 ANR 回调。
+ * @param onRecovered 主线程心跳恢复回调。
  */
 class AnrWatchdog(
     private val clock: Clock,
@@ -23,6 +24,7 @@ class AnrWatchdog(
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
     private val onChecktimeInterval: (Long) -> Unit = {},
     private val onSuspectAnr: () -> Unit,
+    private val onRecovered: () -> Unit = {},
 ) {
     // Watchdog 运行态，保证 [start] 幂等。
     private val isRunning: AtomicBoolean = AtomicBoolean(false)
@@ -35,6 +37,9 @@ class AnrWatchdog(
 
     // 上一次 Watchdog 循环时间，用于计算实际调度间隔。
     private var lastLoopUptimeMs: Long? = null
+
+    // 是否已经观察到超时窗口，用于恢复时清理事件去重状态。
+    private var wasTimedOut: Boolean = false
 
     /**
      * 启动后台 Watchdog；重复调用不会创建多条检测线程。
@@ -55,6 +60,7 @@ class AnrWatchdog(
         lastLoopUptimeMs = null
         thread?.interrupt()
         thread = null
+        wasTimedOut = false
     }
 
     /**
@@ -64,8 +70,13 @@ class AnrWatchdog(
         while (isRunning.get()) {
             val nowUptimeMs: Long = clock.uptimeMillis()
             recordChecktimeInterval(nowUptimeMs = nowUptimeMs)
-            if (heartbeatState.isTimedOut(nowUptimeMs = nowUptimeMs)) {
+            val timedOut: Boolean = heartbeatState.isTimedOut(nowUptimeMs = nowUptimeMs)
+            if (timedOut) {
+                wasTimedOut = true
                 onSuspectAnr()
+            } else if (wasTimedOut) {
+                wasTimedOut = false
+                onRecovered()
             }
             if (!heartbeatState.hasPending()) {
                 postHeartbeat()

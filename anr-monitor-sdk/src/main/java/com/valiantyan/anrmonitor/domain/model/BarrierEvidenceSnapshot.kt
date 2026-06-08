@@ -81,12 +81,14 @@ data class BarrierTokenRecord(
  * @property enterUptimeMs 进入调用时的 uptime。
  * @property exitUptimeMs 退出调用时的 uptime，仍在调用中时为空。
  * @property durationMs 已完成调用的耗时，仍在调用中时为空。
+ * @property source 记录来源，区分真实 hook 记录和栈推断证据。
  */
 data class NativePollOnceRecord(
     val timeoutMillis: Int,
     val enterUptimeMs: Long,
     val exitUptimeMs: Long?,
     val durationMs: Long?,
+    val source: NativePollOnceRecordSource = NativePollOnceRecordSource.HOOK,
 ) {
     /**
      * 是否为无限等待轮询，不能简单视为空闲。
@@ -97,4 +99,19 @@ data class NativePollOnceRecord(
      * 是否仍在 [nativePollOnce] 调用中。
      */
     val isInFlight: Boolean = exitUptimeMs == null
+}
+
+/**
+ * [nativePollOnce] 证据来源。
+ */
+enum class NativePollOnceRecordSource {
+    /**
+     * 由 hook、调试入口或灰度探针直接记录。
+     */
+    HOOK,
+
+    /**
+     * 由主线程栈和 Pending 队列现场推断。
+     */
+    STACK_INFERENCE,
 }

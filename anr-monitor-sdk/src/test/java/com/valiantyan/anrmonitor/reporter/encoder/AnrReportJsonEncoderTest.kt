@@ -344,6 +344,7 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"postStack\":[\"postSyncBarrier token=41\"]"))
         assertTrue(json.contains("\"timeoutMillis\":-1"))
         assertTrue(json.contains("\"durationMs\":300"))
+        assertTrue(json.contains("\"source\":\"HOOK\""))
         assertTrue(json.contains("\"repeatedInfinitePollCount\":2"))
         assertTrue(json.contains("\"alignedWithPendingBarrier\":true"))
     }

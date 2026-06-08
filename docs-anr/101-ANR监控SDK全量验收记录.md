@@ -24,7 +24,7 @@
 | Pending 队列快照 | 第二篇、第三篇 | `PendingQueueSnapshot` 记录 `available`、`failureReason`、队头与重复消息摘要 | 已接入 |
 | Barrier 疑似 | 第四篇 | Pending 队头 `target == null`、同步消息被屏障阻塞、`SYNC_BARRIER_STUCK` 归因 | 已接入 |
 | Barrier token | 第四篇 | `BarrierTokenTracker` 记录 post/remove token、停留时长和未移除 token | 已接入 |
-| nativePollOnce | 第四篇 | `NativePollOnceMonitor` 记录进入/退出和停留时长，辅助区分假死与真实阻塞 | 已接入 |
+| nativePollOnce | 第四篇 | `NativePollOnceMonitor` 记录进入/退出和停留时长；无 hook 时可由主线程栈和 Pending 队头输出 `source=STACK_INFERENCE` 证据 | 已接入 |
 | 慢消息堆栈采样 | 第二篇、第三篇 | `SlowMessageStackSampler` 输出 stack hash、hit count 和采样栈 | 已接入 |
 | 线程 CPU | 第一篇、第二篇 | `ThreadCpuSnapshotter` 输出 Top N 线程 CPU 排名，辅助判断 CPU 抢占 | 已接入 |
 | Checktime | 第一篇、第二篇 | `ChecktimeSummary.maxDelayMs` 和 `severeDelayCount` 记录 Watchdog 调度延迟 | 已接入 |
@@ -58,7 +58,7 @@
 - `Message.obj` 等潜在业务对象内容不进入 JSON。
 - Pending 队列、系统环境、Barrier、Binder 等核心证据失败时必须记录 `available=false` 或缺失证据，不能影响宿主业务。
 - SharedPreferences 风险治理不属于本 SDK 基础验收；如业务需要治理，应转交存储治理专项，不在 ANR SDK 中通过包装 API、文件扫描或 `QueuedWork` 绕过实现。
-- Barrier token 与 `nativePollOnce` 属于增强证据，默认可按配置关闭以控制 hook 风险。
+- Barrier token 与 `nativePollOnce` 属于增强证据，默认可按配置关闭以控制风险；`source=HOOK` 表示探针直接记录，`source=STACK_INFERENCE` 表示栈和队列推断。
 
 ## 结论
 

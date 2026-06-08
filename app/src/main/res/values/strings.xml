@@ -7,4 +7,5 @@
     <string name="demo_message_storm">消息风暴</string>
     <string name="demo_current_busy">当前消息忙等</string>
     <string name="demo_binder_like_lock">Binder 模拟等待</string>
+    <string name="demo_sync_barrier_leak">Sync Barrier 泄漏 ANR</string>
 </resources>

@@ -17,7 +17,7 @@
 | `systemAnr` | 系统确认 ANR 和组件阈值解释 | `isConfirmedAnr`、`anrType`、`componentTimeoutMs`、`shortMsg`、`longMsg` |
 | `mainThread` | 当前 Trace、当前消息、历史消息和慢消息栈聚合 | `current`、`history`、`stackId`、`stackFrames`、`sampleStackIds` |
 | `pendingQueue` | Pending 队列、同步屏障和消息风暴聚类 | `available`、`truncated`、`maxDepth`、`messages` |
-| `barrierEvidence` | Barrier token 和 nativePollOnce 增强证据 | `stuckTokens`、`nativePollOnceRecords`、`alignedWithPendingBarrier` |
+| `barrierEvidence` | Barrier token 和 nativePollOnce 增强证据 | `stuckTokens`、`nativePollOnceRecords`、`nativePollOnceRecords[].source`、`alignedWithPendingBarrier` |
 | `binderBlock` | Binder 和跨进程等待疑似识别 | `suspected`、`mainThreadInBinder`、`binderThreadWaitsMain` |
 | `threadCpu` | 线程 CPU TopN 和进程内资源竞争 | `topThreads` |
 | `checktime` | Watchdog 调度延迟和系统调度压力 | `maxDelayMs`、`severeDelayCount`、`recentDelayMs` |
@@ -46,7 +46,7 @@
 
 1. 端侧归因码 + ANR 类型：Input、Service、Broadcast、Provider、Activity、Finalizer。
 2. 当前栈 hash、历史慢消息栈 hash、Pending target/callback hash。
-3. Barrier token、Binder 证据签名、nativePollOnce 模式。
+3. Barrier token、Binder 证据签名、nativePollOnce 模式和 `source`。
 4. 设备、ROM、Android 版本、App 版本、灰度批次、页面、进程名。
 5. 缺失证据类型，例如 Pending 反射失败、环境采集失败、隐私模式裁剪。
 
@@ -56,6 +56,7 @@
 2. 证据链：按系统 Reason、当前 Trace、当前消息、历史消息、Pending、线程 CPU、Checktime、Barrier、Binder 展示，不把单一 Trace 当作根因。
 3. 时间线：联动过去历史消息、当前 dispatch、未来 Pending 三段证据，标记 slow、storm、barrier、binder 事件。
 4. 专项卡片：Barrier token、nativePollOnce、Binder 阻塞疑似、环境负载。
+   nativePollOnce 卡片必须展示 `source`：`HOOK` 表示端侧探针直接记录，`STACK_INFERENCE` 表示由主线程栈和 Pending 队头推断。
 5. 缺失证据：展示 collector 失败、权限限制、ROM 限制、隐私模式裁剪和 `UNKNOWN_INSUFFICIENT_EVIDENCE` 的原因。
 6. 治理建议：展示 owner hint、版本分布、设备分布、灰度批次、回滚建议和 Barrier 修复建议；SharedPreferences 治理建议归入存储治理专项，不作为通用 ANR 看板默认项。
 

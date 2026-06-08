@@ -27,6 +27,8 @@ class VibeAnrApplication : Application() {
                 sampleRate = 1.0f,
                 suspectAnrMs = 3_000L,
                 watchdogIntervalMs = 500L,
+                captureBarrierEvidence = true,
+                barrierTokenStuckThresholdMs = 2_000L,
             ),
             listener = object : AnrEventListener {
                 /**
@@ -40,7 +42,7 @@ class VibeAnrApplication : Application() {
                  * 完整报告生成后输出事件 ID，便于确认本地 JSON 已完成编码。
                  */
                 override fun onConfirmedAnr(report: AnrReport): Unit {
-                    Log.w(TAG, "confirmed ANR report: ${report.snapshot.eventId}")
+                    Log.w(TAG, "ANR report written: ${report.snapshot.eventId}")
                 }
 
                 /**

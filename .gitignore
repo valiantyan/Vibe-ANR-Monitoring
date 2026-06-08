@@ -8,3 +8,5 @@
 /.externalNativeBuild
 /.cxx
 /app/build
+/anr-monitor-sdk/build/
+/.idea/

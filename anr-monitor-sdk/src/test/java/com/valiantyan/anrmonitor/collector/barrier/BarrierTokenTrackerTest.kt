@@ -1,6 +1,7 @@
 package com.valiantyan.anrmonitor.collector.barrier
 
 import com.valiantyan.anrmonitor.collector.nativepoll.NativePollOnceMonitor
+import com.valiantyan.anrmonitor.domain.model.NativePollOnceRecordSource
 import com.valiantyan.anrmonitor.domain.model.PendingMessage
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import org.junit.Assert.assertEquals
@@ -101,6 +102,74 @@ class BarrierTokenTrackerTest {
         assertEquals(41, snapshot.stuckTokens.first().token)
         assertEquals(2, snapshot.repeatedInfinitePollCount)
         assertEquals(-1, snapshot.recentNativePollOnceRecords.first().timeoutMillis)
+    }
+
+    /**
+     * P0/P1 未接入 native hook 时，token 与 Pending 队头匹配也应算作 Barrier 对齐证据。
+     */
+    @Test
+    fun collectAlignsBarrierTokenWithPendingQueueWithoutNativePollOnceHook(): Unit {
+        val tracker = BarrierTokenTracker()
+        val collector = BarrierEvidenceCollector(
+            tokenTracker = tracker,
+            nativePollOnceMonitor = NativePollOnceMonitor(),
+        )
+        tracker.onPostBarrier(
+            token = 42,
+            uptimeMs = 1_000L,
+            stack = listOf("postSyncBarrier token=42"),
+        )
+
+        val snapshot = collector.collect(
+            enabled = true,
+            nowUptimeMs = 7_000L,
+            stuckThresholdMs = 5_000L,
+            maxRecords = 10,
+            pendingQueue = pendingBarrierQueue(token = 42),
+        )
+
+        assertTrue(snapshot.available)
+        assertTrue(snapshot.alignedWithPendingBarrier)
+        assertEquals(0, snapshot.repeatedInfinitePollCount)
+        assertTrue(snapshot.recentNativePollOnceRecords.isEmpty())
+    }
+
+    /**
+     * P2 没有 native hook 记录时，也应把主线程栈中的 nativePollOnce 与队头 Barrier 生成可读证据。
+     */
+    @Test
+    fun collectInfersNativePollOnceRecordFromMainThreadStackAndPendingBarrier(): Unit {
+        val tracker = BarrierTokenTracker()
+        val collector = BarrierEvidenceCollector(
+            tokenTracker = tracker,
+            nativePollOnceMonitor = NativePollOnceMonitor(),
+        )
+        tracker.onPostBarrier(
+            token = 43,
+            uptimeMs = 1_000L,
+            stack = listOf("postSyncBarrier token=43"),
+        )
+
+        val snapshot = collector.collect(
+            enabled = true,
+            nowUptimeMs = 7_000L,
+            stuckThresholdMs = 5_000L,
+            maxRecords = 10,
+            pendingQueue = pendingBarrierQueue(token = 43),
+            mainThreadFrames = listOf(
+                "android.os.MessageQueue.nativePollOnce(Native Method)",
+                "android.os.MessageQueue.next(MessageQueue.java:339)",
+            ),
+        )
+
+        val record = snapshot.recentNativePollOnceRecords.first()
+
+        assertEquals(-1, record.timeoutMillis)
+        assertTrue(record.isInFlight)
+        assertTrue(record.isInfiniteWait)
+        assertEquals(NativePollOnceRecordSource.STACK_INFERENCE, record.source)
+        assertEquals(1, snapshot.repeatedInfinitePollCount)
+        assertTrue(snapshot.alignedWithPendingBarrier)
     }
 
     /**

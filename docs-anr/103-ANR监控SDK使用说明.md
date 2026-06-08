@@ -163,6 +163,8 @@ class App : Application() {
 | 灰度 | `uploadEnabled=true`、`sampleRate=0.05f` 到 `0.1f`、保留 `SAFE` 隐私模式 |
 | 线上 | `uploadEnabled=true`、低采样率、`privacyMode=STRICT` 或按合规要求配置；Barrier 增强证据按白名单灰度 |
 
+当前 Demo App 为了验证 Sync Barrier 场景，Debug 配置已开启 `captureBarrierEvidence=true`，并把 `barrierTokenStuckThresholdMs` 调低到 `2000L`，便于第一份报告中看到 `stuckTokens`。
+
 ## 5. 上传接入
 
 SDK 不绑定任何网络库，宿主通过 `AnrReportUploader` 接收领域对象 `AnrReport`。SDK 总是先写本地 JSON；只有 `uploadEnabled=true` 时才会调用 uploader。
@@ -393,6 +395,7 @@ anr-report.json
 | `durationMs` | 本次等待持续时间 | 持续时间长时支持 Looper 假死判断 |
 | `isInfiniteWait` | 是否无限等待 | Barrier 假死场景的重要线索 |
 | `isInFlight` | 是否仍在等待中 | 判断当前现场是否还卡在 nativePollOnce |
+| `source` | nativePollOnce 证据来源 | `HOOK` 表示探针或 hook 直接记录；`STACK_INFERENCE` 表示由主线程栈和 Pending 队头推断 |
 
 `binderBlock`：
 
@@ -616,8 +619,10 @@ collectorFailures
 `captureBarrierEvidence=false` 是默认值。开启后报告会补充：
 
 - `barrierEvidence.stuckTokens`：超过 `barrierTokenStuckThresholdMs` 仍未移除的 token。
-- `barrierEvidence.nativePollOnceRecords`：最近 nativePollOnce 轮询记录。
+- `barrierEvidence.nativePollOnceRecords`：最近 nativePollOnce 轮询记录，包含 `source` 用于区分真实探针和栈推断。
 - `barrierEvidence.alignedWithPendingBarrier`：Barrier 证据是否与 Pending 队列头部同步屏障对齐。
+
+当前 P2 默认不会主动安装 native hook，避免 SDK 改变宿主运行风险；但当主线程栈命中 `MessageQueue.nativePollOnce` 且 Pending 队头是 Sync Barrier 时，SDK 会输出一条 `source=STACK_INFERENCE` 的 in-flight `nativePollOnce(timeoutMillis=-1)` 证据。若宿主后续接入自有 hook、JVMTI 或灰度探针，可调用 `AnrNativePollProbe.recordEnter()` / `recordExit()` / `recordCompleted()` 写入 `source=HOOK` 的真实轮询窗口。
 
 建议只在 Debug、专项灰度或已知 Barrier 风险页面开启。线上开启前需要确认 ROM 兼容性、性能成本和回滚策略。
 
@@ -640,18 +645,34 @@ Demo 页面按钮：
 
 | 按钮 | 触发场景 | 预期证据 |
 | --- | --- | --- |
-| `Current Slow` | 主线程 sleep | `CURRENT_MESSAGE_SLOW`、当前消息 wall time 高 |
-| `Message Storm` | 大量主线程消息后阻塞 | 历史消息、Pending 队列、消息风暴证据 |
-| `Current Busy` | 主线程忙等 | 当前消息慢、线程 CPU TopN |
-| `Binder Like Lock` | 模拟等待类窗口 | 主线程等待栈、Binder suspected 相关复核入口 |
+| `当前消息慢` | 主线程 sleep | `CURRENT_MESSAGE_SLOW`、当前消息 wall time 高 |
+| `消息风暴` | 大量主线程消息后阻塞 | 历史消息、Pending 队列、消息风暴证据 |
+| `当前消息忙等` | 主线程忙等 | 当前消息慢、线程 CPU TopN |
+| `Binder 模拟等待` | 模拟等待类窗口 | 主线程等待栈、Binder suspected 相关复核入口 |
+| `Sync Barrier 泄漏 ANR` | 反射插入 Sync Barrier 并故意不移除 | `SYNC_BARRIER_STUCK`、队头 `isBarrierLike=true`、`stuckTokens` token 对齐 |
 
 验证步骤：
 
 1. 打开 Demo App。
 2. 点击目标按钮并等待 3 到 6 秒。
-3. 在 logcat 中查找 `suspect ANR captured` 和 `confirmed ANR report`。
+3. 在 logcat 中查找 `suspect ANR captured` 和 `ANR report written`。
 4. 使用 `adb shell run-as ... ls files/anr-monitor-reports` 查看报告文件。
 5. `cat` 对应 JSON，按第 6 节五步排查法输出定位结论。
+
+验证 `Sync Barrier 泄漏 ANR` 时，点击按钮后主线程会被故意卡住。为了触发系统 Input ANR，可以在按钮点击后继续点击屏幕；为了复核 SDK 报告，优先看以下字段：
+
+```text
+attribution.primary = SYNC_BARRIER_STUCK
+pendingQueue.messages[0].isBarrierLike = true
+pendingQueue.messages[0].targetClass = null
+barrierEvidence.stuckTokens[].token = pendingQueue.messages[0].arg1
+barrierEvidence.alignedWithPendingBarrier = true
+barrierEvidence.nativePollOnceRecords[].source = STACK_INFERENCE 或 HOOK
+```
+
+如果系统 trace 同时显示主线程在 `android.os.MessageQueue.nativePollOnce`，这次问题的可评审结论应写成：主线程不是业务代码直接耗时，而是 Sync Barrier 泄漏挡住同步消息，导致 Looper 看似停在 `nativePollOnce`。
+
+同一次主线程卡死在恢复前只会写出第一份报告。若看到多份报告，先比较 `pendingQueue.messages[0].arg1`、`barrierEvidence.stuckTokens[].token` 和 `event.timeUptimeMs`：token 相同且时间递增，通常是同一轮卡死的历史报告；token 不同或心跳恢复后再次卡死，才按新事件处理。
 
 ## 9. 线上接入清单
 
@@ -676,7 +697,7 @@ Demo 页面按钮：
 | Pending 队列不可用 | 可能是反射受限、ROM 差异或 `capturePendingQueue=false`，查看 `pendingQueue.failureReason` |
 | 归因为 UNKNOWN | 查看 `attribution.missingEvidence` 和 `sdkDiagnostics.collectorFailures`，优先补齐 Pending、历史消息或 Barrier 证据 |
 | 主线程栈看起来不是根因 | 对照 `history`、`stackSamples`、`pendingQueue`；ANR 的当前 Trace 可能只是超时窗口内的一个结果 |
-| 本地报告太多 | 调整 `reportRetentionMaxFileCount`、`reportRetentionMaxTotalBytes`、`reportRetentionMaxAgeMs` |
+| 本地报告太多 | 先确认是否是修复前版本重复采样；新版本同一活跃 ANR 会去重，再调整 `reportRetentionMaxFileCount`、`reportRetentionMaxTotalBytes`、`reportRetentionMaxAgeMs` |
 
 ## 11. 与设计文档的关系
 

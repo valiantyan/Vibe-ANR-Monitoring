@@ -329,6 +329,7 @@ class AnrReportJsonEncoder {
             "\"durationMs\":${longOrNull(value = record.durationMs)}",
             "\"isInfiniteWait\":${record.isInfiniteWait}",
             "\"isInFlight\":${record.isInFlight}",
+            "\"source\":${string(record.source.name)}",
         )
     }
 

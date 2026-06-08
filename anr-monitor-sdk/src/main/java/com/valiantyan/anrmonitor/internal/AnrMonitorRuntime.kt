@@ -179,6 +179,9 @@ internal class AnrMonitorRuntime(
     // 运行态开关，保证 start/stop 幂等。
     private val isRunning: AtomicBoolean = AtomicBoolean(false)
 
+    // 活跃 ANR 去重器，避免同一阻塞窗口重复写入多份 JSON。
+    private val incidentDeduplicator: AnrIncidentDeduplicator = AnrIncidentDeduplicator()
+
     // Looper Printer 安装句柄，停止时用于恢复宿主安装前状态。
     @Volatile
     private var looperPrinterHandle: MainLooperPrinterInstaller.InstallHandle? = null
@@ -198,6 +201,7 @@ internal class AnrMonitorRuntime(
         heartbeatState = HeartbeatState(timeoutMs = config.suspectAnrMs),
         onChecktimeInterval = ::recordChecktimeInterval,
         onSuspectAnr = ::captureSuspectAnr,
+        onRecovered = ::markAnrRecovered,
     )
 
     /**
@@ -222,6 +226,7 @@ internal class AnrMonitorRuntime(
         watchdog.stop()
         looperPrinterHandle?.uninstall()
         looperPrinterHandle = null
+        markAnrRecovered()
         stopUploadRetryLoop()
     }
 
@@ -242,7 +247,7 @@ internal class AnrMonitorRuntime(
         }
     }
 
-    // 统一处理运行态和限频判断，避免同一轮阻塞重复生成报告。
+    // 统一处理运行态和低成本限频判断，完整事件去重在快照生成后执行。
     private fun shouldCapture(nowUptimeMs: Long): Boolean {
         if (!isRunning.get()) {
             return false
@@ -258,6 +263,9 @@ internal class AnrMonitorRuntime(
     private fun captureAndReport(nowUptimeMs: Long): Unit {
         val buildStartMs: Long = clock.uptimeMillis()
         val snapshot: AnrSnapshot = buildSnapshot(nowUptimeMs = nowUptimeMs)
+        if (!incidentDeduplicator.shouldReport(snapshot = snapshot)) {
+            return
+        }
         listener.onSuspectAnr(snapshot = snapshot)
         val report: AnrReport = reportAssembler.build(
             snapshot = snapshot,
@@ -292,9 +300,16 @@ internal class AnrMonitorRuntime(
             barrierEvidenceSnapshot = captureBarrierEvidenceSnapshot(
                 nowUptimeMs = nowUptimeMs,
                 pendingQueue = pendingQueue,
+                mainThreadStack = mainThreadStack,
             ),
             binderBlockSnapshot = captureBinderBlockSnapshot(mainThreadStack = mainThreadStack),
         )
+    }
+
+    // 主线程心跳恢复后清理活跃 ANR 状态，避免后续新卡顿被旧签名压制。
+    private fun markAnrRecovered(): Unit {
+        incidentDeduplicator.markRecovered()
+        lastSuspectReportUptimeMs = 0L
     }
 
     // 系统确认状态只改变事件阶段，不参与根因归因。
@@ -352,6 +367,7 @@ internal class AnrMonitorRuntime(
     private fun captureBarrierEvidenceSnapshot(
         nowUptimeMs: Long,
         pendingQueue: PendingQueueSnapshot,
+        mainThreadStack: StackTraceSnapshot,
     ): BarrierEvidenceSnapshot {
         return barrierEvidenceCollector.collect(
             enabled = config.captureBarrierEvidence,
@@ -359,6 +375,7 @@ internal class AnrMonitorRuntime(
             stuckThresholdMs = config.barrierTokenStuckThresholdMs,
             maxRecords = config.barrierEvidenceMaxRecords,
             pendingQueue = pendingQueue,
+            mainThreadFrames = mainThreadStack.frames,
         )
     }
 

@@ -10,6 +10,8 @@
 - `04-第四篇-Barrier导致主线程假死.md`
 - `05-第五篇-告别SharedPreference等待.md`
 - `99-ANR监控SDK设计开发文档.md`
+- `103-ANR监控SDK使用说明.md`
+- `104-ANR监控JSON日志根因排查指南.md`
 
 ## 当前进度
 
@@ -21,6 +23,8 @@
 | 04 | Barrier 导致主线程假死 | [04-第四篇-Barrier导致主线程假死.md](./04-第四篇-Barrier导致主线程假死.md) | 已完成初版、举一反三提问、三轮审核 |
 | 05 | 告别 SharedPreference 等待 | [05-第五篇-告别SharedPreference等待.md](./05-第五篇-告别SharedPreference等待.md) | 已完成初版、举一反三提问、三轮审核 |
 | 99 | ANR 监控 SDK 设计开发文档 | [99-ANR监控SDK设计开发文档.md](./99-ANR监控SDK设计开发文档.md) | 已完成五篇综合汇总与 SDK 设计 |
+| 103 | ANR 监控 SDK 使用说明 | [103-ANR监控SDK使用说明.md](./103-ANR监控SDK使用说明.md) | 已完成接入、配置、验证和报告读取说明 |
+| 104 | ANR 监控 JSON 日志根因排查指南 | [104-ANR监控JSON日志根因排查指南.md](./104-ANR监控JSON日志根因排查指南.md) | 已完成新人向 JSON 根因排查步骤和样例走读 |
 
 ## 单篇总结建议结构
 

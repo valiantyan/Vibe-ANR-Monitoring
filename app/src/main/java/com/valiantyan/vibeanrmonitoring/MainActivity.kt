@@ -13,6 +13,11 @@ class MainActivity : AppCompatActivity() {
     // 主线程 Handler，用于构造大量 pending message 的验收场景。
     private val mainHandler: Handler = Handler(Looper.getMainLooper())
 
+    // Sync Barrier 泄漏场景，单独封装反射和 token 记录逻辑。
+    private val syncBarrierLeakScenario: SyncBarrierLeakScenario by lazy {
+        SyncBarrierLeakScenario(context = this)
+    }
+
     /**
      * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
@@ -30,6 +35,9 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.binderLikeButton).setOnClickListener {
             waitBinderLikeLock()
+        }
+        findViewById<Button>(R.id.syncBarrierLeakButton).setOnClickListener {
+            runSyncBarrierLeak()
         }
     }
 
@@ -65,5 +73,10 @@ class MainActivity : AppCompatActivity() {
         synchronized(lock) {
             Thread.sleep(6_000L)
         }
+    }
+
+    // 泄漏 Sync Barrier，用于验证 nativePollOnce 表象背后的队列根因。
+    private fun runSyncBarrierLeak(): Unit {
+        syncBarrierLeakScenario.run()
     }
 }

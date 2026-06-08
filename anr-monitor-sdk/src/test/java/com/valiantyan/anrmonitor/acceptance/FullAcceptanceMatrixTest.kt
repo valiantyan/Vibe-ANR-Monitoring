@@ -9,25 +9,42 @@ import org.junit.Test
  */
 class FullAcceptanceMatrixTest {
     /**
-     * Demo 页面必须暴露全量手动验收入口，方便复核当前忙等和 Binder 疑似两类新增场景。
+     * Demo 页面必须暴露全量手动验收入口，方便复核当前忙等、Binder 疑似和 Barrier 泄漏场景。
      */
     @Test
     fun demoActivityContainsFullManualScenarioEntrypoints(): Unit {
         val rootDir: File = findProjectRoot()
         val layoutText: String = rootDir.resolve("app/src/main/res/layout/activity_main.xml").readText()
+        val stringsText: String = rootDir.resolve("app/src/main/res/values/strings.xml").readText()
         val activityText: String = rootDir.resolve(
             "app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt",
         ).readText()
+        val scenarioFile: File = rootDir.resolve(
+            "app/src/main/java/com/valiantyan/vibeanrmonitoring/SyncBarrierLeakScenario.kt",
+        )
+        val serviceFile: File = rootDir.resolve(
+            "app/src/main/java/com/valiantyan/vibeanrmonitoring/BarrierLeakService.kt",
+        )
         assertContains(layoutText, "android:id=\"@+id/currentBusyButton\"")
-        assertContains(layoutText, "android:text=\"Current Busy Loop\"")
+        assertContains(layoutText, "android:text=\"@string/demo_current_busy\"")
         assertContains(layoutText, "android:id=\"@+id/binderLikeButton\"")
-        assertContains(layoutText, "android:text=\"Binder Like Wait\"")
+        assertContains(layoutText, "android:text=\"@string/demo_binder_like_lock\"")
+        assertContains(layoutText, "android:id=\"@+id/syncBarrierLeakButton\"")
+        assertContains(layoutText, "android:text=\"@string/demo_sync_barrier_leak\"")
+        assertContains(stringsText, "<string name=\"demo_sync_barrier_leak\">Sync Barrier 泄漏 ANR</string>")
         assertContains(activityText, "R.id.currentBusyButton")
         assertContains(activityText, "runBusyLoop()")
         assertContains(activityText, "R.id.binderLikeButton")
         assertContains(activityText, "waitBinderLikeLock()")
+        assertContains(activityText, "R.id.syncBarrierLeakButton")
+        assertContains(activityText, "runSyncBarrierLeak()")
         assertContains(activityText, "Math.sqrt(42.0)")
         assertContains(activityText, "Thread.sleep(6_000L)")
+        assertTrue("缺少 Sync Barrier 泄漏场景: ${scenarioFile.path}", scenarioFile.exists())
+        assertTrue("缺少 Barrier 泄漏测试 Service: ${serviceFile.path}", serviceFile.exists())
+        assertContains(scenarioFile.readText(), "postSyncBarrier")
+        assertContains(scenarioFile.readText(), "AnrBarrierDebug.recordPostSyncBarrier")
+        assertContains(scenarioFile.readText(), "BarrierLeakService")
     }
 
     /**
