@@ -21,7 +21,7 @@
 | 6 | BroadcastReceiver 超时 | 点击“BroadcastReceiver 超时”后发送显式应用内广播，Receiver 主线程阻塞 12 秒 | Broadcast 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `BroadcastTimeoutReceiver.onReceive`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 7 | Service 超时 | 点击“Service 超时”后启动显式应用内 Service，`onStartCommand()` 主线程阻塞 25 秒 | Service 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 8 | ContentProvider 阻塞 | 点击“ContentProvider 阻塞”后查询应用内 Provider，`query()` 主线程阻塞 12 秒 | Provider 查询阻塞 + 当前消息慢证据 | `mainThread.stackFrames` 包含 `BlockingContentProvider.query`、`ContentProviderBlocker.block`、`mainThread.current.wallMs` | 已实现，待手动验收 |
-| 9 | Binder 跨进程阻塞 | 主进程调用远端阻塞服务 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected`、主线程 Binder 栈 | 待实现 |
+| 9 | Binder 跨进程阻塞 | 点击“Binder 跨进程阻塞”后主线程同步调用远端 `:remote` AIDL，远端 Binder 线程阻塞 12 秒 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected=true`、`binderBlock.mainThreadInBinder=true`、`mainThread.stackFrames` 包含 `BinderProxy.transact` | 已实现，待手动验收 |
 | 10 | 主线程 IO/数据库阻塞 | 主线程执行慢 IO 或慢查询 | `CURRENT_MESSAGE_SLOW` | IO/DB 业务栈、当前消息耗时 | 待实现 |
 | 11 | 线程池耗尽后主线程等待 | 占满线程池后主线程等待结果 | 等待类当前慢消息 | 主线程等待栈、后台线程证据 | 待实现 |
 | 12 | GC / 内存抖动 | 大量分配对象制造 GC 压力 | 环境或资源辅因 | `environmentSnapshot`、历史消息抖动 | 待实现 |
@@ -487,6 +487,62 @@ binderBlock.suspected = false
 本次采样先命中 SDK 疑似 ANR 阈值，系统尚未确认 Provider ANR；因此 `systemAnr.anrType=UNKNOWN` 和 `componentTimeoutMs=null` 属于可接受结果。验收过程中发现 Pending 队头可能存在系统绘制产生的临时 Sync Barrier，已补充归因回归测试并收紧 Barrier 主因规则：只有主线程停在 `MessageQueue.nativePollOnce`，或 Barrier token 与 Pending 队头对齐，或存在 stuck token 时，才把 Barrier 提升为主因。
 
 验收结论：ContentProvider 阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 能把 Provider 查询调用链和业务 Provider 阻塞入口分开表达；本次根因可以明确写为“`BlockingContentProvider.query` 在主线程执行耗时阻塞，内部调用 `ContentProviderBlocker.block`，导致 Provider 查询无法及时返回”。Barrier 和 Binder 证据均不是本次主因。
+
+## 第九批次：Binder / 跨进程阻塞
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 等待 1 秒，让远端 `:remote` Service 完成绑定。
+4. 点击“Binder 跨进程阻塞”。
+5. 如果弹出未就绪提示，等 1 秒后再点击一次。
+6. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+7. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `attribution.primary`，预期为 `BINDER_BLOCK_SUSPECTED`。再看 `binderBlock.suspected` 和 `binderBlock.mainThreadInBinder`，都应为 `true`。接着看 `mainThread.stackFrames`，应能看到 `BinderProxy.transact` 或 `BinderProxy.transactNative`，并能回溯到 `BinderCrossProcessBlockScenario.run`。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `pendingQueue.messages[0].isBarrierLike` 不应该作为主证据。
+- 如果 `binderBlock.available=false`，不能用这份 JSON 排除或证明 Binder。
+- 如果只有 `CURRENT_MESSAGE_SLOW`，但主线程栈没有 Binder transact，应检查是否没有真正连上远端 Service。
+
+### 验收记录模板
+
+验收时间：2026-06-08 HH:mm CST
+
+验收设备：`<device-id>`
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s <device-id> install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s <device-id> logcat -c
+adb -s <device-id> shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity
+adb -s <device-id> shell input tap <binder-button-x> <binder-button-y>
+adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json
+```
+
+关键 JSON 字段：
+
+```text
+event.eventType = SUSPECT_ANR
+attribution.primary = BINDER_BLOCK_SUSPECTED
+binderBlock.available = true
+binderBlock.suspected = true
+binderBlock.mainThreadInBinder = true
+mainThread.stackFrames contains BinderProxy.transact
+mainThread.stackFrames contains BinderCrossProcessBlockScenario.run
+barrierEvidence.stuckTokens = []
+```
+
+验收结论：待执行后填写。
 
 ## 后续批次顺序
 

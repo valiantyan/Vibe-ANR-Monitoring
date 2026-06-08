@@ -919,7 +919,7 @@ git commit -m "接入 Binder 跨进程阻塞按钮"
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Add usage guide section**
+- [x] **Step 1: Add usage guide section**
 
 Append this section to `docs-anr/103-ANR监控SDK使用说明.md` after the ContentProvider section:
 
@@ -980,7 +980,7 @@ binderBlock.mainThreadInBinder = true
 - 线上排查时需要同时拿调用方日志、对端进程日志和系统 traces，确认阻塞发生在对端业务、系统服务还是调用方错误地等待结果。
 ```
 
-- [ ] **Step 2: Update scenario matrix row**
+- [x] **Step 2: Update scenario matrix row**
 
 Modify row 9 in `docs-anr/105-Demo-ANR场景实现计划.md`:
 
@@ -988,7 +988,7 @@ Modify row 9 in `docs-anr/105-Demo-ANR场景实现计划.md`:
 | 9 | Binder 跨进程阻塞 | 点击“Binder 跨进程阻塞”后主线程同步调用远端 `:remote` AIDL，远端 Binder 线程阻塞 12 秒 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected=true`、`binderBlock.mainThreadInBinder=true`、`mainThread.stackFrames` 包含 `BinderProxy.transact` | 已实现，待手动验收 |
 ```
 
-- [ ] **Step 3: Add batch section to scenario matrix**
+- [x] **Step 3: Add batch section to scenario matrix**
 
 Append this section to `docs-anr/105-Demo-ANR场景实现计划.md`:
 
@@ -1050,7 +1050,7 @@ barrierEvidence.stuckTokens = []
 验收结论：待执行后填写。
 ```
 
-- [ ] **Step 4: Check markdown formatting**
+- [x] **Step 4: Check markdown formatting**
 
 Run:
 
@@ -1060,7 +1060,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md docs-anr/105-Demo-A
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md docs-anr/105-Demo-ANR场景实现计划.md

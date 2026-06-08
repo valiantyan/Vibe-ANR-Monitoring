@@ -648,7 +648,7 @@ Demo 页面按钮：
 | `当前消息慢` | 主线程 sleep | `CURRENT_MESSAGE_SLOW`、当前消息 wall time 高 |
 | `消息风暴` | 大量主线程消息后阻塞 | 历史消息、Pending 队列、消息风暴证据 |
 | `当前消息忙等` | 主线程忙等 | 当前消息慢、线程 CPU TopN |
-| `Binder 模拟等待` | 模拟等待类窗口 | 主线程等待栈、Binder suspected 相关复核入口 |
+| `Binder 跨进程阻塞` | 主线程同步调用远端 `:remote` AIDL，远端 Binder 线程阻塞 12 秒 | `BINDER_BLOCK_SUSPECTED`、`binderBlock.suspected=true`、主线程栈包含 `BinderProxy.transact` |
 | `Sync Barrier 泄漏 ANR` | 反射插入 Sync Barrier 并故意不移除 | `SYNC_BARRIER_STUCK`、队头 `isBarrierLike=true`、`stuckTokens` token 对齐 |
 | `BroadcastReceiver 超时` | 发送显式应用内广播，Receiver 主线程阻塞 12 秒 | `systemAnr.anrType=BROADCAST_*`、`BroadcastTimeoutReceiver.onReceive`、当前消息耗时 |
 | `Service 超时` | 启动显式应用内 Service，`onStartCommand()` 主线程阻塞 25 秒 | `mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`、`systemAnr.anrType=SERVICE` 或 Service 相关 ActivityThread 消息 |
@@ -932,6 +932,59 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 - 如果 Provider 是跨进程访问入口，要把超时预算看得更严格，因为调用方可能正在主线程等待返回。
 - 对数据库查询增加索引、分页、取消能力和慢查询日志，避免一次 Provider 查询扫描大量数据。
 - 修复后重新点击“ContentProvider 阻塞”按钮验证：`mainThread.stackFrames` 不应再出现 Provider 阻塞栈，`mainThread.current.wallMs` 应低于疑似 ANR 阈值。
+
+### Binder / 跨进程阻塞场景
+
+这个场景用于验证：主线程发起同步跨进程调用后，如果远端进程迟迟不返回，SDK 是否能把问题识别为 Binder / 跨进程阻塞疑似，而不是只看到一个普通当前消息慢。
+
+操作步骤：
+
+1. 安装 debug 包并打开 Demo App。
+2. 等待 1 秒，让主进程完成远端 `:remote` Service 绑定。
+3. 点击“Binder 跨进程阻塞”。
+4. 如果弹出“Binder 场景未就绪，请稍后再点一次”，说明远端 Service 还没连接完成；等 1 秒后再点一次。
+5. 等待 Logcat 出现 `suspect ANR captured` 和 `ANR report written`。
+6. 从 `files/anr-monitor-reports` 拉取最新 JSON。
+
+先看这些字段：
+
+```text
+attribution.primary = BINDER_BLOCK_SUSPECTED
+binderBlock.suspected = true
+binderBlock.mainThreadInBinder = true
+```
+
+再看 `mainThread.stackFrames`，应能看到 `android.os.BinderProxy.transact` 或 `android.os.BinderProxy.transactNative`，并能看到 Demo 入口 `BinderCrossProcessBlockScenario.run`。
+
+然后看 `mainThread.current.wallMs`，应超过 `suspectAnrMs=3000`。这说明当前点击消息不是普通慢代码，而是卡在同步 Binder 调用返回前。
+
+判断结论模板：
+
+```text
+本次 ANR 是 Binder / 跨进程阻塞疑似。主线程在点击“Binder 跨进程阻塞”后同步调用远端 AIDL，当前消息执行时间超过阈值，主线程栈命中 BinderProxy.transact，binderBlock 输出 suspected=true 和 mainThreadInBinder=true。因此端侧根因入口是 BinderCrossProcessBlockScenario.run 发起的同步远端调用。
+```
+
+不要写成：
+
+```text
+已经确认跨进程死锁。
+```
+
+因为端侧 JSON 只能证明主线程卡在 Binder 调用及当前进程存在 Binder 疑似证据，是否死锁还需要 system traces、Perfetto 或对端进程日志复核。
+
+排除项：
+
+- `barrierEvidence.stuckTokens` 不应成为主因。
+- `pendingQueue.messages[0].isBarrierLike` 不应作为主证据。
+- 如果 `binderBlock.available=false`，说明 Binder 证据不可用，不能用这份 JSON 证明 Binder 阻塞。
+- 如果主线程栈没有 `BinderProxy.transact`，优先检查是否点到了旧包、远端 Service 未连接，或当前报告不是这次按钮产生的最新 JSON。
+
+修复方向：
+
+- 不要在主线程发起不可控耗时的同步跨进程调用。
+- 对必须跨进程的能力，改为异步调用、超时取消、后台线程调用或缓存上一次结果。
+- 对远端服务增加超时保护和降级结果，避免调用方无限等待。
+- 线上排查时需要同时拿调用方日志、对端进程日志和系统 traces，确认阻塞发生在对端业务、系统服务还是调用方错误地等待结果。
 
 ## 9. 线上接入清单
 
