@@ -58,8 +58,11 @@ Vibe-ANR-Monitoring
 | 消息风暴 | 点击“消息风暴” | `MESSAGE_STORM`，Pending 队列中出现大量重复消息 |
 | Sync Barrier 泄漏 / nativePollOnce | 点击“Sync Barrier 泄漏” | `SYNC_BARRIER_STUCK`，Barrier 与 `nativePollOnce` 证据对齐 |
 | BroadcastReceiver 超时 | 点击“BroadcastReceiver 超时” | 主线程栈定位到 `BroadcastTimeoutReceiver.onReceive` |
+| Service 超时 | 点击“Service 超时” | 主线程栈定位到 `ServiceTimeoutService.onStartCommand`，说明 Service 生命周期回调阻塞 |
+| ContentProvider 阻塞 | 点击“ContentProvider 阻塞” | 主线程栈定位到 `BlockingContentProvider.query` 和 `ContentProviderBlocker.block` |
+| Binder 跨进程阻塞 | 点击“Binder 跨进程阻塞” | `BINDER_BLOCK_SUSPECTED`，主线程栈命中 `BinderProxy.transact` 并回溯到 Demo 场景入口 |
 
-后续场景计划包括主线程锁等待、Service 超时、ContentProvider 阻塞、Binder 跨进程阻塞、主线程 IO/数据库阻塞、线程池耗尽等待、GC/内存抖动、进程内 CPU 竞争等。
+后续场景计划包括主线程锁等待、主线程 IO/数据库阻塞、线程池耗尽等待、GC/内存抖动、进程内 CPU 竞争等。
 
 ## 快速构建
 
