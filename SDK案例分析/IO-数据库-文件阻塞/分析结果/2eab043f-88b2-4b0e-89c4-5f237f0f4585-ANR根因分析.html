@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>2eab043f ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.3; }
+    h1 { font-size: 28px; }
+    h2 { margin-top: 28px; font-size: 22px; border-left: 4px solid var(--primary); padding-left: 10px; }
+    h3 { margin-top: 22px; font-size: 18px; }
+    p { margin: 8px 0; }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #eef3f9; color: #24334d; }
+    tr:last-child td { border-bottom: 0; }
+    ul { padding-left: 22px; }
+
+    .subtitle { color: #d6e4ff; max-width: 980px; margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06); }
+    .result { border-left: 5px solid var(--danger); }
+    .evidence { border-left: 5px solid var(--primary); }
+    .exclude { border-left: 5px solid var(--ok); }
+    .warn { border-left: 5px solid var(--warn); }
+    .badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; margin-right: 6px; }
+    .badge-danger { background: #fee4e2; color: var(--danger); }
+    .badge-warn { background: #fff4d6; color: var(--warn); }
+    .badge-ok { background: #dcfae6; color: var(--ok); }
+    .step { display: flex; gap: 12px; margin: 14px 0; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    .step-number { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .quote { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：IO / 数据库 / 文件阻塞</h1>
+    <p class="subtitle">分析对象：<code>2eab043f-88b2-4b0e-89c4-5f237f0f4585.json</code>。本次最可信的根因是主线程在按钮点击回调中执行文件和数据库阻塞工作，尤其是在事务内批量插入 payload 行并伴随大量进程写入，导致当前主线程消息超过 3 秒未结束。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>结论</h2>
+        <p><span class="badge badge-danger">根因</span>点击回调在主线程执行数据库事务和文件/IO 工作。</p>
+        <p>业务入口是 <code>IoDatabaseFileBlockScenario.run()</code>，核心阻塞链路进入 <code>FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload()</code>、<code>runBlockingDatabaseTransaction()</code> 和 <code>insertPayloadRow()</code>。</p>
+      </div>
+      <div class="card evidence">
+        <h2>SDK 归因</h2>
+        <p><code>attribution.primary = CURRENT_MESSAGE_SLOW</code></p>
+        <p><code>confidence = MEDIUM</code></p>
+        <p>当前消息 <code>wallMs = 3485</code>，CPU 耗时 <code>cpuMs = 2483</code>，说明不是已经结束的历史慢消息，而是采集时主线程仍卡在当前点击消息中。</p>
+      </div>
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p>不是 Binder 阻塞：<code>binderBlock.suspected = false</code>，<code>mainThreadInBinder = false</code>。</p>
+        <p>不是典型 Sync Barrier 泄漏：<code>stuckTokens = 0</code>，<code>alignedWithPendingBarrier = false</code>，<code>nativePollOnceRecords = 0</code>。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>一眼看懂这份 JSON</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>JSON 节点</th>
+            <th>本次值</th>
+            <th>怎么理解</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>event</code></td>
+            <td><code>eventType = SUSPECT_ANR</code>，<code>environment = debug</code></td>
+            <td>SDK 在 debug 环境提前捕获到疑似 ANR 现场。</td>
+          </tr>
+          <tr>
+            <td><code>systemAnr</code></td>
+            <td><code>isConfirmedAnr = false</code>，<code>anrType = UNKNOWN</code></td>
+            <td>系统尚未确认 ANR，但这不影响使用 SDK 现场定位主线程阻塞。</td>
+          </tr>
+          <tr>
+            <td><code>attribution</code></td>
+            <td><code>primary = CURRENT_MESSAGE_SLOW</code>，<code>confidence = MEDIUM</code></td>
+            <td>SDK 第一判断是当前消息过慢；置信度为中等，需要用主线程栈、采样栈和环境 I/O 继续复核。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current</code></td>
+            <td><code>callbackClass = android.view.View$PerformClick@6ee39af</code>，<code>wallMs = 3485</code>，<code>cpuMs = 2483</code></td>
+            <td>当前卡住的是一次点击事件，已经执行约 3.5 秒还未结束。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.stackFrames</code></td>
+            <td>栈顶位于 <code>FileAndDatabaseBlockingWorkload.insertPayloadRow</code></td>
+            <td>主线程没有停在 Looper 空等，而是在业务数据库插入链路中继续执行。</td>
+          </tr>
+          <tr>
+            <td><code>environmentSnapshot.processIo</code></td>
+            <td><code>writeBytes = 264015872</code></td>
+            <td>采集窗口内进程写入量约 251.8 MB，支持“文件/数据库写入负载很重”的判断。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>一步一步定位根因</h2>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>先看 SDK 摘要，确定排查主线</h3>
+          <p>打开 <code>attribution</code>，看到：</p>
+          <pre>{
+  &quot;primary&quot;: &quot;CURRENT_MESSAGE_SLOW&quot;,
+  &quot;secondary&quot;: [],
+  &quot;confidence&quot;: &quot;MEDIUM&quot;,
+  &quot;evidence&quot;: [
+    &quot;current message wall=3485ms cpu=2483ms&quot;,
+    &quot;top thread beanrmonitoring cpu=3790ms&quot;
+  ],
+  &quot;missingEvidence&quot;: [],
+  &quot;suggestions&quot;: [
+    &quot;优化当前消息对应业务逻辑，拆分主线程重计算、同步等待或阻塞 I/O。&quot;
+  ]
+}</pre>
+          <p>这一步得到初始方向：当前正在执行的主线程消息已经慢到触发疑似 ANR。证据里同时出现主线程当前消息耗时和进程主线程 CPU 耗时，所以先沿着当前点击消息继续追。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>确认当前卡住的是哪一条主线程消息</h3>
+          <p>看 <code>mainThread.current</code>：</p>
+          <pre>{
+  &quot;seq&quot;: 153,
+  &quot;kind&quot;: &quot;CURRENT&quot;,
+  &quot;messageType&quot;: &quot;looper_dispatch&quot;,
+  &quot;what&quot;: 0,
+  &quot;targetClass&quot;: &quot;android.view.ViewRootImpl$ViewRootHandler&quot;,
+  &quot;callbackClass&quot;: &quot;android.view.View$PerformClick@6ee39af&quot;,
+  &quot;isCriticalComponent&quot;: false,
+  &quot;startUptimeMs&quot;: 20501573,
+  &quot;endUptimeMs&quot;: null,
+  &quot;wallMs&quot;: 3485,
+  &quot;cpuMs&quot;: 2483,
+  &quot;count&quot;: 1,
+  &quot;sampleStackIds&quot;: [
+    &quot;861393286&quot;
+  ]
+}</pre>
+          <p><code>View$PerformClick</code> 表示当前主线程正在执行按钮点击回调；<code>endUptimeMs = null</code> 表示这条消息还没结束；<code>wallMs = 3485</code> 表示它已经阻塞约 3.5 秒。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>顺着主线程栈找到业务代码</h3>
+          <p>看 <code>mainThread.stackFrames</code> 前几行：</p>
+          <pre>com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.insertPayloadRow(FileAndDatabaseBlockingWorkload.kt:113)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.insertRowsInTransaction(FileAndDatabaseBlockingWorkload.kt:93)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.runBlockingDatabaseTransaction(FileAndDatabaseBlockingWorkload.kt:81)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload(FileAndDatabaseBlockingWorkload.kt:46)
+com.valiantyan.vibeanrmonitoring.scenario.IoDatabaseFileBlockScenario.run(IoDatabaseFileBlockScenario.kt:45)
+com.valiantyan.vibeanrmonitoring.MainActivity.onCreate$lambda$8(MainActivity.kt:91)
+com.valiantyan.vibeanrmonitoring.MainActivity.$r8$lambda$yAqK1X9jjvN2hZVQllSfnpcsH7s(Unknown Source:0)
+com.valiantyan.vibeanrmonitoring.MainActivity$$ExternalSyntheticLambda8.onClick(D8$$SyntheticClass:0)
+android.view.View.performClick(View.java:7498)
+com.google.android.material.button.MaterialButton.performClick(MaterialButton.java:1345)
+android.view.View.performClickInternal(View.java:7471)
+android.view.View.access$3700(View.java:843)</pre>
+          <p>从上往下读：采集瞬间主线程正在 <code>insertPayloadRow</code> 内执行，调用链来自 <code>insertRowsInTransaction</code>、<code>runBlockingDatabaseTransaction</code> 和 <code>runIoDatabaseFileWorkload</code>，最终由 <code>IoDatabaseFileBlockScenario.run</code> 的点击入口触发。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>用采样栈复核不是偶然栈</h3>
+          <p>当前消息带有 <code>sampleStackIds = 861393286</code>，采样栈同样命中数据库插入和 payload 格式化：</p>
+          <pre>java.util.Formatter.getZero(Formatter.java:2286)
+java.util.Formatter.&lt;init&gt;(Formatter.java:1896)
+java.util.Formatter.&lt;init&gt;(Formatter.java:1951)
+java.lang.String.format(String.java:3644)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.insertPayloadRow(FileAndDatabaseBlockingWorkload.kt:112)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.insertRowsInTransaction(FileAndDatabaseBlockingWorkload.kt:93)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.runBlockingDatabaseTransaction(FileAndDatabaseBlockingWorkload.kt:81)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload(FileAndDatabaseBlockingWorkload.kt:46)
+com.valiantyan.vibeanrmonitoring.scenario.IoDatabaseFileBlockScenario.run(IoDatabaseFileBlockScenario.kt:45)
+com.valiantyan.vibeanrmonitoring.MainActivity.onCreate$lambda$8(MainActivity.kt:91)
+com.valiantyan.vibeanrmonitoring.MainActivity.$r8$lambda$yAqK1X9jjvN2hZVQllSfnpcsH7s(Unknown Source:0)
+com.valiantyan.vibeanrmonitoring.MainActivity$$ExternalSyntheticLambda8.onClick(D8$$SyntheticClass:0)
+android.view.View.performClick(View.java:7498)
+com.google.android.material.button.MaterialButton.performClick(MaterialButton.java:1345)
+android.view.View.performClickInternal(View.java:7471)
+android.view.View.access$3700(View.java:843)</pre>
+          <p>采样栈里出现 <code>String.format</code>、<code>insertPayloadRow</code>、<code>insertRowsInTransaction</code>，说明慢消息期间主线程确实在持续执行业务数据库写入准备和插入逻辑。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <h3>看 Pending 队列，区分根因和后果</h3>
+          <p>队列里出现多条已经等待 2.7 秒到 3.4 秒的消息：</p>
+          <pre>index=0  blockedMs=3483  target=null  callback=null  barrierLike=true  async=false
+index=1  blockedMs=3431  target=android.view.ViewRootImpl$ViewRootHandler  callback=android.view.View$UnsetPressedState  barrierLike=false  async=false
+index=2  blockedMs=3274  target=android.view.GestureDetector$GestureHandler  callback=null  barrierLike=false  async=false
+index=3  blockedMs=3027  target=android.os.Handler  callback=android.graphics.animation.RenderNodeAnimator$$ExternalSyntheticLambda0  barrierLike=false  async=true
+index=4  blockedMs=3007  target=android.os.Handler  callback=com.valiantyan.anrmonitor.collector.watchdog.AnrWatchdog$$ExternalSyntheticLambda1  barrierLike=false  async=false
+index=5  blockedMs=2747  target=android.view.ViewRootImpl$ViewRootHandler  callback=android.view.View$ScrollabilityCache  barrierLike=false  async=false
+index=6  blockedMs=2659  target=android.os.Handler  callback=android.graphics.animation.RenderNodeAnimator$$ExternalSyntheticLambda0  barrierLike=false  async=true</pre>
+          <p>这里的队头虽然 <code>isBarrierLike = true</code>，但 Barrier 专项证据没有卡住 token，也没有 nativePollOnce 无限等待记录。本次主线程仍在当前点击消息里执行业务代码，所以 Pending 队列更像后续 UI、手势、动画和 Watchdog 探针被当前慢消息拖住后的结果。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div>
+          <h3>结合环境 I/O 证据确认文件/数据库方向</h3>
+          <p>本次 <code>environmentSnapshot</code> 里记录：</p>
+          <pre>{
+  &quot;processIo&quot;: {
+    &quot;readBytes&quot;: 0,
+    &quot;writeBytes&quot;: 264015872,
+    &quot;cancelledWriteBytes&quot;: 0
+  },
+  &quot;availableStorageBytes&quot;: 183415762944,
+  &quot;memory&quot;: {
+    &quot;availableBytes&quot;: 3871719424,
+    &quot;totalBytes&quot;: 8011993088,
+    &quot;isLowMemory&quot;: null
+  },
+  &quot;failureReasons&quot;: [
+    &quot;load average io failed: /proc/loadavg: open failed: EACCES (Permission denied)&quot;
+  ]
+}</pre>
+          <p>内存和存储空间充足，不像资源耗尽导致；但进程写入量达到约 251.8 MB，与“数据库事务和文件写入负载放在主线程”这一根因方向一致。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">7</div>
+        <div>
+          <h3>排除 Binder、Barrier 和 Watchdog 自身调度异常</h3>
+          <p>关键排除证据：</p>
+          <pre>{
+  &quot;barrierEvidence&quot;: {
+    &quot;available&quot;: true,
+    &quot;failureReason&quot;: null,
+    &quot;repeatedInfinitePollCount&quot;: 0,
+    &quot;alignedWithPendingBarrier&quot;: false,
+    &quot;stuckTokens&quot;: [],
+    &quot;nativePollOnceRecords&quot;: []
+  },
+  &quot;binderBlock&quot;: {
+    &quot;available&quot;: true,
+    &quot;suspected&quot;: false,
+    &quot;mainThreadInBinder&quot;: false,
+    &quot;binderThreadWaitsMain&quot;: false,
+    &quot;mainThreadEvidence&quot;: [],
+    &quot;binderThreadEvidence&quot;: [],
+    &quot;failureReason&quot;: null
+  },
+  &quot;checktime&quot;: {
+    &quot;available&quot;: true,
+    &quot;maxDelayMs&quot;: 1,
+    &quot;severeDelayCount&quot;: 0,
+    &quot;recentDelayMs&quot;: [
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+    ],
+    &quot;failureReason&quot;: null
+  }
+}</pre>
+          <p>Binder 没有命中；Barrier 没有 stuck token；Watchdog 最近调度最大延迟只有 <code>1</code> ms。所以不要把本次结论写成 Binder 阻塞、Sync Barrier 泄漏或监控线程被系统调度拖慢。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>根因链路</h2>
+      <div class="quote">
+        <p><strong>用户点击按钮</strong> -> <code>MainActivity.onCreate$lambda$8()</code> -> <code>IoDatabaseFileBlockScenario.run()</code> -> <code>FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload()</code> -> <code>runBlockingDatabaseTransaction()</code> -> <code>insertRowsInTransaction()</code> -> <code>insertPayloadRow()</code> 在主线程持续执行数据库插入和 payload 构造，同时进程产生大量写入 -> 当前点击消息超过 3 秒未完成 -> 后续 UI/动画/Watchdog 消息排队 -> SDK 捕获疑似 ANR。</p>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>问题层级</th>
+            <th>定位结果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>表象</td>
+            <td>点击按钮后主线程卡住，当前 <code>View$PerformClick</code> 消息未结束，后续消息开始排队。</td>
+          </tr>
+          <tr>
+            <td>直接原因</td>
+            <td>主线程执行耗时数据库事务和文件/IO 写入相关工作。</td>
+          </tr>
+          <tr>
+            <td>业务入口</td>
+            <td><code>IoDatabaseFileBlockScenario.run(IoDatabaseFileBlockScenario.kt:45)</code></td>
+          </tr>
+          <tr>
+            <td>核心阻塞点</td>
+            <td><code>FileAndDatabaseBlockingWorkload.insertPayloadRow(FileAndDatabaseBlockingWorkload.kt:113)</code>，上游为 <code>insertRowsInTransaction(FileAndDatabaseBlockingWorkload.kt:93)</code> 和 <code>runBlockingDatabaseTransaction(FileAndDatabaseBlockingWorkload.kt:81)</code>。</td>
+          </tr>
+          <tr>
+            <td>证据强度</td>
+            <td>SDK 置信度为 <code>MEDIUM</code>。虽然不是 HIGH，但主线程当前消息、主线程栈、采样栈和进程写入量互相印证，足以把修复方向定位到主线程 IO/数据库工作。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>修复建议</h2>
+      <h3>短期修复</h3>
+      <ul>
+        <li>不要在主线程点击回调中直接执行数据库批量插入、文件写入或大 payload 构造。</li>
+        <li>把 <code>runIoDatabaseFileWorkload</code> 这类重工作移动到后台线程，例如协程 <code>Dispatchers.IO</code>、专用线程池或 WorkManager。</li>
+        <li>主线程只负责触发任务、更新 loading/按钮状态和接收结果，避免一次点击消息长时间占用 Looper。</li>
+        <li>批量数据库写入要控制单批大小，必要时分批提交，并避免在事务内做不必要的字符串格式化或大对象构造。</li>
+      </ul>
+
+      <h3>长期治理</h3>
+      <ul>
+        <li>为主线程数据库、文件、SharedPreferences、ContentProvider 查询等调用建立静态扫描或运行时 StrictMode 监控。</li>
+        <li>给 Demo 和 SDK 样例补充“主线程禁止阻塞 I/O”的说明，让使用者能把本案例和真实业务点击卡顿对应起来。</li>
+        <li>线上排查同类问题时，同时关注 <code>mainThread.current</code>、业务栈、<code>processIo.writeBytes</code>、数据库慢查询日志和系统 traces。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>新人排查口诀</h2>
+      <div class="card warn">
+        <p><strong>先看当前消息，再看主线程栈，最后用专项证据排除干扰项。</strong></p>
+        <p>这份 JSON 的关键路径是：<code>CURRENT_MESSAGE_SLOW</code> -> <code>View$PerformClick</code> -> <code>FileAndDatabaseBlockingWorkload.insertPayloadRow</code> -> <code>processIo.writeBytes ≈ 251.8 MB</code>。所以结论应该写“点击回调在主线程执行数据库/文件阻塞工作导致当前消息过慢”，不要写成 <code>nativePollOnce</code>、Binder 或 Sync Barrier。</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
