@@ -22,7 +22,7 @@
 | 7 | Service 超时 | 点击“Service 超时”后启动显式应用内 Service，`onStartCommand()` 主线程阻塞 25 秒 | Service 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 8 | ContentProvider 阻塞 | 点击“ContentProvider 阻塞”后查询应用内 Provider，`query()` 主线程阻塞 12 秒 | Provider 查询阻塞 + 当前消息慢证据 | `mainThread.stackFrames` 包含 `BlockingContentProvider.query`、`ContentProviderBlocker.block`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 9 | Binder 跨进程阻塞 | 点击“Binder 跨进程阻塞”后主线程同步调用远端 `:remote` AIDL，远端 Binder 线程阻塞 12 秒 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected=true`、`binderBlock.mainThreadInBinder=true`、`mainThread.stackFrames` 包含 `BinderProxy.transact` | 已验收 |
-| 10 | 主线程 IO/数据库阻塞 | 主线程执行慢 IO 或慢查询 | `CURRENT_MESSAGE_SLOW` | IO/DB 业务栈、当前消息耗时 | 待实现 |
+| 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已实现，待手动验收 |
 | 11 | 线程池耗尽后主线程等待 | 占满线程池后主线程等待结果 | 等待类当前慢消息 | 主线程等待栈、后台线程证据 | 待实现 |
 | 12 | GC / 内存抖动 | 大量分配对象制造 GC 压力 | 环境或资源辅因 | `environmentSnapshot`、历史消息抖动 | 待实现 |
 | 13 | 进程内 CPU 竞争 | 后台线程打满 CPU | CPU 竞争辅因 | `threadCpu.topThreads`、`checktime.maxDelayMs` | 待实现 |
@@ -546,6 +546,35 @@ barrierEvidence.stuckTokens = []
 
 验收结论：Binder / 跨进程阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `BINDER_BLOCK_SUSPECTED`，`binderBlock.suspected=true`，主线程栈命中 `BinderProxy.transact` 并能回溯到 `BinderCrossProcessBlockScenario.run`。本次缺少本进程 Binder 线程等待增强证据，因此 `binderThreadWaitsMain=false` 属于可接受结果；Barrier 证据不是本次主因。本次可以写为“主线程同步 Binder 调用远端进程时等待返回，属于跨进程阻塞疑似”，不能写为“已确认跨进程死锁”。
 
+## 第十批次：IO / 数据库 / 文件阻塞
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“IO / 数据库 / 文件阻塞”。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `attribution.primary`，预期为 `CURRENT_MESSAGE_SLOW`。再看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。接着看 `mainThread.stackFrames`，应能看到 `IoDatabaseFileBlockScenario.run` 和 `FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload`；如果采样时机落在文件阶段，还可能看到 `FileOutputStream.write`、`FileDescriptor.sync`；如果采样时机落在数据库阶段，还可能看到 `SQLiteDatabase`、`SQLiteConnection` 或 SQLite native 调用。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `binderBlock.suspected` 不应该成为主因。
+- 如果 `mainThread.current.wallMs` 没有超过阈值，优先增加 `DEFAULT_FILE_CHUNKS`、`DEFAULT_DATABASE_ROWS` 或降低 `DEFAULT_SYNC_EVERY_CHUNKS`，不要用 `Thread.sleep()` 伪造 IO/DB 耗时。
+- 这个场景不等同于 `ContentProvider 阻塞`；本场景直接在主线程执行文件和 SQLite 工作负载。
+
+### 首次验收记录
+
+验收状态：未执行。
+
+验收设备：未执行。
+
+验收结论：未执行。执行 Task 5 后用真实日志和 JSON 字段替换本段。
+
 ## 后续批次顺序
 
-后续按锁等待、Binder、IO、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
+后续按锁等待、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。

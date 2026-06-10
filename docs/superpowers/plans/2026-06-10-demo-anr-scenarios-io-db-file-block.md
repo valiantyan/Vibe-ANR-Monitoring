@@ -562,7 +562,7 @@ git commit -m "更新 IO 数据库文件阻塞使用说明"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Update scenario table row**
+- [x] **Step 1: Update scenario table row**
 
 Modify row 10 in `docs-anr/105-Demo-ANR场景实现计划.md` from:
 
@@ -576,7 +576,7 @@ to:
 | 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已实现，待手动验收 |
 ```
 
-- [ ] **Step 2: Add batch section**
+- [x] **Step 2: Add batch section**
 
 Add this section before the final “后续批次顺序” paragraph:
 
@@ -611,7 +611,7 @@ Add this section before the final “后续批次顺序” paragraph:
 验收结论：未执行。执行 Task 5 后用真实日志和 JSON 字段替换本段。
 ```
 
-- [ ] **Step 3: Update final next-batch sentence**
+- [x] **Step 3: Update final next-batch sentence**
 
 Modify the final next-batch sentence from:
 
@@ -625,7 +625,7 @@ to:
 后续按锁等待、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
 ```
 
-- [ ] **Step 4: Check markdown formatting**
+- [x] **Step 4: Check markdown formatting**
 
 Run:
 
@@ -635,7 +635,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md
