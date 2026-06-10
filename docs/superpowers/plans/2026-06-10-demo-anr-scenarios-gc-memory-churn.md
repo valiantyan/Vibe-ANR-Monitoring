@@ -372,7 +372,7 @@ git commit -m "接入 GC 内存抖动 Demo 按钮"
 **Files:**
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 
-- [ ] **Step 1: Add usage section**
+- [x] **Step 1: Add usage section**
 
 Add this section after the `### Demo 场景：线程池耗尽 + 主线程等待` section and before `## 10. 常见问题` in `docs-anr/103-ANR监控SDK使用说明.md`:
 
@@ -417,7 +417,7 @@ adb -s <deviceId> shell am start -S -n com.valiantyan.vibeanrmonitoring/.MainAct
 - 如果业务必须在前台处理大量数据，分批执行并在每批之间让出主线程，避免单条消息持续超过输入超时窗口。
 ```
 
-- [ ] **Step 2: Check markdown formatting**
+- [x] **Step 2: Check markdown formatting**
 
 Run:
 
@@ -427,7 +427,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md

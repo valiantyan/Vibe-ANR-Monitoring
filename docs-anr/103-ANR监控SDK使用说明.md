@@ -1031,6 +1031,45 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 - 使用异步回调、协程 `suspend`、LiveData/Flow 或状态机更新 UI，不阻塞主线程等待结果。
 - 对必须等待的任务设置业务超时、降级和取消能力，并把等待链路打点到日志中。
 
+### Demo 场景：GC / 内存抖动
+
+这个场景用于验证“当前消息里大量分配对象，触发频繁 GC 和内存压力”的 ANR 现场。它不代表 SDK 已经有独立的 `GC_MEMORY_CHURN` 主归因；当前分析应把它看成 `CURRENT_MESSAGE_SLOW` 主因下的资源辅因。
+
+#### 触发方式
+
+1. 安装 debug 包并打开 Demo App。
+2. 点击“GC / 内存抖动”。
+3. 等待 Logcat 出现 `suspect ANR captured` 和 `ANR report written`。
+4. 同时保留触发前后 10 秒的 logcat，方便查看系统 GC 日志。
+5. 拉取 `files/anr-monitor-reports/<eventId>.json`。
+
+也可以用 adb 触发：
+
+```bash
+adb -s <deviceId> shell am start -S -n com.valiantyan.vibeanrmonitoring/.MainActivity --es anr_demo_scenario gc_memory_churn
+```
+
+#### JSON 判断步骤
+
+1. 看 `attribution.primary`，预期通常是 `CURRENT_MESSAGE_SLOW`。
+2. 看 `mainThread.current.wallMs`，应大于 `3000`。
+3. 看 `mainThread.stackFrames`，应包含 `GcMemoryChurnScenario.run` 和 `GcMemoryChurnWorkload.churnMemoryOnMainThread`。
+4. 看 `environmentSnapshot.memory`，确认 `availableBytes`、`totalBytes` 有值；如果 `availability.memoryAvailable=false`，本次缺少内存环境证据，不能用 JSON 单独证明内存压力。
+5. 看 `barrierEvidence.stuckTokens` 和 `binderBlock.suspected`，它们不应该是本次主因。
+6. 打开同一时间窗 logcat，先用 `GcMemoryChurn` 确认场景确实请求过 GC，再搜索 `GC`、`concurrent copying`、`Clamp target GC heap`、`Alloc` 等关键词，确认是否出现系统真实 GC 日志。
+
+#### 可以写进分析报告的结论模板
+
+本次 ANR 主因是当前主线程消息执行过久。JSON 的主线程栈定位到 `GcMemoryChurnScenario.run` / `GcMemoryChurnWorkload.churnMemoryOnMainThread`，说明按钮点击消息中存在大量对象分配；同一时间窗 logcat 出现场景 GC 请求日志和系统 GC 日志，`environmentSnapshot.memory` 提供了当时内存快照，因此可以把“GC / 内存抖动”作为本次 ANR 的关键辅因。Barrier 和 Binder 证据均不是本次主因。
+
+#### 修复建议
+
+- 不要在主线程一次性创建大量短生命周期对象。
+- 把批量解析、图片处理、列表构建、序列化等分配密集逻辑移到后台线程。
+- 对大对象使用分页、流式处理、对象复用或缓存上限，避免瞬时分配峰值。
+- 通过 Android Studio Memory Profiler、Perfetto、logcat 系统 GC 日志确认分配热点。
+- 如果业务必须在前台处理大量数据，分批执行并在每批之间让出主线程，避免单条消息持续超过输入超时窗口。
+
 ### Binder / 跨进程阻塞场景
 
 这个场景用于验证：主线程发起同步跨进程调用后，如果远端进程迟迟不返回，SDK 是否能把问题识别为 Binder / 跨进程阻塞疑似，而不是只看到一个普通当前消息慢。
