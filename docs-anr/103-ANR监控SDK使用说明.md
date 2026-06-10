@@ -1070,6 +1070,41 @@ adb -s <deviceId> shell am start -S -n com.valiantyan.vibeanrmonitoring/.MainAct
 - 通过 Android Studio Memory Profiler、Perfetto、logcat 系统 GC 日志确认分配热点。
 - 如果业务必须在前台处理大量数据，分批执行并在每批之间让出主线程，避免单条消息持续超过输入超时窗口。
 
+### 进程内 CPU 竞争
+
+这个场景用于验证“主线程本身不是持续计算，但同一进程内后台线程打满 CPU，导致主线程调度和输入响应变慢”的问题。用户点击按钮后，Demo 会启动多个 `DemoCpuContender-*` 后台线程持续计算，同时当前点击消息保持 6 秒低 CPU 等待窗口，方便 SDK 生成报告。
+
+#### 操作步骤
+
+1. 安装 debug 包并打开 Demo App。
+2. 点击“进程内 CPU 竞争”。
+3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report written`。
+4. 拉取最新 JSON：
+
+```bash
+adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
+adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json > process-cpu-contention.json
+```
+
+#### JSON 判断口径
+
+1. 看 `mainThread.current.wallMs`，应大于 `3000`，说明 SDK 的疑似 ANR 窗口成立。
+2. 看 `mainThread.stackFrames`，应包含 `ProcessCpuContentionScenario.run` 或 `DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread`。
+3. 看 `threadCpu.topThreads`，应出现 `DemoCpuContender-1`、`DemoCpuContender-2` 等后台竞争线程，且它们位于 CPU 排名前列。
+4. 对比 `mainThread.current.cpuMs` 和 `threadCpu.topThreads`：如果主线程 CPU 不高，而后台竞争线程 CPU 高，本次更像进程内 CPU 竞争；如果主线程 CPU 同样很高，要按“主线程执行 + 后台竞争共同存在”保守表述。
+5. 看 `barrierEvidence.stuckTokens` 和 `binderBlock.suspected`，它们不应成为本次主因。
+
+#### 结论模板
+
+本次报告由 Demo 进程内 CPU 竞争场景触发。当前消息 wall time 超过阈值，主线程栈定位到 `ProcessCpuContentionScenario`，同时 `threadCpu.topThreads` 中出现多个 `DemoCpuContender-*` 高 CPU 后台线程。Barrier 和 Binder 证据不构成本次主因，因此根因可以写为：同一进程内后台线程持续占用 CPU，造成主线程调度和输入响应延迟。
+
+#### 修复建议
+
+- 限制后台 CPU 密集任务并发数，不要按请求数无限启动计算线程。
+- 后台批处理改为分片执行，并在批次之间让出调度窗口。
+- CPU 密集任务降低线程优先级，避免与主线程争抢前台调度资源。
+- 在线上结合线程名、任务名、耗时和 CPU 排名做采样上报，避免只看到主线程 `nativePollOnce` 或等待栈却找不到真正消耗资源的线程。
+
 ### Binder / 跨进程阻塞场景
 
 这个场景用于验证：主线程发起同步跨进程调用后，如果远端进程迟迟不返回，SDK 是否能把问题识别为 Binder / 跨进程阻塞疑似，而不是只看到一个普通当前消息慢。

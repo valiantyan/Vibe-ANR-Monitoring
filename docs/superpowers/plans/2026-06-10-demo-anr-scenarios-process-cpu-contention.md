@@ -514,7 +514,7 @@ git commit -m "接入进程内CPU竞争Demo按钮"
 **Files:**
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 
-- [ ] **Step 1: Add scenario section**
+- [x] **Step 1: Add scenario section**
 
 Add this section after the GC / 内存抖动验证步骤 in `docs-anr/103-ANR监控SDK使用说明.md`:
 
@@ -532,7 +532,7 @@ Add this section after the GC / 内存抖动验证步骤 in `docs-anr/103-ANR监
 
 ```bash
 adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls files/anr-monitor-reports
-adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.JSON > process-cpu-contention.json
+adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json > process-cpu-contention.json
 ```
 
 #### JSON 判断口径
@@ -555,7 +555,7 @@ adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/an
 - 在线上结合线程名、任务名、耗时和 CPU 排名做采样上报，避免只看到主线程 `nativePollOnce` 或等待栈却找不到真正消耗资源的线程。
 ```
 
-- [ ] **Step 2: Check markdown**
+- [x] **Step 2: Check markdown**
 
 Run:
 
@@ -565,7 +565,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md
 
 Expected: command exits with code `0`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md
