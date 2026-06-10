@@ -15,4 +15,6 @@
     <string name="demo_thread_pool_exhaustion_wait">线程池耗尽 + 主线程等待</string>
     <string name="demo_gc_memory_churn">GC / 内存抖动</string>
     <string name="demo_process_cpu_contention">进程内 CPU 竞争</string>
+    <string name="demo_worker_looper_printer">多 Looper Printer 验证</string>
+    <string name="demo_main_looper_printer_replaced">主 Looper Printer 被替换</string>
 </resources>

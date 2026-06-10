@@ -11,12 +11,16 @@ import com.valiantyan.vibeanrmonitoring.scenario.ContentProviderBlockScenario
 import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
 import com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnScenario
 import com.valiantyan.vibeanrmonitoring.scenario.IoDatabaseFileBlockScenario
+import com.valiantyan.vibeanrmonitoring.scenario.AndroidLooperPrinterDemoProbe
+import com.valiantyan.vibeanrmonitoring.scenario.LooperPrinterDemoProbe
+import com.valiantyan.vibeanrmonitoring.scenario.MainLooperPrinterReplacementScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ProcessCpuContentionScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ServiceTimeoutScenario
 import com.valiantyan.vibeanrmonitoring.scenario.SyncBarrierLeakScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ThreadPoolExhaustionWaitScenario
+import com.valiantyan.vibeanrmonitoring.scenario.WorkerLooperPrinterScenario
 
 /**
  * ANR SDK 示例入口，提供全量验收所需的主线程慢消息、消息风暴、忙等和等待类场景。
@@ -70,6 +74,20 @@ class MainActivity : AppCompatActivity() {
     private val processCpuContentionScenario: ProcessCpuContentionScenario =
         ProcessCpuContentionScenario()
 
+    // Looper Printer Demo 探针，两个验证场景共享，便于统一释放 worker Looper。
+    private val looperPrinterDemoProbe: LooperPrinterDemoProbe = AndroidLooperPrinterDemoProbe()
+
+    // 多 Looper Printer 验证场景，证明 worker Looper Printer 不影响主 Looper 采集。
+    private val workerLooperPrinterScenario: WorkerLooperPrinterScenario = WorkerLooperPrinterScenario(
+        probe = looperPrinterDemoProbe,
+    )
+
+    // 主 Looper Printer 替换场景，模拟三方 SDK 后装抢占单槽位。
+    private val mainLooperPrinterReplacementScenario: MainLooperPrinterReplacementScenario =
+        MainLooperPrinterReplacementScenario(
+            probe = looperPrinterDemoProbe,
+        )
+
     /**
      * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
@@ -113,6 +131,12 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.processCpuContentionButton).setOnClickListener {
             processCpuContentionScenario.run()
         }
+        findViewById<Button>(R.id.workerLooperPrinterButton).setOnClickListener {
+            workerLooperPrinterScenario.run()
+        }
+        findViewById<Button>(R.id.mainLooperPrinterReplacementButton).setOnClickListener {
+            mainLooperPrinterReplacementScenario.run()
+        }
         runScenarioFromIntent(intent = intent)
     }
 
@@ -132,6 +156,7 @@ class MainActivity : AppCompatActivity() {
         if (::binderCrossProcessBlockScenario.isInitialized) {
             binderCrossProcessBlockScenario.release()
         }
+        looperPrinterDemoProbe.shutdown()
         super.onDestroy()
     }
 
@@ -149,6 +174,8 @@ class MainActivity : AppCompatActivity() {
             threadPoolExhaustionWaitScenario.id -> threadPoolExhaustionWaitScenario.run()
             gcMemoryChurnScenario.id -> gcMemoryChurnScenario.run()
             processCpuContentionScenario.id -> processCpuContentionScenario.run()
+            workerLooperPrinterScenario.id -> workerLooperPrinterScenario.run()
+            mainLooperPrinterReplacementScenario.id -> mainLooperPrinterReplacementScenario.run()
         }
     }
 

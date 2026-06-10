@@ -12,6 +12,7 @@
 - `99-ANR监控SDK设计开发文档.md`
 - `103-ANR监控SDK使用说明.md`
 - `104-ANR监控JSON日志根因排查指南.md`
+- `106-Demo-Looper-Printer竞争验收指南.md`
 
 ## 当前进度
 
@@ -26,6 +27,7 @@
 | 103 | ANR 监控 SDK 使用说明 | [103-ANR监控SDK使用说明.md](./103-ANR监控SDK使用说明.md) | 已完成接入、配置、验证和报告读取说明 |
 | 104 | ANR 监控 JSON 日志根因排查指南 | [104-ANR监控JSON日志根因排查指南.md](./104-ANR监控JSON日志根因排查指南.md) | 已完成新人向 JSON 根因排查步骤和样例走读 |
 | 105 | Demo ANR 场景实现计划 | [105-Demo-ANR场景实现计划.md](./105-Demo-ANR场景实现计划.md) | 已规划 Demo 全量 ANR 场景和逐个实现顺序 |
+| 106 | Demo Looper Printer 竞争验收指南 | [106-Demo-Looper-Printer竞争验收指南.md](./106-Demo-Looper-Printer竞争验收指南.md) | 已补充多 Looper 和主 Looper Printer 竞争的手动验收步骤 |
 
 ## 单篇总结建议结构
 

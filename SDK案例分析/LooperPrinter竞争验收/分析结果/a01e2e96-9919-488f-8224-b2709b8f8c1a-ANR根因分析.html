@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>a01e2e96 ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.3; }
+    h1 { font-size: 28px; }
+    h2 { margin-top: 28px; font-size: 22px; border-left: 4px solid var(--primary); padding-left: 10px; }
+    h3 { margin-top: 22px; font-size: 18px; }
+    p { margin: 8px 0; }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #eef3f9; color: #24334d; }
+    tr:last-child td { border-bottom: 0; }
+    ul { padding-left: 22px; }
+
+    .subtitle { color: #d6e4ff; max-width: 980px; margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06); }
+    .result { border-left: 5px solid var(--danger); }
+    .evidence { border-left: 5px solid var(--primary); }
+    .exclude { border-left: 5px solid var(--ok); }
+    .warn { border-left: 5px solid var(--warn); }
+    .badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; margin-right: 6px; }
+    .badge-danger { background: #fee4e2; color: var(--danger); }
+    .badge-warn { background: #fff4d6; color: var(--warn); }
+    .badge-ok { background: #dcfae6; color: var(--ok); }
+    .step { display: flex; gap: 12px; margin: 14px 0; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    .step-number { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .quote { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：主线程 SQLite / 文件数据库阻塞</h1>
+    <p class="subtitle">分析对象：<code>a01e2e96-9919-488f-8224-b2709b8f8c1a.json</code>。虽然目录名是 LooperPrinter 竞争验收，但这份 JSON 的主线程栈明确指向 <code>IoDatabaseFileBlockScenario</code> 和 <code>FileAndDatabaseBlockingWorkload</code>：主线程正在结束 SQLite 事务，当前消息执行超过 3 秒，且主线程 CPU 较高。因此本次根因应按主线程同步数据库事务 / 文件数据库阻塞分析。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>结论</h2>
+        <p><span class="badge badge-danger">根因</span>主线程执行同步 SQLite 事务和文件数据库工作负载，导致 ActivityThread 当前消息超过疑似 ANR 阈值。</p>
+        <p>直接入口是 <code>IoDatabaseFileBlockScenario.run()</code>，核心耗时栈在 <code>FileAndDatabaseBlockingWorkload.insertRowsInTransaction()</code> 和 <code>SQLiteDatabase.endTransaction()</code>。</p>
+      </div>
+      <div class="card evidence">
+        <h2>关键证据</h2>
+        <p><code>attribution.primary = CURRENT_MESSAGE_SLOW</code></p>
+        <p><code>mainThread.current.wallMs = 3381ms</code></p>
+        <p><code>mainThread.current.cpuMs = 2439ms</code></p>
+        <p><code>processIo.writeBytes = 266989568</code></p>
+      </div>
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p><code>barrierEvidence.stuckTokens = []</code>，不是 Sync Barrier 泄漏。</p>
+        <p><code>binderBlock.suspected = false</code>，不是 Binder 或跨进程阻塞。</p>
+        <p><code>checktime.maxDelayMs = 2</code>，Watchdog 自身没有明显被系统调度拖慢。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>JSON 节点目录</h2>
+      <p>第一次看这份 JSON 时，建议先按节点找证据，不要把文件夹名称当作根因。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>节点</th>
+            <th>本次重点值</th>
+            <th>怎么理解</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>event</code></td>
+            <td><code>eventType = SUSPECT_ANR</code>，<code>eventId = a01e2e96...</code></td>
+            <td>这是 SDK 在 debug 环境捕获的疑似 ANR 现场，可以用 eventId 对齐本地 JSON 和 logcat。</td>
+          </tr>
+          <tr>
+            <td><code>systemAnr</code></td>
+            <td><code>isConfirmedAnr = false</code>，<code>anrType = UNKNOWN</code></td>
+            <td>系统尚未确认 ANR；分析重点放在 SDK 保存的主线程、队列和资源证据。</td>
+          </tr>
+          <tr>
+            <td><code>attribution</code></td>
+            <td><code>primary = CURRENT_MESSAGE_SLOW</code>，<code>confidence = MEDIUM</code></td>
+            <td>SDK 初判为当前消息慢，且证据比低置信度更稳定，但仍要用栈和专项证据复核。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current</code></td>
+            <td><code>targetClass = ActivityThread$H</code>，<code>wallMs = 3381</code>，<code>cpuMs = 2439</code></td>
+            <td>当前 ActivityThread 主消息执行超过 3 秒，并且主线程 CPU 也很高，符合主线程正在执行重任务。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.stackFrames</code></td>
+            <td><code>SQLiteConnection.nativeExecute</code>、<code>SQLiteDatabase.endTransaction</code>、<code>FileAndDatabaseBlockingWorkload</code></td>
+            <td>栈直接定位到同步 SQLite 事务结束阶段，以及 Demo 的 IO / 数据库 / 文件阻塞场景。</td>
+          </tr>
+          <tr>
+            <td><code>pendingQueue.messages</code></td>
+            <td>队头关键组件消息 <code>blockedMs = 3370</code>；Service 连接消息 <code>blockedMs = 3289</code></td>
+            <td>当前消息占住主线程后，后续 Activity / Service / Watchdog 消息已经排队等待 2.6 到 3.3 秒。</td>
+          </tr>
+          <tr>
+            <td><code>threadCpu.topThreads</code></td>
+            <td><code>beanrmonitoring = 4250ms</code>，<code>Jit thread pool = 610ms</code>，<code>RenderThread = 600ms</code></td>
+            <td>进程主线程所在任务 CPU 最高，支持“当前消息执行重任务”的判断；不是后台线程独立抢占导致。</td>
+          </tr>
+          <tr>
+            <td><code>environmentSnapshot.processIo</code></td>
+            <td><code>readBytes = 33873920</code>，<code>writeBytes = 266989568</code></td>
+            <td>进程存在明显写入量，和文件 / SQLite 场景吻合，是重要辅证。</td>
+          </tr>
+          <tr>
+            <td><code>barrierEvidence</code> / <code>binderBlock</code></td>
+            <td><code>stuckTokens = []</code>，<code>suspected = false</code></td>
+            <td>这两个常见误判方向都不成立。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>一步一步定位根因</h2>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>先确认报告类型</h3>
+          <pre>{
+  "eventId": "a01e2e96-9919-488f-8224-b2709b8f8c1a",
+  "eventType": "SUSPECT_ANR",
+  "appId": "vibe-anr-demo",
+  "environment": "debug"
+}</pre>
+          <p><code>SUSPECT_ANR</code> 表示 SDK 抓到的是疑似 ANR 现场。它不是系统最终结论，但足够用来分析主线程当时为什么超过阈值。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>看 attribution，拿到第一判断</h3>
+          <pre>{
+  "primary": "CURRENT_MESSAGE_SLOW",
+  "confidence": "MEDIUM",
+  "evidence": [
+    "current message wall=3381ms cpu=2439ms",
+    "top thread beanrmonitoring cpu=4250ms"
+  ]
+}</pre>
+          <p>第一判断是当前主线程消息慢。这里的 <code>cpuMs = 2439ms</code> 很关键：它说明主线程不是在低 CPU 等待，而是在执行明显消耗 CPU / native 调用的同步任务。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>确认当前消息是否超阈值</h3>
+          <pre>{
+  "messageType": "looper_dispatch",
+  "targetClass": "android.app.ActivityThread$H",
+  "isCriticalComponent": true,
+  "wallMs": 3381,
+  "cpuMs": 2439
+}</pre>
+          <p><code>wallMs = 3381ms</code> 已超过 Demo 的 3 秒疑似 ANR 阈值。它是 ActivityThread 的关键组件消息，所以后续 Activity / Service 生命周期消息都可能被影响。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>看主线程栈，定位正在执行什么</h3>
+          <pre>android.database.sqlite.SQLiteConnection.nativeExecute(Native Method)
+android.database.sqlite.SQLiteConnection.execute(SQLiteConnection.java:715)
+android.database.sqlite.SQLiteSession.endTransactionUnchecked(SQLiteSession.java:439)
+android.database.sqlite.SQLiteSession.endTransaction(SQLiteSession.java:403)
+android.database.sqlite.SQLiteDatabase.endTransaction(SQLiteDatabase.java:589)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.insertRowsInTransaction(FileAndDatabaseBlockingWorkload.kt:100)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.runBlockingDatabaseTransaction(FileAndDatabaseBlockingWorkload.kt:81)
+com.valiantyan.vibeanrmonitoring.scenario.FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload(FileAndDatabaseBlockingWorkload.kt:46)
+com.valiantyan.vibeanrmonitoring.scenario.IoDatabaseFileBlockScenario.run(IoDatabaseFileBlockScenario.kt:45)</pre>
+          <p>这个栈已经把根因入口定位得很明确：主线程在 Demo 的 IO / 数据库 / 文件阻塞场景里执行 SQLite 事务，采样时停在 <code>endTransaction</code> 的 native execute。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <h3>看 Pending 队列，确认后果</h3>
+          <pre>{
+  "messages": [
+    { "index": 0, "targetClass": "android.app.ActivityThread$H", "blockedMs": 3370, "isCriticalComponent": true },
+    { "index": 1, "callbackClass": "android.app.LoadedApk$ServiceDispatcher$RunConnection", "blockedMs": 3289, "isCriticalComponent": true },
+    { "index": 2, "callbackClass": "AnrWatchdog", "blockedMs": 3010 }
+  ]
+}</pre>
+          <p>Pending 队列说明主线程不是“没事做”，而是当前数据库事务消息占住主线程，导致后续关键组件消息和 Watchdog 消息都排队等待。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div>
+          <h3>结合进程 I/O 辅证</h3>
+          <pre>{
+  "processIo": {
+    "readBytes": 33873920,
+    "writeBytes": 266989568,
+    "cancelledWriteBytes": 0
+  }
+}</pre>
+          <p>进程写入量约 255MB，和同步文件 / SQLite 场景一致。它不是单独决定根因的字段，但能补强“数据库 / 文件阻塞”这个判断。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">7</div>
+        <div>
+          <h3>排除 Sync Barrier / nativePollOnce</h3>
+          <pre>{
+  "barrierEvidence": {
+    "repeatedInfinitePollCount": 0,
+    "alignedWithPendingBarrier": false,
+    "stuckTokens": [],
+    "nativePollOnceRecords": []
+  }
+}</pre>
+          <p>没有 Barrier token、没有 nativePollOnce 专项证据、队头也不是 Barrier，所以不能把本次写成 Sync Barrier 泄漏。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">8</div>
+        <div>
+          <h3>排除 Binder / 跨进程阻塞</h3>
+          <pre>{
+  "binderBlock": {
+    "suspected": false,
+    "mainThreadInBinder": false,
+    "binderThreadWaitsMain": false
+  }
+}</pre>
+          <p>主线程栈没有 Binder 调用，SDK 的 Binder 专项也没有命中，因此不应归因为跨进程阻塞。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">9</div>
+        <div>
+          <h3>确认 LooperPrinter 竞争不是本次 JSON 的主因</h3>
+          <p>这份报告目录叫 LooperPrinter 竞争验收，但 JSON 中没有看到 Looper Printer 竞争、锁等待或打印器相关栈。根因分析应以 JSON 的主线程栈为准：<code>SQLiteConnection.nativeExecute</code>、<code>SQLiteDatabase.endTransaction</code> 和 <code>FileAndDatabaseBlockingWorkload</code> 才是本次能落地修复的证据。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">10</div>
+        <div>
+          <h3>写出最终根因</h3>
+          <p>本次 ANR 是主线程同步执行数据库 / 文件工作负载导致的当前消息慢。ActivityThread 当前消息 <code>wallMs=3381ms</code>，<code>cpuMs=2439ms</code>；主线程栈停在 SQLite 事务结束阶段，并能回溯到 <code>IoDatabaseFileBlockScenario.run</code>。Pending 队列中多个关键消息已经阻塞超过 3 秒。Barrier 和 Binder 证据均不成立，因此根因应写为“主线程执行同步 SQLite 事务和文件数据库操作，导致关键主线程消息长时间未返回”。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>修复方案</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>问题点</th>
+            <th>修复建议</th>
+            <th>验收方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>主线程执行 SQLite 事务</td>
+            <td>把批量插入、事务提交、索引维护等数据库操作移到后台线程，主线程只做状态更新。</td>
+            <td>再次采集 JSON，主线程栈不应再出现业务数据库事务调用。</td>
+          </tr>
+          <tr>
+            <td>单次事务过大</td>
+            <td>拆分批次，每批设置数量上限；批次之间允许取消、降级或让出调度窗口。</td>
+            <td>单条主线程消息 <code>wallMs</code> 低于 ANR 阈值，Pending 队列不再积压关键组件消息。</td>
+          </tr>
+          <tr>
+            <td>文件 / 数据库写入集中爆发</td>
+            <td>减少主线程路径上的同步写入；必要写入使用异步队列和背压，避免短时间大量刷盘。</td>
+            <td><code>environmentSnapshot.processIo.writeBytes</code> 在前台交互窗口明显下降。</td>
+          </tr>
+          <tr>
+            <td>线上问题难定位</td>
+            <td>给数据库操作记录表名、批次大小、事务耗时、线程名和调用来源，并和 ANR eventId 对齐。</td>
+            <td>线上报告能直接从业务日志定位到具体表和具体批次。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>最终结论模板</h2>
+      <div class="quote">
+        本次 ANR 是主线程同步数据库 / 文件操作导致的当前消息慢。SDK 报告显示 <code>attribution.primary=CURRENT_MESSAGE_SLOW</code>，当前 ActivityThread 消息 <code>wallMs=3381ms</code>、<code>cpuMs=2439ms</code>；主线程栈停在 <code>SQLiteConnection.nativeExecute</code> / <code>SQLiteDatabase.endTransaction</code>，并能回溯到 <code>FileAndDatabaseBlockingWorkload.insertRowsInTransaction</code> 与 <code>IoDatabaseFileBlockScenario.run</code>。Pending 队列中关键组件消息已阻塞 3 秒以上。Sync Barrier 和 Binder 证据均不成立。因此根因是业务在主线程执行同步 SQLite 事务和文件数据库写入，导致主线程关键消息无法及时返回。
+      </div>
+    </section>
+  </main>
+</body>
+</html>
