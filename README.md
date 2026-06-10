@@ -63,9 +63,10 @@ Vibe-ANR-Monitoring
 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞” | `CURRENT_MESSAGE_SLOW`，主线程栈定位到 `IoDatabaseFileBlockScenario.run` 和 `FileAndDatabaseBlockingWorkload` |
 | 线程池耗尽 + 主线程等待 | 点击“线程池耗尽 + 主线程等待” | `CURRENT_MESSAGE_SLOW`，主线程栈定位到 `ThreadPoolExhaustionWaitScenario.run`、`ThreadPoolExhaustionWorkload` 和 `FutureTask.get` |
 | GC / 内存抖动 | 点击“GC / 内存抖动” | `CURRENT_MESSAGE_SLOW` + GC/内存压力辅因，主线程栈定位到 `GcMemoryChurnScenario.run` 和 `GcMemoryChurnWorkload` |
+| 进程内 CPU 竞争 | 点击“进程内 CPU 竞争” | `CURRENT_MESSAGE_SLOW` + 进程内线程 CPU 竞争辅因，`threadCpu.topThreads` 出现 `DemoCpuContender-*` 高 CPU 线程 |
 | Binder 跨进程阻塞 | 点击“Binder 跨进程阻塞” | `BINDER_BLOCK_SUSPECTED`，主线程栈命中 `BinderProxy.transact` 并回溯到 Demo 场景入口 |
 
-后续场景计划包括主线程锁等待、进程内 CPU 竞争等。
+后续场景计划包括主线程锁等待等。
 
 ## 快速构建
 

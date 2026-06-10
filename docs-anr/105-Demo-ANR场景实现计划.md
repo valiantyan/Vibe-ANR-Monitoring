@@ -25,7 +25,7 @@
 | 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已验收 |
 | 11 | 线程池耗尽后主线程等待 | 点击“线程池耗尽 + 主线程等待”后占满固定线程池 worker，主线程同步等待排队 `Future` 结果 | `CURRENT_MESSAGE_SLOW` + 等待栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `ThreadPoolExhaustionWaitScenario.run` / `ThreadPoolExhaustionWorkload.exhaustPoolAndWait` / `FutureTask.get` | 已验收 |
 | 12 | GC / 内存抖动 | 点击“GC / 内存抖动”后主线程分批分配对象并周期性请求 GC | `CURRENT_MESSAGE_SLOW` + GC/内存压力辅因 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `GcMemoryChurnScenario.run` / `GcMemoryChurnWorkload.churnMemoryOnMainThread`、`environmentSnapshot.memory`、同时间窗 logcat 系统 GC 日志 | 已实现，待手动验收 |
-| 13 | 进程内 CPU 竞争 | 后台线程打满 CPU | CPU 竞争辅因 | `threadCpu.topThreads`、`checktime.maxDelayMs` | 待实现 |
+| 13 | 进程内 CPU 竞争 | 点击“进程内 CPU 竞争”后启动多个 `DemoCpuContender-*` 后台线程并保留当前消息观察窗口 | `CURRENT_MESSAGE_SLOW` + 进程内线程 CPU 竞争辅因 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `ProcessCpuContentionScenario.run` / `DefaultProcessCpuContentionWorkload`、`threadCpu.topThreads` 包含 `DemoCpuContender-*` | 已实现，待手动验收 |
 
 ## 当前批次：输入事件当前慢消息
 
@@ -747,6 +747,27 @@ binderBlock.suspected = false
 
 验收结论：GC / 内存抖动场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，当前消息耗时达到 Demo 阈值，主线程栈能定位到 `GcMemoryChurnScenario.run` 与 `GcMemoryChurnWorkload.churnMemoryOnMainThread`；同一时间窗 logcat 出现场景 GC 请求日志和系统 `Starting a blocking GC Alloc` / `WaitForGcToComplete` 日志，`environmentSnapshot.memory` 提供内存快照。Barrier 和 Binder 证据均不是本次主因。因此本次可以写为“按钮点击消息中大量对象分配造成当前消息执行过久，并伴随 GC / 内存压力证据”。
 
+## 第十三批次：进程内 CPU 竞争
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“进程内 CPU 竞争”。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。再看 `mainThread.stackFrames`，应能看到 `ProcessCpuContentionScenario.run` 或 `DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread`，说明入口是 Demo 进程内 CPU 竞争场景。接着看 `threadCpu.topThreads`，应出现 `DemoCpuContender-*` 线程，并且这些后台线程位于 CPU 排名前列。最后对比 `mainThread.current.cpuMs`，如果主线程 CPU 不高而后台竞争线程 CPU 高，本次根因应写为进程内后台线程 CPU 竞争。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `binderBlock.suspected` 不应该为 true。
+- 如果 `mainThread.current.cpuMs` 和主线程线程 CPU 都很高，应检查是否点错了“当前消息忙等”，或是否存在主线程执行与后台竞争混合问题。
+- 如果 `threadCpu.topThreads` 中没有 `DemoCpuContender-*`，应检查线程 CPU 采集是否失败，或当前设备 CPU 核数/调度导致竞争证据不明显。
+
 ## 后续批次顺序
 
-后续按锁等待、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
+后续按锁等待等场景逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。

@@ -578,7 +578,7 @@ git commit -m "补充进程内CPU竞争验证说明"
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Update scenario matrix row**
+- [x] **Step 1: Update scenario matrix row**
 
 In `docs-anr/105-Demo-ANR场景实现计划.md`, replace the scenario 13 row with:
 
@@ -586,7 +586,7 @@ In `docs-anr/105-Demo-ANR场景实现计划.md`, replace the scenario 13 row wit
 | 13 | 进程内 CPU 竞争 | 点击“进程内 CPU 竞争”后启动多个 `DemoCpuContender-*` 后台线程并保留当前消息观察窗口 | `CURRENT_MESSAGE_SLOW` + 进程内线程 CPU 竞争辅因 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `ProcessCpuContentionScenario.run` / `DefaultProcessCpuContentionWorkload`、`threadCpu.topThreads` 包含 `DemoCpuContender-*` | 已实现，待手动验收 |
 ```
 
-- [ ] **Step 2: Add scenario batch section**
+- [x] **Step 2: Add scenario batch section**
 
 Append this section near the end of `docs-anr/105-Demo-ANR场景实现计划.md`, after the GC / 内存抖动批次 section:
 
@@ -613,7 +613,7 @@ Append this section near the end of `docs-anr/105-Demo-ANR场景实现计划.md`
 - 如果 `threadCpu.topThreads` 中没有 `DemoCpuContender-*`，应检查线程 CPU 采集是否失败，或当前设备 CPU 核数/调度导致竞争证据不明显。
 ```
 
-- [ ] **Step 3: Update README covered scenarios**
+- [x] **Step 3: Update README covered scenarios**
 
 In `README.md`, add this row after `GC / 内存抖动` in “Demo 已覆盖场景”:
 
@@ -633,7 +633,7 @@ With:
 后续场景计划包括主线程锁等待等。
 ```
 
-- [ ] **Step 4: Check docs**
+- [x] **Step 4: Check docs**
 
 Run:
 
@@ -643,7 +643,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md README.md
 
 Expected: command exits with code `0`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md README.md
