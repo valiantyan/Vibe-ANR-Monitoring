@@ -14,4 +14,5 @@
     <string name="demo_io_database_file_block">IO / 数据库 / 文件阻塞</string>
     <string name="demo_thread_pool_exhaustion_wait">线程池耗尽 + 主线程等待</string>
     <string name="demo_gc_memory_churn">GC / 内存抖动</string>
+    <string name="demo_process_cpu_contention">进程内 CPU 竞争</string>
 </resources>

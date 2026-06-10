@@ -436,7 +436,7 @@ git commit -m "实现进程内CPU竞争Demo场景"
 - Modify: `app/src/main/res/layout/activity_main.xml`
 - Modify: `app/src/main/res/values/strings.xml`
 
-- [ ] **Step 1: Update MainActivity imports and property**
+- [x] **Step 1: Update MainActivity imports and property**
 
 Modify `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`.
 
@@ -454,7 +454,7 @@ Add this property after `gcMemoryChurnScenario`:
         ProcessCpuContentionScenario()
 ```
 
-- [ ] **Step 2: Wire the button and intent extra**
+- [x] **Step 2: Wire the button and intent extra**
 
 In `onCreate`, add this block after the `gcMemoryChurnButton` listener:
 
@@ -470,7 +470,7 @@ In `runScenarioFromIntent`, add this branch after `gcMemoryChurnScenario.id`:
             processCpuContentionScenario.id -> processCpuContentionScenario.run()
 ```
 
-- [ ] **Step 3: Add layout button**
+- [x] **Step 3: Add layout button**
 
 Modify `app/src/main/res/layout/activity_main.xml`. Add this button after `gcMemoryChurnButton`:
 
@@ -483,7 +483,7 @@ Modify `app/src/main/res/layout/activity_main.xml`. Add this button after `gcMem
             android:text="@string/demo_process_cpu_contention" />
 ```
 
-- [ ] **Step 4: Add Chinese string**
+- [x] **Step 4: Add Chinese string**
 
 Modify `app/src/main/res/values/strings.xml`. Add this string after `demo_gc_memory_churn`:
 
@@ -491,7 +491,7 @@ Modify `app/src/main/res/values/strings.xml`. Add this string after `demo_gc_mem
     <string name="demo_process_cpu_contention">进程内 CPU 竞争</string>
 ```
 
-- [ ] **Step 5: Run compile and unit test**
+- [x] **Step 5: Run compile and unit test**
 
 Run:
 
@@ -502,7 +502,7 @@ Run:
 
 Expected: both commands PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt app/src/main/res/layout/activity_main.xml app/src/main/res/values/strings.xml

@@ -13,6 +13,7 @@ import com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnScenario
 import com.valiantyan.vibeanrmonitoring.scenario.IoDatabaseFileBlockScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
+import com.valiantyan.vibeanrmonitoring.scenario.ProcessCpuContentionScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ServiceTimeoutScenario
 import com.valiantyan.vibeanrmonitoring.scenario.SyncBarrierLeakScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ThreadPoolExhaustionWaitScenario
@@ -65,6 +66,10 @@ class MainActivity : AppCompatActivity() {
     // GC / 内存抖动场景，按钮点击后在主线程制造大量对象分配和 GC 压力。
     private val gcMemoryChurnScenario: GcMemoryChurnScenario = GcMemoryChurnScenario()
 
+    // 进程内 CPU 竞争场景，按钮点击后启动后台 CPU 竞争线程并保留当前消息观察窗口。
+    private val processCpuContentionScenario: ProcessCpuContentionScenario =
+        ProcessCpuContentionScenario()
+
     /**
      * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
@@ -105,6 +110,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.gcMemoryChurnButton).setOnClickListener {
             gcMemoryChurnScenario.run()
         }
+        findViewById<Button>(R.id.processCpuContentionButton).setOnClickListener {
+            processCpuContentionScenario.run()
+        }
         runScenarioFromIntent(intent = intent)
     }
 
@@ -140,6 +148,7 @@ class MainActivity : AppCompatActivity() {
             ioDatabaseFileBlockScenario.id -> ioDatabaseFileBlockScenario.run()
             threadPoolExhaustionWaitScenario.id -> threadPoolExhaustionWaitScenario.run()
             gcMemoryChurnScenario.id -> gcMemoryChurnScenario.run()
+            processCpuContentionScenario.id -> processCpuContentionScenario.run()
         }
     }
 
