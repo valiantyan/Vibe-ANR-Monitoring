@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANR 监控 SDK 项目架构图</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --line: #cbd5e1;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --orange: #b45309;
+      --purple: #6d28d9;
+      --red: #b42318;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.62;
+    }
+
+    main {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #eef2f7;
+      color: #1d2939;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .summary {
+      max-width: 980px;
+      color: var(--muted);
+    }
+
+    .panel {
+      margin-top: 18px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .diagram-wrap {
+      overflow-x: auto;
+      padding-top: 8px;
+    }
+
+    svg {
+      display: block;
+      min-width: 1160px;
+      max-width: 100%;
+      height: auto;
+      font-family: inherit;
+    }
+
+    .boundary {
+      fill: #fbfdff;
+      stroke: #94a3b8;
+      stroke-width: 1.4;
+      stroke-dasharray: 8 6;
+      rx: 10;
+    }
+
+    .layer {
+      fill: #ffffff;
+      stroke: #9fb0c7;
+      stroke-width: 1.4;
+      rx: 8;
+    }
+
+    .app {
+      fill: #eef4ff;
+      stroke: #7da2f7;
+    }
+
+    .api {
+      fill: #ecfdf3;
+      stroke: #75c7a3;
+    }
+
+    .runtime {
+      fill: #fff7ed;
+      stroke: #f2b36d;
+    }
+
+    .collector {
+      fill: #f4f0ff;
+      stroke: #b69df0;
+    }
+
+    .domain {
+      fill: #fff1f1;
+      stroke: #f0a1a1;
+    }
+
+    .reporter {
+      fill: #eff8ff;
+      stroke: #7bb7e6;
+    }
+
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      fill: #111827;
+    }
+
+    .sub {
+      font-size: 12px;
+      fill: #475467;
+    }
+
+    .boundary-title {
+      font-size: 13px;
+      font-weight: 700;
+      fill: #334155;
+    }
+
+    .arrow {
+      stroke: #667085;
+      stroke-width: 1.6;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+
+    .data-arrow {
+      stroke: #1d4ed8;
+      stroke-width: 1.8;
+      fill: none;
+      marker-end: url(#dataArrow);
+    }
+
+    .legend-dot {
+      rx: 4;
+      stroke-width: 1.2;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef4ff;
+      color: #1f2a44;
+    }
+
+    ul {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+
+    .note {
+      border-left: 4px solid var(--blue);
+      padding: 10px 12px;
+      background: #eef4ff;
+      color: #1f2a44;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ANR 监控 SDK 项目架构图</h1>
+  <p class="summary">
+    本图按正式架构图方式表达系统边界、模块分层、依赖方向和报告数据流。代码探索先使用 GitNexus，
+    且 GitNexus 当前只索引 <code>app</code> 与 <code>anr-monitor-sdk</code> 的 main 代码，不包含测试代码、文档和案例目录。
+  </p>
+
+  <section class="panel">
+    <h2>GitNexus 探索前置校验</h2>
+    <p class="note">
+      <code>gitnexus status</code> 显示索引已是最新；Cypher 排除查询确认没有 <code>src/test</code>、
+      <code>src/androidTest</code>，也没有 <code>app</code>、<code>anr-monitor-sdk</code> 之外的文件进入代码地图。
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>分层架构图</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1180 760" role="img" aria-label="ANR 监控 SDK 分层架构图">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#667085"></path>
+          </marker>
+          <marker id="dataArrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#1d4ed8"></path>
+          </marker>
+        </defs>
+
+        <rect class="boundary" x="28" y="40" width="260" height="650"></rect>
+        <text class="boundary-title" x="48" y="70">宿主 Demo App 边界</text>
+
+        <rect class="boundary" x="328" y="40" width="820" height="650"></rect>
+        <text class="boundary-title" x="348" y="70">ANR Monitor SDK 边界</text>
+
+        <rect class="layer app" x="58" y="112" width="200" height="110"></rect>
+        <text class="title" x="78" y="144">应用启动接入</text>
+        <text class="sub" x="78" y="170">VibeAnrApplication</text>
+        <text class="sub" x="78" y="192">安装 SDK，配置采集能力</text>
+
+        <rect class="layer app" x="58" y="290" width="200" height="126"></rect>
+        <text class="title" x="78" y="322">Demo 场景入口</text>
+        <text class="sub" x="78" y="348">MainActivity</text>
+        <text class="sub" x="78" y="370">scenario 包</text>
+        <text class="sub" x="78" y="392">触发各类 ANR 复现</text>
+
+        <rect class="layer api" x="358" y="112" width="210" height="126"></rect>
+        <text class="title" x="380" y="144">Public API 层</text>
+        <text class="sub" x="380" y="170">AnrMonitor</text>
+        <text class="sub" x="380" y="192">AnrMonitorConfig</text>
+        <text class="sub" x="380" y="214">Listener / Uploader</text>
+
+        <rect class="layer runtime" x="628" y="112" width="210" height="126"></rect>
+        <text class="title" x="650" y="144">Runtime 编排层</text>
+        <text class="sub" x="650" y="170">AnrMonitorRuntime</text>
+        <text class="sub" x="650" y="192">AnrIncidentDeduplicator</text>
+        <text class="sub" x="650" y="214">AnrReportAssembler</text>
+
+        <rect class="layer collector" x="898" y="92" width="210" height="102"></rect>
+        <text class="title" x="920" y="124">持续采集器</text>
+        <text class="sub" x="920" y="150">Looper Timeline</text>
+        <text class="sub" x="920" y="172">Watchdog / Checktime</text>
+
+        <rect class="layer collector" x="898" y="224" width="210" height="134"></rect>
+        <text class="title" x="920" y="256">现场快照采集器</text>
+        <text class="sub" x="920" y="282">Pending Queue</text>
+        <text class="sub" x="920" y="304">Main Stack / Stack Samples</text>
+        <text class="sub" x="920" y="326">Thread CPU / Environment</text>
+
+        <rect class="layer collector" x="898" y="388" width="210" height="134"></rect>
+        <text class="title" x="920" y="420">专项增强采集器</text>
+        <text class="sub" x="920" y="446">Barrier Evidence</text>
+        <text class="sub" x="920" y="468">NativePollOnce Monitor</text>
+        <text class="sub" x="920" y="490">Binder Block Classifier</text>
+
+        <rect class="layer domain" x="358" y="430" width="210" height="126"></rect>
+        <text class="title" x="380" y="462">领域模型层</text>
+        <text class="sub" x="380" y="488">AnrSnapshot</text>
+        <text class="sub" x="380" y="510">AnrReport</text>
+        <text class="sub" x="380" y="532">Message / Barrier / Binder 模型</text>
+
+        <rect class="layer domain" x="628" y="430" width="210" height="126"></rect>
+        <text class="title" x="650" y="462">归因分析层</text>
+        <text class="sub" x="650" y="488">AttributionAnalyzer</text>
+        <text class="sub" x="650" y="510">Barrier / Storm / Binder</text>
+        <text class="sub" x="650" y="532">当前消息 / 历史消息</text>
+
+        <rect class="layer reporter" x="628" y="600" width="210" height="74"></rect>
+        <text class="title" x="650" y="630">报告出口层</text>
+        <text class="sub" x="650" y="654">Encoder / LocalWriter / RetryQueue</text>
+
+        <rect class="layer reporter" x="898" y="600" width="210" height="74"></rect>
+        <text class="title" x="920" y="630">本地文件</text>
+        <text class="sub" x="920" y="654">files/anr-monitor-reports/*.json</text>
+
+        <path class="arrow" d="M258 166 H358"></path>
+        <path class="arrow" d="M258 354 H358"></path>
+        <path class="arrow" d="M568 175 H628"></path>
+        <path class="arrow" d="M838 150 H898"></path>
+        <path class="arrow" d="M838 198 C870 198 870 270 898 270"></path>
+        <path class="arrow" d="M838 216 C880 240 868 430 898 452"></path>
+
+        <path class="data-arrow" d="M1003 194 V224"></path>
+        <path class="data-arrow" d="M1003 358 V388"></path>
+        <path class="data-arrow" d="M898 292 H804 C750 292 750 430 733 430"></path>
+        <path class="data-arrow" d="M898 456 H838"></path>
+        <path class="data-arrow" d="M628 493 H568"></path>
+        <path class="data-arrow" d="M568 493 H628"></path>
+        <path class="data-arrow" d="M733 556 V600"></path>
+        <path class="data-arrow" d="M838 637 H898"></path>
+
+        <rect class="legend-dot app" x="58" y="708" width="16" height="16"></rect>
+        <text class="sub" x="82" y="721">宿主接入</text>
+        <rect class="legend-dot api" x="158" y="708" width="16" height="16"></rect>
+        <text class="sub" x="182" y="721">公开 API</text>
+        <rect class="legend-dot runtime" x="258" y="708" width="16" height="16"></rect>
+        <text class="sub" x="282" y="721">运行时</text>
+        <rect class="legend-dot collector" x="358" y="708" width="16" height="16"></rect>
+        <text class="sub" x="382" y="721">采集器</text>
+        <rect class="legend-dot domain" x="458" y="708" width="16" height="16"></rect>
+        <text class="sub" x="482" y="721">领域与归因</text>
+        <rect class="legend-dot reporter" x="586" y="708" width="16" height="16"></rect>
+        <text class="sub" x="610" y="721">报告出口</text>
+      </svg>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>架构说明</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>架构层</th>
+          <th>边界职责</th>
+          <th>依赖方向</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>宿主 Demo App</td>
+          <td>负责安装 SDK、提供配置、触发可验证 ANR 场景。</td>
+          <td>只依赖 SDK Public API，不直接依赖 SDK 内部实现。</td>
+        </tr>
+        <tr>
+          <td>Public API 层</td>
+          <td>暴露安装、卸载、配置、监听器、上传器。</td>
+          <td>向内创建 Runtime，不暴露 collector 和 reporter 细节。</td>
+        </tr>
+        <tr>
+          <td>Runtime 编排层</td>
+          <td>统一启动采集器，接收 Watchdog 事件，组装快照，触发归因和写入。</td>
+          <td>向下依赖 collector、domain、reporter，是 SDK 内部主控层。</td>
+        </tr>
+        <tr>
+          <td>Collector 层</td>
+          <td>持续采集主 Looper 时间线；疑似 ANR 时采集 Pending、栈、CPU、环境、Barrier、Binder 证据。</td>
+          <td>输出领域模型，不直接决定根因。</td>
+        </tr>
+        <tr>
+          <td>Domain / Analyzer 层</td>
+          <td>定义稳定报告模型，按证据优先级输出主因、置信度和修复建议。</td>
+          <td>读取 <code>AnrSnapshot</code>，输出 <code>AttributionResult</code>。</td>
+        </tr>
+        <tr>
+          <td>Reporter 层</td>
+          <td>把报告编码成 JSON，落盘到私有目录，并支持保留策略和上传重试。</td>
+          <td>只消费 <code>AnrReport</code>，不反向影响采集和归因。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>架构评审关注点</h2>
+    <ul>
+      <li>依赖方向是单向的：App 到 Public API，Public API 到 Runtime，Runtime 到 Collector / Domain / Reporter。</li>
+      <li>采集器只负责生产证据，归因逻辑集中在 <code>AttributionAnalyzer</code>，避免根因规则散落在采集代码里。</li>
+      <li><code>nativePollOnce</code> 类问题不会只依赖主线程栈，而是通过 Pending 队列、Barrier token 和 poll 记录共同确认。</li>
+      <li>报告出口层不参与根因判断，保证写入失败、上传失败不会改变 ANR 现场事实。</li>
+    </ul>
+  </section>
+
+  <p class="small">生成依据：GitNexus 代码地图、Cypher 查询、关键实现文件阅读。更新时间：2026-06-10。</p>
+</main>
+</body>
+</html>

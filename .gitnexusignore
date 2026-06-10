@@ -1,0 +1,13 @@
+*
+
+!app/
+!app/build.gradle.kts
+!app/src/
+!app/src/main/
+!app/src/main/**
+
+!anr-monitor-sdk/
+!anr-monitor-sdk/build.gradle.kts
+!anr-monitor-sdk/src/
+!anr-monitor-sdk/src/main/
+!anr-monitor-sdk/src/main/**

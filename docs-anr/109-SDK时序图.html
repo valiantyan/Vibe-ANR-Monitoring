@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANR 监控 SDK 时序图</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --line: #cbd5e1;
+      --blue: #1d4ed8;
+      --green: #047857;
+      --orange: #b45309;
+      --red: #b42318;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.62;
+    }
+
+    main {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #eef2f7;
+      color: #1d2939;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .summary {
+      max-width: 980px;
+      color: var(--muted);
+    }
+
+    .panel {
+      margin-top: 18px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .diagram-wrap {
+      overflow-x: auto;
+      padding-top: 8px;
+    }
+
+    svg {
+      display: block;
+      min-width: 1180px;
+      max-width: 100%;
+      height: auto;
+      font-family: inherit;
+    }
+
+    .participant {
+      fill: #eef4ff;
+      stroke: #7da2f7;
+      stroke-width: 1.3;
+      rx: 8;
+    }
+
+    .participant-alt {
+      fill: #ecfdf3;
+      stroke: #75c7a3;
+      stroke-width: 1.3;
+      rx: 8;
+    }
+
+    .lifeline {
+      stroke: #94a3b8;
+      stroke-width: 1.2;
+      stroke-dasharray: 6 6;
+    }
+
+    .activation {
+      fill: #ffffff;
+      stroke: #64748b;
+      stroke-width: 1.1;
+      rx: 3;
+    }
+
+    .message {
+      stroke: #334155;
+      stroke-width: 1.4;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+
+    .async-message {
+      stroke: #1d4ed8;
+      stroke-width: 1.4;
+      fill: none;
+      marker-end: url(#openArrow);
+    }
+
+    .return {
+      stroke: #64748b;
+      stroke-width: 1.2;
+      stroke-dasharray: 6 5;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+
+    .frame {
+      fill: #ffffff;
+      stroke: #cbd5e1;
+      stroke-width: 1.2;
+      rx: 8;
+    }
+
+    .frame-title {
+      fill: #eef2f7;
+      stroke: #cbd5e1;
+      stroke-width: 1.2;
+      rx: 8;
+    }
+
+    .label {
+      font-size: 12px;
+      fill: #1f2937;
+    }
+
+    .title {
+      font-size: 13px;
+      font-weight: 700;
+      fill: #111827;
+    }
+
+    .note {
+      font-size: 12px;
+      fill: #475467;
+    }
+
+    .phase {
+      font-size: 13px;
+      font-weight: 700;
+      fill: #334155;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef4ff;
+      color: #1f2a44;
+    }
+
+    ul {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+
+    .callout {
+      border-left: 4px solid var(--orange);
+      padding: 10px 12px;
+      background: #fff7ed;
+      color: #3f2a12;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ANR 监控 SDK 时序图</h1>
+  <p class="summary">
+    本图按正式时序图方式表达参与者、调用顺序、异步触发、返回结果和关键分支。
+    代码探索基于 GitNexus，范围限定为 <code>app</code> 与 <code>anr-monitor-sdk</code> 的 main 代码。
+  </p>
+
+  <section class="panel">
+    <h2>安装、采集、疑似 ANR、报告写入时序</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1200 980" role="img" aria-label="ANR 监控 SDK 主时序图">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#334155"></path>
+          </marker>
+          <marker id="openArrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M1,1 L9,4 L1,7" fill="none" stroke="#1d4ed8" stroke-width="1.6"></path>
+          </marker>
+        </defs>
+
+        <rect class="participant" x="34" y="40" width="120" height="46"></rect>
+        <text class="title" x="58" y="68">Application</text>
+
+        <rect class="participant" x="188" y="40" width="120" height="46"></rect>
+        <text class="title" x="214" y="68">AnrMonitor</text>
+
+        <rect class="participant-alt" x="342" y="40" width="140" height="46"></rect>
+        <text class="title" x="370" y="68">Runtime</text>
+
+        <rect class="participant" x="516" y="40" width="138" height="46"></rect>
+        <text class="title" x="542" y="68">Looper Printer</text>
+
+        <rect class="participant" x="688" y="40" width="120" height="46"></rect>
+        <text class="title" x="716" y="68">Watchdog</text>
+
+        <rect class="participant" x="842" y="40" width="130" height="46"></rect>
+        <text class="title" x="872" y="68">Collectors</text>
+
+        <rect class="participant" x="1006" y="40" width="120" height="46"></rect>
+        <text class="title" x="1030" y="68">Analyzer</text>
+
+        <rect class="participant-alt" x="1140" y="40" width="40" height="46"></rect>
+        <text class="title" x="1148" y="68">Writer</text>
+
+        <line class="lifeline" x1="94" y1="86" x2="94" y2="936"></line>
+        <line class="lifeline" x1="248" y1="86" x2="248" y2="936"></line>
+        <line class="lifeline" x1="412" y1="86" x2="412" y2="936"></line>
+        <line class="lifeline" x1="585" y1="86" x2="585" y2="936"></line>
+        <line class="lifeline" x1="748" y1="86" x2="748" y2="936"></line>
+        <line class="lifeline" x1="907" y1="86" x2="907" y2="936"></line>
+        <line class="lifeline" x1="1066" y1="86" x2="1066" y2="936"></line>
+        <line class="lifeline" x1="1160" y1="86" x2="1160" y2="936"></line>
+
+        <rect class="frame-title" x="28" y="116" width="1146" height="28"></rect>
+        <text class="phase" x="46" y="136">阶段一：安装 SDK</text>
+        <path class="message" d="M94 172 H248"></path>
+        <text class="label" x="112" y="164">install(context, config, listener, uploader)</text>
+        <rect class="activation" x="244" y="160" width="8" height="76"></rect>
+        <path class="message" d="M252 206 H412"></path>
+        <text class="label" x="270" y="198">new AnrMonitorRuntime</text>
+        <rect class="activation" x="408" y="196" width="8" height="78"></rect>
+        <path class="return" d="M412 254 H248"></path>
+        <text class="label" x="296" y="246">session</text>
+
+        <rect class="frame-title" x="28" y="298" width="1146" height="28"></rect>
+        <text class="phase" x="46" y="318">阶段二：启动持续采集</text>
+        <path class="message" d="M248 354 H412"></path>
+        <text class="label" x="270" y="346">runtime.start()</text>
+        <rect class="activation" x="408" y="342" width="8" height="160"></rect>
+        <path class="message" d="M416 390 H585"></path>
+        <text class="label" x="438" y="382">install(printer = timelineCollector)</text>
+        <rect class="activation" x="581" y="380" width="8" height="88"></rect>
+        <path class="async-message" d="M416 438 H748"></path>
+        <text class="label" x="438" y="430">watchdog.start()</text>
+        <rect class="activation" x="744" y="428" width="8" height="96"></rect>
+        <path class="return" d="M585 468 H412"></path>
+        <text class="label" x="454" y="460">InstallHandle</text>
+
+        <rect class="frame-title" x="28" y="548" width="1146" height="28"></rect>
+        <text class="phase" x="46" y="568">阶段三：正常运行中的消息时间线</text>
+        <path class="async-message" d="M585 606 H907"></path>
+        <text class="label" x="606" y="598">println(&gt;&gt;&gt; dispatch start)</text>
+        <rect class="activation" x="903" y="594" width="8" height="108"></rect>
+        <text class="note" x="914" y="620">记录 currentMessage 起点</text>
+        <text class="note" x="914" y="642">脱敏 target / callback</text>
+        <path class="async-message" d="M585 680 H907"></path>
+        <text class="label" x="606" y="672">println(&lt;&lt;&lt; dispatch end)</text>
+        <text class="note" x="914" y="696">归档到 history ring buffer</text>
+
+        <rect class="frame-title" x="28" y="728" width="1146" height="28"></rect>
+        <text class="phase" x="46" y="748">阶段四：Watchdog 发现疑似 ANR 并写入报告</text>
+        <path class="async-message" d="M748 786 H94"></path>
+        <text class="label" x="518" y="778">post heartbeat 到主线程</text>
+        <text class="note" x="106" y="806">主线程阻塞，心跳未执行</text>
+        <path class="async-message" d="M748 838 H412"></path>
+        <text class="label" x="506" y="830">onSuspectAnr()</text>
+        <rect class="activation" x="408" y="826" width="8" height="108"></rect>
+        <path class="message" d="M416 872 H907"></path>
+        <text class="label" x="438" y="864">buildSnapshot()</text>
+        <path class="message" d="M416 902 H1066"></path>
+        <text class="label" x="438" y="894">AttributionAnalyzer.analyze(snapshot)</text>
+        <path class="return" d="M1066 924 H412"></path>
+        <text class="label" x="690" y="916">AttributionResult</text>
+        <path class="message" d="M416 952 H1160"></path>
+        <text class="label" x="438" y="944">LocalWriter.write(encoder.encode(report))</text>
+      </svg>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>nativePollOnce / Sync Barrier 根因定位时序</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 1200 620" role="img" aria-label="nativePollOnce 和 Sync Barrier 根因定位时序图">
+        <defs>
+          <marker id="arrow2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M0,0 L10,4 L0,8 Z" fill="#334155"></path>
+          </marker>
+          <marker id="openArrow2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <path d="M1,1 L9,4 L1,7" fill="none" stroke="#1d4ed8" stroke-width="1.6"></path>
+          </marker>
+        </defs>
+
+        <rect class="participant" x="40" y="40" width="150" height="46"></rect>
+        <text class="title" x="62" y="68">Main Thread</text>
+        <rect class="participant" x="240" y="40" width="150" height="46"></rect>
+        <text class="title" x="260" y="68">MessageQueue</text>
+        <rect class="participant-alt" x="440" y="40" width="150" height="46"></rect>
+        <text class="title" x="462" y="68">Watchdog</text>
+        <rect class="participant" x="640" y="40" width="150" height="46"></rect>
+        <text class="title" x="658" y="68">Pending Collector</text>
+        <rect class="participant" x="840" y="40" width="150" height="46"></rect>
+        <text class="title" x="858" y="68">Barrier Collector</text>
+        <rect class="participant-alt" x="1040" y="40" width="120" height="46"></rect>
+        <text class="title" x="1062" y="68">Analyzer</text>
+
+        <line class="lifeline" x1="115" y1="86" x2="115" y2="570"></line>
+        <line class="lifeline" x1="315" y1="86" x2="315" y2="570"></line>
+        <line class="lifeline" x1="515" y1="86" x2="515" y2="570"></line>
+        <line class="lifeline" x1="715" y1="86" x2="715" y2="570"></line>
+        <line class="lifeline" x1="915" y1="86" x2="915" y2="570"></line>
+        <line class="lifeline" x1="1100" y1="86" x2="1100" y2="570"></line>
+
+        <path class="message" marker-end="url(#arrow2)" d="M115 136 H315"></path>
+        <text class="label" x="136" y="128">next()</text>
+        <path class="message" marker-end="url(#arrow2)" d="M315 176 H115"></path>
+        <text class="label" x="148" y="168">nativePollOnce(timeout=-1)</text>
+        <text class="note" x="128" y="206">主线程表象：停在 MessageQueue.nativePollOnce</text>
+
+        <path class="async-message" marker-end="url(#openArrow2)" d="M515 260 H115"></path>
+        <text class="label" x="244" y="252">心跳未被主线程消费</text>
+        <path class="async-message" marker-end="url(#openArrow2)" d="M515 304 H715"></path>
+        <text class="label" x="536" y="296">capture Pending Queue</text>
+        <rect class="activation" x="711" y="292" width="8" height="82"></rect>
+        <text class="note" x="728" y="324">读取 mMessages</text>
+        <text class="note" x="728" y="346">队头 isBarrierLike=true</text>
+        <text class="note" x="728" y="368">同步消息 blockedMs 超阈值</text>
+
+        <path class="async-message" marker-end="url(#openArrow2)" d="M515 414 H915"></path>
+        <text class="label" x="536" y="406">collect Barrier Evidence</text>
+        <rect class="activation" x="911" y="402" width="8" height="82"></rect>
+        <text class="note" x="928" y="434">stuckTokens</text>
+        <text class="note" x="928" y="456">nativePollOnceRecords</text>
+        <text class="note" x="928" y="478">alignedWithPendingBarrier</text>
+
+        <path class="message" marker-end="url(#arrow2)" d="M515 524 H1100"></path>
+        <text class="label" x="536" y="516">analyze(snapshot)</text>
+        <rect class="activation" x="1096" y="512" width="8" height="52"></rect>
+        <text class="note" x="842" y="548">主因：SYNC_BARRIER_STUCK</text>
+      </svg>
+    </div>
+    <p class="callout">
+      这张时序图表达的是“nativePollOnce 是表象，Sync Barrier 卡住同步消息才是可定位根因”的证据组合：
+      主线程栈、Pending 队头、Barrier token 或推断 poll 记录必须互相印证。
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>时序节点和 JSON 节点对应关系</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>时序动作</th>
+          <th>实现入口</th>
+          <th>报告节点</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Looper Printer 记录消息开始和结束</td>
+          <td><code>MainLooperTimelineCollector.println</code></td>
+          <td><code>mainThread.current</code>、<code>mainThread.history</code>、<code>mainThread.stackSamples</code></td>
+        </tr>
+        <tr>
+          <td>Watchdog 心跳超时</td>
+          <td><code>AnrWatchdog.loop</code>、<code>AnrMonitorRuntime.captureSuspectAnr</code></td>
+          <td><code>event.eventType</code>、<code>checktime</code></td>
+        </tr>
+        <tr>
+          <td>采集现场快照</td>
+          <td><code>AnrMonitorRuntime.buildSnapshot</code></td>
+          <td><code>systemAnr</code>、<code>mainThread</code>、<code>pendingQueue</code>、<code>threadCpu</code>、<code>environmentSnapshot</code></td>
+        </tr>
+        <tr>
+          <td>采集 nativePollOnce / Barrier 证据</td>
+          <td><code>BarrierEvidenceCollector.collect</code></td>
+          <td><code>barrierEvidence.stuckTokens</code>、<code>barrierEvidence.nativePollOnceRecords</code></td>
+        </tr>
+        <tr>
+          <td>归因分析</td>
+          <td><code>AttributionAnalyzer.analyze</code></td>
+          <td><code>attribution.primary</code>、<code>confidence</code>、<code>evidence</code>、<code>suggestions</code></td>
+        </tr>
+        <tr>
+          <td>报告写入</td>
+          <td><code>LocalAnrReportWriter.write</code></td>
+          <td><code>files/anr-monitor-reports/{eventId}.json</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>时序图评审关注点</h2>
+    <ul>
+      <li>持续采集和疑似 ANR 现场采集是两条不同的时序：前者实时记录，后者由 Watchdog 超时触发。</li>
+      <li>Watchdog 是异步触发者，它不在主线程执行重采集逻辑，避免进一步阻塞主线程。</li>
+      <li>归因发生在快照构造之后，说明报告中的 <code>attribution</code> 是基于同一时刻的证据集合计算出来的。</li>
+      <li>本地写入发生在归因之后，报告出口不反向改变主因判断。</li>
+    </ul>
+  </section>
+
+  <p class="small">生成依据：GitNexus 代码地图、Cypher 查询、关键实现文件阅读。更新时间：2026-06-10。</p>
+</main>
+</body>
+</html>

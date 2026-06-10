@@ -1,0 +1,5 @@
+{
+  "defaultBranch": "main",
+  "embeddings": false,
+  "workerTimeout": 60
+}
