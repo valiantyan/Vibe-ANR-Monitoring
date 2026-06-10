@@ -121,7 +121,7 @@ class App : Application() {
 安装语义：
 
 - `AnrMonitor.install()` 在当前进程内幂等，重复安装会返回已有会话。
-- `AnrMonitor.uninstall()` 会停止 Watchdog、恢复 Looper Printer，并允许后续重新安装。
+- `AnrMonitor.uninstall()` 会停止 Watchdog；只有当前 Looper Printer 槽位仍由 SDK 持有时才恢复安装前的 Printer，并允许后续重新安装。
 - `AnrMonitorSession.stop()` 适合调试、自动化测试或动态关闭场景。
 - SDK 内部异常会通过 `AnrEventListener.onMonitorError()` 回调，不应影响宿主主流程。
 
@@ -457,6 +457,19 @@ anr-report.json
 | `privacyMode` | 当前隐私模式 | 解释栈、类名、字段是否被脱敏 |
 | `missingEvidenceCount` | 缺失证据数量 | 数量越多，归因越需要保守 |
 | `selfMetrics` | SDK 自身计数指标 | 观察本地写入、上传、构建等运行状态 |
+
+### Looper Printer 竞争诊断
+
+Android `Looper.setMessageLogging(Printer)` 是单槽位入口，不是多监听器注册。SDK 安装时会读取当前 `Printer` 并建立链式转发，避免覆盖宿主或已安装三方 SDK 的消息日志。
+
+如果 SDK 安装后又有三方 SDK 调用 `setMessageLogging()`，当前 SDK 的 Looper 时间线采集可能停止更新。SDK 不会默认抢回该槽位，避免多个 SDK 互相覆盖；它会在疑似 ANR 报告和停止时检查安装句柄状态，并在 `sdkDiagnostics.selfMetrics` 中记录：
+
+| 指标 | 含义 | 建议排查 |
+| --- | --- | --- |
+| `looper_printer_replaced` | SDK 安装的链式 `Printer` 已被后续 `Printer` 替换 | 检查接入顺序；要求后装 SDK 读取旧 `Printer` 并转发；或在灰度版本中评估受控自恢复 |
+| `looper_printer_status_unknown` | SDK 无法读取当前 Looper `Printer` 状态，通常来自反射读取失败 | 检查目标 Android 版本和厂商限制；该状态不会被误判为三方覆盖 |
+
+卸载时 SDK 只会在当前槽位仍是自身安装的链式 `Printer` 时恢复旧值。如果槽位已经被后装 `Printer` 接管，或当前槽位状态无法读取，SDK 会保留当前槽位不变，避免覆盖第三方后续安装或基于未知状态做错误恢复。
 
 读报告的推荐顺序：
 
