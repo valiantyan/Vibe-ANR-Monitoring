@@ -24,7 +24,7 @@
 | 9 | Binder 跨进程阻塞 | 点击“Binder 跨进程阻塞”后主线程同步调用远端 `:remote` AIDL，远端 Binder 线程阻塞 12 秒 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected=true`、`binderBlock.mainThreadInBinder=true`、`mainThread.stackFrames` 包含 `BinderProxy.transact` | 已验收 |
 | 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已验收 |
 | 11 | 线程池耗尽后主线程等待 | 点击“线程池耗尽 + 主线程等待”后占满固定线程池 worker，主线程同步等待排队 `Future` 结果 | `CURRENT_MESSAGE_SLOW` + 等待栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `ThreadPoolExhaustionWaitScenario.run` / `ThreadPoolExhaustionWorkload.exhaustPoolAndWait` / `FutureTask.get` | 已验收 |
-| 12 | GC / 内存抖动 | 大量分配对象制造 GC 压力 | 环境或资源辅因 | `environmentSnapshot`、历史消息抖动 | 待实现 |
+| 12 | GC / 内存抖动 | 点击“GC / 内存抖动”后主线程分批分配对象并周期性请求 GC | `CURRENT_MESSAGE_SLOW` + GC/内存压力辅因 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `GcMemoryChurnScenario.run` / `GcMemoryChurnWorkload.churnMemoryOnMainThread`、`environmentSnapshot.memory`、同时间窗 logcat 系统 GC 日志 | 已实现，待手动验收 |
 | 13 | 进程内 CPU 竞争 | 后台线程打满 CPU | CPU 竞争辅因 | `threadCpu.topThreads`、`checktime.maxDelayMs` | 待实现 |
 
 ## 当前批次：输入事件当前慢消息
@@ -659,6 +659,49 @@ binderBlock.suspected = false
 
 验收结论：线程池耗尽 + 主线程等待场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，当前消息耗时超过 Demo 阈值，主线程栈能定位到 `FutureTask.get` 和 Demo 线程池等待入口，Barrier 和 Binder 证据均不是本次主因。因此根因可以明确写为“固定线程池 worker 被长任务占满后，主线程同步等待同一线程池中的排队 `Future` 结果，导致当前 Activity 启动消息无法及时返回”。
 
+## 第十二批次：GC / 内存抖动
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“GC / 内存抖动”。
+4. 保存触发前后 10 秒 logcat。
+5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `attribution.primary`，预期通常为 `CURRENT_MESSAGE_SLOW`。再看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。接着看 `mainThread.stackFrames`，应能看到 `GcMemoryChurnScenario.run` 和 `GcMemoryChurnWorkload.churnMemoryOnMainThread`。最后看 `environmentSnapshot.memory` 与同一时间窗 logcat 系统 GC 日志，用来判断是否存在明显内存抖动辅因。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `binderBlock.suspected` 不应该为 true。
+- `threadCpu.topThreads` 可以有主线程 CPU 消耗，但不能把本场景误判成纯 CPU 忙等。
+- 没有系统 GC 日志时，只能写“主线程大量分配导致当前消息慢”，不能强写“GC 已确认导致 ANR”。
+
+### 修复方向
+
+- 把大量对象分配、解析、序列化、图片处理移出主线程。
+- 分批处理大数据并让出主线程。
+- 减少短生命周期对象和大对象瞬时峰值。
+- 用 Memory Profiler、Perfetto、logcat 系统 GC 日志确认分配热点。
+
+### 验收记录
+
+- [ ] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnScenarioTest` 通过。
+- [ ] `./gradlew :app:assembleDebug` 通过。
+- [ ] 真机或模拟器点击“GC / 内存抖动”后生成 JSON。
+- [ ] JSON 中 `attribution.primary=CURRENT_MESSAGE_SLOW`。
+- [ ] JSON 中 `mainThread.current.wallMs >= 3000`。
+- [ ] JSON 中 `mainThread.stackFrames` 包含 `GcMemoryChurnScenario.run`。
+- [ ] JSON 中 `mainThread.stackFrames` 包含 `GcMemoryChurnWorkload.churnMemoryOnMainThread`。
+- [ ] JSON 中 `environmentSnapshot.memory` 可读，或记录不可用原因。
+- [ ] 同一时间窗 logcat 中存在系统 GC 相关日志。
+- [ ] Barrier 和 Binder 证据均不是本次主因。
+
+验收结论：待手动验收后填写。
+
 ## 后续批次顺序
 
-后续按锁等待、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
+后续按锁等待、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
