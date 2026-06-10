@@ -933,6 +933,55 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 - 对数据库查询增加索引、分页、取消能力和慢查询日志，避免一次 Provider 查询扫描大量数据。
 - 修复后重新点击“ContentProvider 阻塞”按钮验证：`mainThread.stackFrames` 不应再出现 Provider 阻塞栈，`mainThread.current.wallMs` 应低于疑似 ANR 阈值。
 
+### Demo 场景：IO / 数据库 / 文件阻塞
+
+这个场景用于验证“主线程同步文件 IO / SQLite 数据库事务”导致的当前消息慢。按钮点击后，Demo 会在主线程写入应用私有目录文件、执行 `FileDescriptor.sync()`，并执行一段 SQLite 事务插入。
+
+#### 操作步骤
+
+1. 安装 debug 包并打开 Demo App。
+2. 点击“IO / 数据库 / 文件阻塞”。
+3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report written`。
+4. 拉取 `files/anr-monitor-reports` 目录下最新 JSON。
+5. 按下面字段顺序分析。
+
+#### JSON 判断口径
+
+| 字段 | 期望 | 含义 |
+| --- | --- | --- |
+| `event.eventType` | `SUSPECT_ANR` 或系统确认 ANR | SDK 已捕获一次 ANR 现场 |
+| `attribution.primary` | `CURRENT_MESSAGE_SLOW` | 主因是当前主线程消息执行过慢 |
+| `mainThread.current.wallMs` | 大于 `3000` | 当前消息超过 Demo 疑似 ANR 阈值 |
+| `mainThread.stackFrames` | 包含 `IoDatabaseFileBlockScenario.run` | 能定位到 Demo 场景入口 |
+| `mainThread.stackFrames` | 包含 `FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload` | 能定位到同步 IO/DB 工作负载 |
+| `mainThread.stackFrames` | 可能包含 `FileOutputStream.write`、`FileDescriptor.sync`、`SQLiteDatabase`、`SQLiteConnection` | 说明主线程正在执行文件或数据库相关操作 |
+| `barrierEvidence.stuckTokens` | 空数组或不是主证据 | 本次不是 Sync Barrier 泄漏 |
+| `binderBlock.suspected` | `false` 或不是主证据 | 本次不是 Binder 跨进程阻塞 |
+
+#### 根因写法
+
+可以写成：
+
+```text
+本次 ANR 是主线程同步 IO/数据库阻塞。证据是 attribution.primary=CURRENT_MESSAGE_SLOW，当前消息耗时超过阈值，主线程栈能回溯到 IoDatabaseFileBlockScenario.run 和 FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload，并出现文件写入或 SQLite 调用帧。Barrier 和 Binder 证据不是本次主因。
+```
+
+不要写成：
+
+```text
+系统 nativePollOnce 导致 ANR。
+```
+
+如果系统 traces 中看到 `nativePollOnce`，要继续回到 SDK JSON 看当前消息、历史消息、Pending 队列和主线程栈。对这个场景来说，`nativePollOnce` 只是系统等待消息或等待事件的表象，不是根因。
+
+#### 修复建议
+
+- 不在 `onClick`、`onCreate`、`onResume`、`BroadcastReceiver.onReceive`、`Service.onStartCommand` 等主线程回调中执行同步文件读写或大事务。
+- 文件写入放到后台线程，必要时拆成小块并提供取消能力。
+- 数据库写入使用后台线程、事务批处理、索引优化和分页查询。
+- 对用户可感知操作增加超时、进度状态和失败兜底，不让主线程等待 IO 完成。
+- 对线上业务增加慢 IO、慢 SQL 和主线程磁盘访问日志，和 SDK JSON 的栈证据交叉定位。
+
 ### Binder / 跨进程阻塞场景
 
 这个场景用于验证：主线程发起同步跨进程调用后，如果远端进程迟迟不返回，SDK 是否能把问题识别为 Binder / 跨进程阻塞疑似，而不是只看到一个普通当前消息慢。

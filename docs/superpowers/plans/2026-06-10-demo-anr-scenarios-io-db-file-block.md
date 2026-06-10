@@ -465,7 +465,7 @@ git commit -m "接入 IO 数据库文件阻塞按钮"
 - Modify: `docs-anr/103-ANR监控SDK使用说明.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Add README covered scenario row**
+- [x] **Step 1: Add README covered scenario row**
 
 Modify `README.md` in “Demo 已覆盖场景” by adding this row after `ContentProvider 阻塞`:
 
@@ -485,7 +485,7 @@ to:
 后续场景计划包括主线程锁等待、线程池耗尽等待、GC/内存抖动、进程内 CPU 竞争等。
 ```
 
-- [ ] **Step 2: Add usage-guide scenario section**
+- [x] **Step 2: Add usage-guide scenario section**
 
 Modify `docs-anr/103-ANR监控SDK使用说明.md` by adding this section after the existing ContentProvider 场景说明 section:
 
@@ -540,7 +540,7 @@ Modify `docs-anr/103-ANR监控SDK使用说明.md` by adding this section after t
 - 对线上业务增加慢 IO、慢 SQL 和主线程磁盘访问日志，和 SDK JSON 的栈证据交叉定位。
 ```
 
-- [ ] **Step 3: Check markdown formatting**
+- [x] **Step 3: Check markdown formatting**
 
 Run:
 
@@ -550,7 +550,7 @@ git diff --check -- docs-anr/103-ANR监控SDK使用说明.md README.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs-anr/103-ANR监控SDK使用说明.md README.md
