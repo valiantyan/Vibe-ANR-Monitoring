@@ -7,6 +7,7 @@ import com.valiantyan.vibeanrmonitoring.scenario.BinderCrossProcessBlockScenario
 import com.valiantyan.vibeanrmonitoring.scenario.BroadcastTimeoutScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ContentProviderBlockScenario
 import com.valiantyan.vibeanrmonitoring.scenario.CurrentSlowInputScenario
+import com.valiantyan.vibeanrmonitoring.scenario.IoDatabaseFileBlockScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ServiceTimeoutScenario
@@ -48,6 +49,11 @@ class MainActivity : AppCompatActivity() {
         ContentProviderBlockScenario(context = this)
     }
 
+    // IO / 数据库 / 文件阻塞场景，按钮点击后在主线程执行同步文件和 SQLite 操作。
+    private val ioDatabaseFileBlockScenario: IoDatabaseFileBlockScenario by lazy {
+        IoDatabaseFileBlockScenario(context = this)
+    }
+
     /**
      * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
@@ -78,6 +84,9 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.contentProviderBlockButton).setOnClickListener {
             contentProviderBlockScenario.run()
+        }
+        findViewById<Button>(R.id.ioDatabaseFileBlockButton).setOnClickListener {
+            ioDatabaseFileBlockScenario.run()
         }
     }
 

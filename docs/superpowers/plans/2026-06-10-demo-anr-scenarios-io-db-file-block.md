@@ -335,7 +335,7 @@ git commit -m "新增 IO 数据库文件阻塞场景类"
 - Modify: `app/src/main/res/layout/activity_main.xml`
 - Modify: `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`
 
-- [ ] **Step 1: Add button string**
+- [x] **Step 1: Add button string**
 
 Modify `app/src/main/res/values/strings.xml` by adding this string after `demo_content_provider_block`:
 
@@ -352,7 +352,7 @@ The end of the file should look like this:
 </resources>
 ```
 
-- [ ] **Step 2: Add button to layout**
+- [x] **Step 2: Add button to layout**
 
 Modify `app/src/main/res/layout/activity_main.xml` by adding this button after `contentProviderBlockButton`:
 
@@ -384,7 +384,7 @@ The end of the `LinearLayout` should look like this:
     </LinearLayout>
 ```
 
-- [ ] **Step 3: Wire MainActivity**
+- [x] **Step 3: Wire MainActivity**
 
 Modify `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt`.
 
@@ -434,7 +434,7 @@ The relevant section should look like this:
         }
 ```
 
-- [ ] **Step 4: Run tests and build**
+- [x] **Step 4: Run tests and build**
 
 Run:
 
@@ -452,7 +452,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/src/main/res/values/strings.xml app/src/main/res/layout/activity_main.xml app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt

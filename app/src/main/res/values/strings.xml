@@ -11,4 +11,5 @@
     <string name="demo_broadcast_timeout">BroadcastReceiver 超时</string>
     <string name="demo_service_timeout">Service 超时</string>
     <string name="demo_content_provider_block">ContentProvider 阻塞</string>
+    <string name="demo_io_database_file_block">IO / 数据库 / 文件阻塞</string>
 </resources>
