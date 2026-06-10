@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>704e0927 ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.3; }
+    h1 { font-size: 28px; }
+    h2 { margin-top: 28px; font-size: 22px; border-left: 4px solid var(--primary); padding-left: 10px; }
+    h3 { margin-top: 22px; font-size: 18px; }
+    p { margin: 8px 0; }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #eef3f9; color: #24334d; }
+    tr:last-child td { border-bottom: 0; }
+    ul { padding-left: 22px; }
+
+    .subtitle { color: #d6e4ff; max-width: 980px; margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06); }
+    .result { border-left: 5px solid var(--danger); }
+    .evidence { border-left: 5px solid var(--primary); }
+    .exclude { border-left: 5px solid var(--ok); }
+    .warn { border-left: 5px solid var(--warn); }
+    .badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; margin-right: 6px; }
+    .badge-danger { background: #fee4e2; color: var(--danger); }
+    .badge-warn { background: #fff4d6; color: var(--warn); }
+    .badge-ok { background: #dcfae6; color: var(--ok); }
+    .step { display: flex; gap: 12px; margin: 14px 0; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    .step-number { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .quote { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：GC / 内存抖动</h1>
+    <p class="subtitle">分析对象：<code>704e0927-7eba-4287-8e97-228935811aa6.json</code>。本次最可信的根因是：按钮点击回调在主线程执行大量对象分配和保留队列维护，触发明显 GC 压力，导致当前点击消息超过 3 秒没有结束，后续 UI、手势、动画和 Watchdog 消息持续排队。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>结论</h2>
+        <p><span class="badge badge-danger">根因</span>主线程执行 GC / 内存抖动场景，当前点击消息被对象分配与保留队列处理拖慢。</p>
+        <p>代码入口是 <code>GcMemoryChurnScenario.run()</code>，主要耗时点在 <code>GcMemoryChurnWorkload.churnMemoryOnMainThread()</code>。</p>
+      </div>
+      <div class="card evidence">
+        <h2>关键证据</h2>
+        <p><code>attribution.primary = CURRENT_MESSAGE_SLOW</code></p>
+        <p><code>mainThread.current.wallMs = 3497ms</code></p>
+        <p><code>mainThread.current.cpuMs = 836ms</code></p>
+        <p><code>threadCpu.topThreads[0] = HeapTaskDaemon / 3250ms</code></p>
+      </div>
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p><code>barrierEvidence.stuckTokens = []</code>，不是 Sync Barrier 泄漏主因。</p>
+        <p><code>binderBlock.suspected = false</code>，不是 Binder 或跨进程阻塞主因。</p>
+        <p><code>processIo.readBytes = 0</code>，不是明显磁盘读阻塞主因。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>JSON 节点目录</h2>
+      <p>第一次看这份 JSON 时，不要从头到尾硬读。先按下面的目录定位关键节点：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>节点</th>
+            <th>本次重点值</th>
+            <th>怎么理解</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>event</code></td>
+            <td><code>eventType = SUSPECT_ANR</code>，<code>eventId = 704e0927...</code></td>
+            <td>这是 SDK 捕获到的疑似 ANR 现场，用 eventId 和日志里的 report id 对齐。</td>
+          </tr>
+          <tr>
+            <td><code>systemAnr</code></td>
+            <td><code>available = true</code>，<code>isConfirmedAnr = false</code></td>
+            <td>系统还没有确认 ANR；这份报告用于提前看主线程为什么卡住。</td>
+          </tr>
+          <tr>
+            <td><code>attribution</code></td>
+            <td><code>primary = CURRENT_MESSAGE_SLOW</code>，<code>confidence = LOW</code></td>
+            <td>SDK 摘要指向“当前主线程消息慢”。置信度低时不能只看摘要，要继续看业务栈和专项证据。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current</code></td>
+            <td><code>callbackClass = View$PerformClick</code>，<code>wallMs = 3497</code>，<code>cpuMs = 836</code></td>
+            <td>当前卡住的是一次按钮点击回调，已经执行 3.497 秒还没结束。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.stackFrames</code></td>
+            <td><code>GcMemoryChurnWorkload.churnMemoryOnMainThread</code>、<code>GcMemoryChurnScenario.run</code></td>
+            <td>这里把问题直接定位到 Demo 的 GC / 内存抖动场景代码。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.stackSamples</code></td>
+            <td><code>ArrayDeque.removeFirst</code>、<code>GcMemoryChurnWorkload.churnMemoryOnMainThread</code></td>
+            <td>采样栈显示当时还在维护保留对象队列，属于内存抖动场景的一部分。</td>
+          </tr>
+          <tr>
+            <td><code>pendingQueue</code></td>
+            <td>队列前几条消息 <code>blockedMs</code> 约 <code>3005ms - 3488ms</code></td>
+            <td>这些是后果：当前点击消息占住主线程，后续 UI、手势、动画和 Watchdog 消息无法及时执行。</td>
+          </tr>
+          <tr>
+            <td><code>threadCpu</code></td>
+            <td><code>HeapTaskDaemon = 3250ms</code></td>
+            <td>HeapTaskDaemon 是 GC/堆相关后台线程，CPU 时间最高，支持“内存抖动带来 GC 压力”的判断。</td>
+          </tr>
+          <tr>
+            <td><code>environmentSnapshot</code></td>
+            <td>可用内存约 <code>4.15GB</code>，进程写入 <code>69632B</code></td>
+            <td>不是因为整机极低内存或大量磁盘 I/O 造成的阻塞，更像是当前业务主动制造的对象分配压力。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>一步一步定位根因</h2>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>先确认报告类型</h3>
+          <pre>{
+  "eventId": "704e0927-7eba-4287-8e97-228935811aa6",
+  "eventType": "SUSPECT_ANR",
+  "appId": "vibe-anr-demo",
+  "environment": "debug"
+}</pre>
+          <p><code>SUSPECT_ANR</code> 表示 SDK 在系统正式 ANR 前保存了现场。分析时不要因为 <code>systemAnr.isConfirmedAnr = false</code> 就忽略它；这类报告通常更接近卡顿发生的第一现场。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>看 attribution，拿到第一判断</h3>
+          <pre>{
+  "primary": "CURRENT_MESSAGE_SLOW",
+  "confidence": "LOW",
+  "evidence": [
+    "current message wall=3497ms cpu=836ms",
+    "top thread HeapTaskDaemon cpu=3250ms"
+  ]
+}</pre>
+          <p>SDK 初步判断是 <code>CURRENT_MESSAGE_SLOW</code>，也就是“当前正在 dispatch 的主线程消息过慢”。这里已经出现两个重要信号：当前消息墙钟耗时超过 3 秒，且 HeapTaskDaemon CPU 很高。</p>
+          <p><code>confidence = LOW</code> 的含义是：摘要本身不足以单独定责，需要继续用主线程栈、采样栈、队列和排除项补齐证据链。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>看 mainThread.current，确认卡住的是哪条消息</h3>
+          <pre>{
+  "kind": "CURRENT",
+  "messageType": "looper_dispatch",
+  "targetClass": "android.view.ViewRootImpl$ViewRootHandler",
+  "callbackClass": "android.view.View$PerformClick@eff63e",
+  "wallMs": 3497,
+  "cpuMs": 836,
+  "endUptimeMs": null
+}</pre>
+          <p>这一步可以得到三个结论：</p>
+          <ul>
+            <li><code>callbackClass = View$PerformClick</code>：问题发生在按钮点击回调内。</li>
+            <li><code>wallMs = 3497ms</code>：这次点击消息已经执行 3.497 秒，超过 SDK 疑似 ANR 阈值。</li>
+            <li><code>endUptimeMs = null</code>：采集时这条消息还没执行完，后续消息只能排队。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>看 mainThread.stackFrames，把问题定位到业务代码</h3>
+          <pre>[
+  "com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnWorkload.churnMemoryOnMainThread(GcMemoryChurnWorkload.kt:27)",
+  "com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnScenario.run(GcMemoryChurnScenario.kt:37)",
+  "com.valiantyan.vibeanrmonitoring.MainActivity.onCreate$lambda$10(MainActivity.kt:106)",
+  "android.view.View.performClick(View.java:7498)"
+]</pre>
+          <p>这是本次最关键的定位证据。栈从下往上看：用户点击按钮后进入 <code>MainActivity</code> 的点击回调，再进入 <code>GcMemoryChurnScenario.run()</code>，最终停在 <code>GcMemoryChurnWorkload.churnMemoryOnMainThread()</code>。</p>
+          <p>因此不能把结论写成“系统卡顿”或“nativePollOnce”。这份 JSON 里主线程栈已经明确指向 Demo 自己的 GC / 内存抖动代码。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <h3>看 stackSamples，确认采样时正在做什么</h3>
+          <pre>[
+  "java.util.ArrayDeque.removeFirst(ArrayDeque.java:268)",
+  "com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnWorkload.churnMemoryOnMainThread(GcMemoryChurnWorkload.kt:30)",
+  "com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnScenario.run(GcMemoryChurnScenario.kt:37)"
+]</pre>
+          <p>采样栈显示主线程正在 <code>ArrayDeque.removeFirst</code> 和 <code>churnMemoryOnMainThread</code> 之间运行。结合场景名可以判断：代码在主线程持续分配对象、保留一部分对象，并维护保留队列；这会制造频繁分配和回收压力。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div>
+          <h3>看 threadCpu，确认 GC 压力证据</h3>
+          <pre>{
+  "topThreads": [
+    { "threadName": "HeapTaskDaemon", "totalCpuMs": 3250 },
+    { "threadName": "beanrmonitoring", "totalCpuMs": 1700 },
+    { "threadName": "RenderThread", "totalCpuMs": 1160 }
+  ]
+}</pre>
+          <p><code>HeapTaskDaemon</code> 是堆和 GC 相关的运行时线程。本次它的 CPU 时间达到 <code>3250ms</code>，排在第一位，说明报告窗口内 GC / 堆维护活动很重。它不是唯一根因，但它和主线程业务栈共同支持“内存抖动导致当前点击消息变慢”的结论。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">7</div>
+        <div>
+          <h3>看 pendingQueue，理解后续消息为什么也慢</h3>
+          <pre>[
+  { "index": 0, "blockedMs": 3488, "isBarrierLike": true, "targetClass": null },
+  { "index": 1, "blockedMs": 3432, "callbackClass": "android.view.View$UnsetPressedState" },
+  { "index": 2, "blockedMs": 3264, "targetClass": "android.view.GestureDetector$GestureHandler" },
+  { "index": 3, "blockedMs": 3032, "callbackClass": "android.graphics.animation.RenderNodeAnimator$$ExternalSyntheticLambda0" },
+  { "index": 4, "blockedMs": 3005, "callbackClass": "com.valiantyan.anrmonitor.collector.watchdog.AnrWatchdog$$ExternalSyntheticLambda1" }
+]</pre>
+          <p>这里的排队消息不是主因，而是当前点击回调长时间占住主线程后的结果。<code>View$UnsetPressedState</code>、手势、动画和 Watchdog 都已经过期 3 秒左右，说明 UI 反馈和监控探针都被当前消息挡住了。</p>
+          <p>队头有一条 <code>isBarrierLike = true</code> 的消息，但专项证据没有对齐为 Barrier 泄漏，因此不能只凭队列头一条疑似 Barrier 就下 Sync Barrier 泄漏结论。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">8</div>
+        <div>
+          <h3>看排除项，避免误判</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>可能方向</th>
+                <th>JSON 证据</th>
+                <th>本次结论</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Sync Barrier 泄漏 / nativePollOnce</td>
+                <td><code>barrierEvidence.alignedWithPendingBarrier = false</code>，<code>stuckTokens = []</code>，<code>nativePollOnceRecords = []</code></td>
+                <td>排除为主因。</td>
+              </tr>
+              <tr>
+                <td>Binder / 跨进程阻塞</td>
+                <td><code>binderBlock.suspected = false</code>，<code>mainThreadInBinder = false</code></td>
+                <td>排除为主因。</td>
+              </tr>
+              <tr>
+                <td>磁盘 I/O 阻塞</td>
+                <td><code>processIo.readBytes = 0</code>，<code>writeBytes = 69632</code></td>
+                <td>没有大量 I/O 阻塞证据。</td>
+              </tr>
+              <tr>
+                <td>整机低内存</td>
+                <td><code>availableBytes = 4154417152</code>，<code>totalBytes = 8011993088</code></td>
+                <td>可用内存仍较充足，不是整机低内存直接触发。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>根因链路</h2>
+      <div class="quote">
+        <p><strong>用户点击“GC / 内存抖动”按钮</strong> → 主线程进入 <code>View$PerformClick</code> → Demo 执行 <code>GcMemoryChurnScenario.run()</code> → 主线程执行 <code>GcMemoryChurnWorkload.churnMemoryOnMainThread()</code>，大量创建对象并维护保留队列 → 堆相关线程 <code>HeapTaskDaemon</code> CPU 时间升高 → 当前点击消息耗时达到 <code>3497ms</code> 且采集时仍未结束 → 后续 UI、手势、动画和 Watchdog 消息排队超过 3 秒 → SDK 生成疑似 ANR 报告。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>最终结论模板</h2>
+      <pre>本次 ANR 的根因是主线程执行 GC / 内存抖动逻辑。
+证据链如下：
+1. attribution.primary = CURRENT_MESSAGE_SLOW，说明 SDK 判断当前主线程消息执行过慢。
+2. mainThread.current.callbackClass = android.view.View$PerformClick，说明问题发生在按钮点击回调。
+3. mainThread.current.wallMs = 3497ms，endUptimeMs = null，说明采集时点击消息已执行 3.497 秒且尚未结束。
+4. mainThread.stackFrames 指向 GcMemoryChurnWorkload.churnMemoryOnMainThread 和 GcMemoryChurnScenario.run，定位到 Demo 的 GC / 内存抖动场景代码。
+5. threadCpu.topThreads 中 HeapTaskDaemon CPU = 3250ms，支持报告窗口内存在明显 GC / 堆维护压力。
+6. barrierEvidence 与 binderBlock 均未给出主因证据，因此不应归因为 Sync Barrier、nativePollOnce 或 Binder 阻塞。</pre>
+    </section>
+
+    <section>
+      <h2>修复方案</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>问题点</th>
+            <th>修复建议</th>
+            <th>验收方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>主线程大量对象分配</td>
+            <td>把批量对象创建、列表构建、解析、压缩、图片处理等内存密集逻辑移到后台线程；主线程只接收最终结果并做轻量 UI 更新。</td>
+            <td>同一操作下 <code>mainThread.current.wallMs</code> 降到阈值以下，主线程栈不再出现大量分配场景代码。</td>
+          </tr>
+          <tr>
+            <td>短时间创建大量临时对象</td>
+            <td>复用对象、分批处理、减少中间集合、避免在循环中频繁创建大数组或大字符串。</td>
+            <td><code>HeapTaskDaemon</code> 不再长期排在 CPU Top 第一；logcat 中 GC 频率下降。</td>
+          </tr>
+          <tr>
+            <td>一次点击内完成全部工作</td>
+            <td>把大任务拆成多批，每批结束后让出主线程；必要时显示进度或禁用按钮防重复触发。</td>
+            <td>Pending 队列中 UI、动画、Watchdog 消息不再持续积压超过 3 秒。</td>
+          </tr>
+          <tr>
+            <td>缺少线上防护</td>
+            <td>为内存密集入口增加耗时监控、采样日志、对象数量限制和降级策略；低端机或低内存状态下减少一次性处理规模。</td>
+            <td>线上报告中同类 event 的数量下降，并且 <code>environmentSnapshot.memory</code> 与业务参数可用于回溯。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>给新人看的排查口诀</h2>
+      <ul>
+        <li>先看 <code>attribution.primary</code>，只拿方向，不直接下结论。</li>
+        <li>再看 <code>mainThread.current</code>，确认当前卡住的是哪条主线程消息。</li>
+        <li>真正定责看 <code>mainThread.stackFrames</code> 和 <code>stackSamples</code>，本次就是 <code>GcMemoryChurnWorkload</code>。</li>
+        <li>看到队列里有疑似 Barrier 时，要继续看 <code>barrierEvidence</code>，本次专项证据不支持 Barrier 泄漏。</li>
+        <li>看到 <code>HeapTaskDaemon</code> CPU 很高时，要结合业务栈判断是否存在大量分配和 GC 压力。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
