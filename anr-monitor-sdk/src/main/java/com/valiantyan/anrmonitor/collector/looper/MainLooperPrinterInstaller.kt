@@ -30,8 +30,20 @@ class MainLooperPrinterInstaller(
         setter(chainedPrinter)
         return InstallHandle(
             previousPrinter = previousPrinter,
+            installedPrinter = chainedPrinter,
+            currentPrinterReader = reader,
             messageLoggingSetter = setter,
         )
+    }
+
+    /**
+     * SDK 安装的 Printer 当前在 Looper 单槽位中的状态。
+     */
+    enum class InstallStatus {
+        INSTALLED,
+        REPLACED,
+        UNKNOWN,
+        UNINSTALLED,
     }
 
     // 默认运行时才读取主 Looper，避免纯 JVM 单测构造对象时触发 Android stub。
@@ -43,10 +55,14 @@ class MainLooperPrinterInstaller(
      * Printer 安装句柄。
      *
      * @property previousPrinter 安装前已有的 [Printer]。
+     * @property installedPrinter SDK 本次安装到 Looper 的链式 [Printer]。
+     * @property currentPrinterReader 当前 Looper Printer 读取入口。
      * @property messageLoggingSetter 恢复 [Printer] 的安装入口。
      */
     class InstallHandle internal constructor(
         private val previousPrinter: Printer?,
+        private val installedPrinter: Printer,
+        private val currentPrinterReader: () -> Printer?,
         private val messageLoggingSetter: (Printer?) -> Unit,
     ) {
         // 避免重复卸载时反复覆盖宿主后续安装的 Printer。
@@ -54,15 +70,41 @@ class MainLooperPrinterInstaller(
         private var isInstalled: Boolean = true
 
         /**
-         * 恢复到安装前的 [Printer]，让 SDK 停止后不继续接收主线程消息日志。
+         * 返回当前 Looper Printer 槽位是否仍由 SDK 本次安装的链式 Printer 持有。
          */
         @Synchronized
-        fun uninstall(): Unit {
+        fun status(): InstallStatus {
             if (!isInstalled) {
-                return
+                return InstallStatus.UNINSTALLED
             }
-            messageLoggingSetter(previousPrinter)
+            val currentPrinter: Printer? = runCatching {
+                currentPrinterReader()
+            }.getOrElse {
+                return InstallStatus.UNKNOWN
+            }
+            if (currentPrinter === installedPrinter) {
+                return InstallStatus.INSTALLED
+            }
+            return InstallStatus.REPLACED
+        }
+
+        /**
+         * 仅当当前槽位仍是 SDK 本次安装的 Printer 时恢复旧值，避免覆盖后装第三方 Printer。
+         * 当前槽位读取失败时返回 [InstallStatus.UNKNOWN]，并保守跳过恢复，避免误判状态。
+         *
+         * @return 卸载前观察到的状态。
+         */
+        @Synchronized
+        fun uninstall(): InstallStatus {
+            val currentStatus: InstallStatus = status()
+            if (currentStatus == InstallStatus.UNINSTALLED) {
+                return currentStatus
+            }
+            if (currentStatus == InstallStatus.INSTALLED) {
+                messageLoggingSetter(previousPrinter)
+            }
             isInstalled = false
+            return currentStatus
         }
     }
 
