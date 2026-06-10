@@ -36,6 +36,7 @@ import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
 import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
+import com.valiantyan.anrmonitor.internal.diagnostics.LooperPrinterConflictReporter
 import com.valiantyan.anrmonitor.internal.diagnostics.SdkSelfMonitor
 import com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoder
 import com.valiantyan.anrmonitor.reporter.local.LocalAnrReportWriter
@@ -69,6 +70,11 @@ internal class AnrMonitorRuntime(
 
     // SDK 自监控器，统一记录报告写入、治理和上传队列健康度。
     private val sdkSelfMonitor: SdkSelfMonitor = SdkSelfMonitor()
+
+    // Looper Printer 单槽位冲突诊断器，默认只记录指标，不主动抢回槽位。
+    private val looperPrinterConflictReporter: LooperPrinterConflictReporter = LooperPrinterConflictReporter(
+        selfMonitor = sdkSelfMonitor,
+    )
 
     // 类名脱敏器，保证 collector 阶段就只输出安全类名。
     private val sanitizer: ClassNameSanitizer = ClassNameSanitizer(privacyMode = config.privacyMode)
@@ -224,6 +230,7 @@ internal class AnrMonitorRuntime(
             return
         }
         watchdog.stop()
+        looperPrinterConflictReporter.record(handle = looperPrinterHandle)
         looperPrinterHandle?.uninstall()
         looperPrinterHandle = null
         markAnrRecovered()
@@ -262,6 +269,7 @@ internal class AnrMonitorRuntime(
     // 采集快照、执行归因、写入本地报告，并按配置调用宿主上报扩展点。
     private fun captureAndReport(nowUptimeMs: Long): Unit {
         val buildStartMs: Long = clock.uptimeMillis()
+        looperPrinterConflictReporter.record(handle = looperPrinterHandle)
         val snapshot: AnrSnapshot = buildSnapshot(nowUptimeMs = nowUptimeMs)
         if (!incidentDeduplicator.shouldReport(snapshot = snapshot)) {
             return
