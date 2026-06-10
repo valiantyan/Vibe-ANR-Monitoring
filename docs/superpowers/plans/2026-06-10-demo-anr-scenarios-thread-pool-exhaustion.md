@@ -540,7 +540,7 @@ git diff --check -- docs-anr/105-Demo-ANR场景实现计划.md README.md
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md README.md
