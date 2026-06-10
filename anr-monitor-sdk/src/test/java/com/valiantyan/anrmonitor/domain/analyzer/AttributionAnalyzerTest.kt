@@ -144,6 +144,34 @@ class AttributionAnalyzerTest {
     }
 
     /**
+     * Watchdog 触发和主线程快照存在毫秒级抖动，接近阈值且已有当前消息证据时仍应归因当前消息慢。
+     */
+    @Test
+    fun analyzeReturnsCurrentSlowWhenCurrentWallIsWithinTolerance(): Unit {
+        val result = AttributionAnalyzer(
+            thresholds = AttributionThresholds(
+                suspectAnrMs = 3_000L,
+                currentMessageToleranceMs = 100L,
+            ),
+        ).analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 1L,
+                    wallMs = 2_997L,
+                    cpuMs = 2_099L,
+                    sampleStackIds = listOf("sample-1"),
+                ),
+                history = emptyList(),
+                pending = emptyList(),
+                frames = listOf("com.example.IoBlock.run(IoBlock.kt:10)"),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.CURRENT_MESSAGE_SLOW, result.primaryCode)
+        assertEquals(Confidence.MEDIUM, result.confidence)
+    }
+
+    /**
      * 当前消息栈明确卡在业务代码时，不能只因 Pending 队头临时 Barrier 就误判成 Barrier 泄漏。
      */
     @Test
@@ -452,6 +480,7 @@ class AttributionAnalyzerTest {
         seq: Long,
         wallMs: Long,
         cpuMs: Long,
+        sampleStackIds: List<String> = emptyList(),
     ): MessageRecord {
         return MessageRecord(
             seq = seq,
@@ -465,6 +494,7 @@ class AttributionAnalyzerTest {
             endUptimeMs = wallMs,
             wallMs = wallMs,
             cpuMs = cpuMs,
+            sampleStackIds = sampleStackIds,
         )
     }
 

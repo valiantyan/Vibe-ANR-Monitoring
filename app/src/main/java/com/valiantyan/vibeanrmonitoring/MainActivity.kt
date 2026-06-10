@@ -1,6 +1,8 @@
 package com.valiantyan.vibeanrmonitoring
 
+import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import com.valiantyan.vibeanrmonitoring.scenario.BinderCrossProcessBlockScenario
@@ -88,6 +90,16 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.ioDatabaseFileBlockButton).setOnClickListener {
             ioDatabaseFileBlockScenario.run()
         }
+        runScenarioFromIntent(intent = intent)
+    }
+
+    /**
+     * Activity 已在前台时允许 adb 通过 intent extra 触发 Demo 场景，避免自动化验收依赖坐标点击。
+     */
+    override fun onNewIntent(intent: Intent): Unit {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        runScenarioFromIntent(intent = intent)
     }
 
     /**
@@ -103,5 +115,26 @@ class MainActivity : AppCompatActivity() {
     // 泄漏 Sync Barrier，用于验证 nativePollOnce 表象背后的队列根因。
     private fun runSyncBarrierLeak(): Unit {
         syncBarrierLeakScenario.run()
+    }
+
+    // 只暴露 Demo 验收入口，实际执行仍复用按钮背后的同一个场景类。
+    private fun runScenarioFromIntent(intent: Intent?): Unit {
+        val scenarioId: String = intent?.getStringExtra(EXTRA_DEMO_SCENARIO) ?: return
+        Log.w(TAG, "run demo scenario from intent: $scenarioId")
+        if (scenarioId == ioDatabaseFileBlockScenario.id) {
+            ioDatabaseFileBlockScenario.run()
+        }
+    }
+
+    private companion object {
+        /**
+         * Demo 页面日志标签，便于手动验收确认 intent 触发入口。
+         */
+        private const val TAG: String = "MainActivity"
+
+        /**
+         * Demo 自动化验收场景 ID extra key。
+         */
+        private const val EXTRA_DEMO_SCENARIO: String = "anr_demo_scenario"
     }
 }

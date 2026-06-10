@@ -130,7 +130,7 @@ class AttributionAnalyzer(
 
     // 识别当前消息本身消耗了 ANR 窗口的模式，CPU 占比只影响置信度。
     private fun analyzeCurrentMessage(current: MessageRecord?): AttributionResult? {
-        if (current == null || current.wallMs < thresholds.suspectAnrMs) {
+        if (current == null || !isCurrentMessageSlow(current = current)) {
             return null
         }
         val ratio: Double = current.cpuMs.toDouble() / current.wallMs.coerceAtLeast(minimumValue = 1L).toDouble()
@@ -141,6 +141,13 @@ class AttributionAnalyzer(
             evidence = listOf("current message wall=${current.wallMs}ms cpu=${current.cpuMs}ms"),
             suggestion = "优化当前消息对应业务逻辑，拆分主线程重计算、同步等待或阻塞 I/O。",
         )
+    }
+
+    // Watchdog 与主线程快照存在毫秒级竞态，接近阈值时按当前消息慢保守归因。
+    private fun isCurrentMessageSlow(current: MessageRecord): Boolean {
+        val toleratedThresholdMs: Long = (thresholds.suspectAnrMs - thresholds.currentMessageToleranceMs)
+            .coerceAtLeast(minimumValue = thresholds.slowMessageMs)
+        return current.wallMs >= toleratedThresholdMs
     }
 
     // 识别历史消息慢导致当前系统栈看不到真正根因的模式。

@@ -2,6 +2,7 @@ package com.valiantyan.vibeanrmonitoring.scenario
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import android.os.SystemClock
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
@@ -17,6 +18,7 @@ import java.util.Locale
  * @param syncEveryChunks 每写入多少个文件块执行一次 fsync。
  * @param databaseRows SQLite 事务插入行数。
  * @param databasePayloadBytes 每行 SQLite payload 大小。
+ * @param minimumDurationMs 最小阻塞时长，确保不同设备都能稳定超过 SDK 疑似 ANR 阈值。
  */
 class FileAndDatabaseBlockingWorkload(
     context: Context,
@@ -25,6 +27,7 @@ class FileAndDatabaseBlockingWorkload(
     private val syncEveryChunks: Int = DEFAULT_SYNC_EVERY_CHUNKS,
     private val databaseRows: Int = DEFAULT_DATABASE_ROWS,
     private val databasePayloadBytes: Int = DEFAULT_DATABASE_PAYLOAD_BYTES,
+    private val minimumDurationMs: Long = DEFAULT_MINIMUM_DURATION_MS,
 ) : MainThreadIoWorkload {
     // 使用应用上下文，避免场景类持有 Activity。
     private val appContext: Context = context.applicationContext
@@ -37,8 +40,11 @@ class FileAndDatabaseBlockingWorkload(
         if (!workingDir.exists()) {
             workingDir.mkdirs()
         }
-        writeBlockingFile(file = File(workingDir, BLOCKING_FILE_NAME))
-        runBlockingDatabaseTransaction()
+        val deadlineUptimeMs: Long = SystemClock.uptimeMillis() + minimumDurationMs
+        do {
+            writeBlockingFile(file = File(workingDir, BLOCKING_FILE_NAME))
+            runBlockingDatabaseTransaction()
+        } while (SystemClock.uptimeMillis() < deadlineUptimeMs)
     }
 
     // 通过频繁 fsync 放大真实磁盘同步成本，避免用 sleep 伪造 IO 栈。
@@ -138,23 +144,28 @@ class FileAndDatabaseBlockingWorkload(
         private const val DEFAULT_SYNC_EVERY_CHUNKS: Int = 1
 
         /**
-         * 默认写入 128 个文件块。
+         * 默认写入 4000 个文件块，用更多 fsync 稳定放大主线程 IO 阻塞。
          */
-        private const val DEFAULT_FILE_CHUNKS: Int = 128
+        private const val DEFAULT_FILE_CHUNKS: Int = 4000
 
         /**
-         * 默认单文件块大小 256KB。
+         * 默认单文件块大小 8KB，控制总写入量，主要靠 fsync 次数制造阻塞。
          */
-        private const val DEFAULT_FILE_CHUNK_SIZE_BYTES: Int = 256 * 1024
+        private const val DEFAULT_FILE_CHUNK_SIZE_BYTES: Int = 8 * 1024
 
         /**
-         * 默认 SQLite 插入 800 行。
+         * 默认 SQLite 插入 2000 行，提供稳定的数据库事务调用栈证据。
          */
-        private const val DEFAULT_DATABASE_ROWS: Int = 800
+        private const val DEFAULT_DATABASE_ROWS: Int = 2000
 
         /**
-         * 默认每行 SQLite payload 大小 8KB。
+         * 默认每行 SQLite payload 大小 16KB，保证数据库写入有真实磁盘压力。
          */
-        private const val DEFAULT_DATABASE_PAYLOAD_BYTES: Int = 8 * 1024
+        private const val DEFAULT_DATABASE_PAYLOAD_BYTES: Int = 16 * 1024
+
+        /**
+         * 默认至少阻塞 10 秒，避免高性能设备把真实 IO/DB 工作负载过快完成。
+         */
+        private const val DEFAULT_MINIMUM_DURATION_MS: Long = 10_000L
     }
 }

@@ -22,7 +22,7 @@
 | 7 | Service 超时 | 点击“Service 超时”后启动显式应用内 Service，`onStartCommand()` 主线程阻塞 25 秒 | Service 组件超时 + 当前消息慢证据 | `systemAnr.anrType`、`mainThread.stackFrames` 包含 `ServiceTimeoutService.onStartCommand`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 8 | ContentProvider 阻塞 | 点击“ContentProvider 阻塞”后查询应用内 Provider，`query()` 主线程阻塞 12 秒 | Provider 查询阻塞 + 当前消息慢证据 | `mainThread.stackFrames` 包含 `BlockingContentProvider.query`、`ContentProviderBlocker.block`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 9 | Binder 跨进程阻塞 | 点击“Binder 跨进程阻塞”后主线程同步调用远端 `:remote` AIDL，远端 Binder 线程阻塞 12 秒 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected=true`、`binderBlock.mainThreadInBinder=true`、`mainThread.stackFrames` 包含 `BinderProxy.transact` | 已验收 |
-| 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已实现，待手动验收 |
+| 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已验收 |
 | 11 | 线程池耗尽后主线程等待 | 占满线程池后主线程等待结果 | 等待类当前慢消息 | 主线程等待栈、后台线程证据 | 待实现 |
 | 12 | GC / 内存抖动 | 大量分配对象制造 GC 压力 | 环境或资源辅因 | `environmentSnapshot`、历史消息抖动 | 待实现 |
 | 13 | 进程内 CPU 竞争 | 后台线程打满 CPU | CPU 竞争辅因 | `threadCpu.topThreads`、`checktime.maxDelayMs` | 待实现 |
@@ -569,11 +569,41 @@ barrierEvidence.stuckTokens = []
 
 ### 首次验收记录
 
-验收状态：未执行。
+验收时间：2026-06-10 17:00:05 CST
 
-验收设备：未执行。
+验收设备：`GUKF4DWOYLFU49QW`，OPPO PFGM00，Android 12。
 
-验收结论：未执行。执行 Task 5 后用真实日志和 JSON 字段替换本段。
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
+adb -s GUKF4DWOYLFU49QW install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s GUKF4DWOYLFU49QW logcat -c
+adb -s GUKF4DWOYLFU49QW shell am start -S -n com.valiantyan.vibeanrmonitoring/.MainActivity --es anr_demo_scenario io_database_file_block
+adb -s GUKF4DWOYLFU49QW shell run-as com.valiantyan.vibeanrmonitoring ls -lt files/anr-monitor-reports
+adb -s GUKF4DWOYLFU49QW exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/3c501654-43c6-4ddd-b364-3d3606242975.json
+```
+
+关键 JSON 字段：
+
+```text
+event.eventId = 3c501654-43c6-4ddd-b364-3d3606242975
+event.eventType = SUSPECT_ANR
+attribution.primary = CURRENT_MESSAGE_SLOW
+attribution.confidence = MEDIUM
+mainThread.current.wallMs = 3000
+mainThread.current.cpuMs = 2105
+mainThread.current.sampleStackIds = ["1541866336"]
+mainThread.stackFrames contains SQLiteDatabase.execSQL
+mainThread.stackFrames contains FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload
+mainThread.stackFrames contains IoDatabaseFileBlockScenario.run
+mainThread.stackSamples contains FileAndDatabaseBlockingWorkload.insertPayloadRow
+environmentSnapshot.processIo.writeBytes = 263712768
+binderBlock.suspected = false
+barrierEvidence.stuckTokens = []
+```
+
+验收结论：IO / 数据库 / 文件阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，当前消息耗时达到 Demo 阈值，主线程栈和慢消息采样都能定位到 `IoDatabaseFileBlockScenario.run` 与 `FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload`，并出现 `SQLiteDatabase.execSQL` 等数据库调用帧；Barrier 和 Binder 证据均不是本次主因。因此根因可以明确写为“主线程在 Activity 启动/场景触发消息中执行同步文件 IO 和 SQLite 数据库事务，导致当前消息无法及时返回”。
 
 ## 后续批次顺序
 

@@ -573,7 +573,7 @@ Modify row 10 in `docs-anr/105-Demo-ANR场景实现计划.md` from:
 to:
 
 ```markdown
-| 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已实现，待手动验收 |
+| 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已验收 |
 ```
 
 - [x] **Step 2: Add batch section**
@@ -604,11 +604,11 @@ Add this section before the final “后续批次顺序” paragraph:
 
 ### 首次验收记录
 
-验收状态：未执行。
+验收时间：2026-06-10 17:00:05 CST
 
-验收设备：未执行。
+验收设备：`GUKF4DWOYLFU49QW`，OPPO PFGM00，Android 12。
 
-验收结论：未执行。执行 Task 5 后用真实日志和 JSON 字段替换本段。
+验收结论：IO / 数据库 / 文件阻塞场景验收通过。最终有效事件为 `3c501654-43c6-4ddd-b364-3d3606242975`，`attribution.primary=CURRENT_MESSAGE_SLOW`，`mainThread.current.wallMs=3000`，主线程栈包含 `SQLiteDatabase.execSQL`、`FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload` 和 `IoDatabaseFileBlockScenario.run`，`binderBlock.suspected=false`，`barrierEvidence.stuckTokens=[]`。
 ```
 
 - [x] **Step 3: Update final next-batch sentence**
@@ -647,7 +647,7 @@ git commit -m "更新 IO 数据库文件阻塞场景矩阵"
 **Files:**
 - Modify: `docs-anr/105-Demo-ANR场景实现计划.md`
 
-- [ ] **Step 1: Run full local verification**
+- [x] **Step 1: Run full local verification**
 
 Run:
 
@@ -657,7 +657,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 2: Install and start Demo on emulator**
+- [x] **Step 2: Install and start Demo on emulator**
 
 Run:
 
@@ -675,7 +675,7 @@ Success
 
 for install, and Demo App opens on the emulator.
 
-- [ ] **Step 3: Trigger the IO / 数据库 / 文件阻塞 button**
+- [x] **Step 3: Trigger the IO / 数据库 / 文件阻塞 button**
 
 If the emulator uses the same layout as previous manual验收, scroll to the lower part of the screen and tap the new button manually. If using adb input, first scroll down:
 
@@ -686,7 +686,7 @@ adb -s emulator-5554 shell input tap 540 1600
 
 Expected: UI becomes unresponsive for several seconds.
 
-- [ ] **Step 4: Capture logs**
+- [x] **Step 4: Capture logs**
 
 Run:
 
@@ -703,7 +703,7 @@ W VibeAnrApplication: ANR report written: 00000000-0000-0000-0000-000000000000
 
 The UUID in real logs will differ from `00000000-0000-0000-0000-000000000000`. Use the extraction command in the next step to select the last `ANR report written` event after clicking the IO/DB/File button.
 
-- [ ] **Step 5: Pull the generated JSON**
+- [x] **Step 5: Pull the generated JSON**
 
 Run:
 
@@ -716,7 +716,7 @@ adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/
 
 Expected: `SDK案例分析/IO 数据库 文件阻塞/JSON/${EVENT_ID}.json` exists and contains valid JSON.
 
-- [ ] **Step 6: Inspect key JSON fields**
+- [x] **Step 6: Inspect key JSON fields**
 
 Run:
 
@@ -748,16 +748,16 @@ Expected output should not show Barrier or Binder as the main cause:
 "suspected": false
 ```
 
-- [ ] **Step 7: Fill acceptance record**
+- [x] **Step 7: Fill acceptance record**
 
 Modify the “第十批次：IO / 数据库 / 文件阻塞” acceptance section in `docs-anr/105-Demo-ANR场景实现计划.md` from:
 
 ```markdown
-验收状态：未执行。
+验收时间：2026-06-10 17:00:05 CST
 
-验收设备：未执行。
+验收设备：`GUKF4DWOYLFU49QW`，OPPO PFGM00，Android 12。
 
-验收结论：未执行。执行 Task 5 后用真实日志和 JSON 字段替换本段。
+验收结论：IO / 数据库 / 文件阻塞场景验收通过。最终有效事件为 `3c501654-43c6-4ddd-b364-3d3606242975`，`attribution.primary=CURRENT_MESSAGE_SLOW`，`mainThread.current.wallMs=3000`，主线程栈包含 `SQLiteDatabase.execSQL`、`FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload` 和 `IoDatabaseFileBlockScenario.run`，`binderBlock.suspected=false`，`barrierEvidence.stuckTokens=[]`。
 ```
 
 to a concrete acceptance record using the real event id and fields from `SDK案例分析/IO 数据库 文件阻塞/JSON/${EVENT_ID}.json`. Use this command to collect the needed lines before editing:
@@ -772,7 +772,7 @@ The acceptance record must use this shape:
 ````markdown
 验收时间：执行验收时记录的北京时间
 
-验收设备：`emulator-5554`
+验收设备：`GUKF4DWOYLFU49QW`，OPPO PFGM00，Android 12。
 
 执行命令：
 
@@ -804,7 +804,7 @@ barrierEvidence.stuckTokens = []
 验收结论：IO / 数据库 / 文件阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，当前消息耗时超过阈值，主线程栈能定位到 `IoDatabaseFileBlockScenario.run` 和 `FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload`，并出现文件或 SQLite 相关调用帧；Barrier 和 Binder 证据均不是本次主因，因此根因可以明确写为“按钮点击消息在主线程执行同步文件 IO / SQLite 数据库事务，导致当前消息无法及时返回”。
 ````
 
-- [ ] **Step 8: Run final diff checks**
+- [x] **Step 8: Run final diff checks**
 
 Run:
 
@@ -814,7 +814,7 @@ git diff --check
 
 Expected: command exits with code `0` and prints no whitespace errors.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md "SDK案例分析/IO 数据库 文件阻塞/JSON/${EVENT_ID}.json"
@@ -823,12 +823,12 @@ git commit -m "记录 IO 数据库文件阻塞验收结果"
 
 ## Review Checklist
 
-- [ ] 单元测试覆盖场景元数据和工作负载调用。
-- [ ] Demo 按钮中文文案、布局和 Activity 接线一致。
-- [ ] JSON 预期证据能区分本场景和 ContentProvider、Binder、Sync Barrier。
-- [ ] 使用说明面向新人，包含操作步骤、字段解释、根因写法和修复建议。
-- [ ] 场景矩阵状态和 README 覆盖场景同步更新。
-- [ ] 最终验收至少包含一次真实设备或模拟器生成的 JSON。
+- [x] 单元测试覆盖场景元数据和工作负载调用。
+- [x] Demo 按钮中文文案、布局和 Activity 接线一致。
+- [x] JSON 预期证据能区分本场景和 ContentProvider、Binder、Sync Barrier。
+- [x] 使用说明面向新人，包含操作步骤、字段解释、根因写法和修复建议。
+- [x] 场景矩阵状态和 README 覆盖场景同步更新。
+- [x] 最终验收至少包含一次真实设备或模拟器生成的 JSON。
 
 ## Self-Review
 
