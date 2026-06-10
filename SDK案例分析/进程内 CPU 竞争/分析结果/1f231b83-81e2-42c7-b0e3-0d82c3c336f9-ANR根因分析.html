@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>1f231b83 ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.3; }
+    h1 { font-size: 28px; }
+    h2 { margin-top: 28px; font-size: 22px; border-left: 4px solid var(--primary); padding-left: 10px; }
+    h3 { margin-top: 22px; font-size: 18px; }
+    p { margin: 8px 0; }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #eef3f9; color: #24334d; }
+    tr:last-child td { border-bottom: 0; }
+    ul { padding-left: 22px; }
+
+    .subtitle { color: #d6e4ff; max-width: 980px; margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06); }
+    .result { border-left: 5px solid var(--danger); }
+    .evidence { border-left: 5px solid var(--primary); }
+    .exclude { border-left: 5px solid var(--ok); }
+    .warn { border-left: 5px solid var(--warn); }
+    .badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; margin-right: 6px; }
+    .badge-danger { background: #fee4e2; color: var(--danger); }
+    .badge-warn { background: #fff4d6; color: var(--warn); }
+    .badge-ok { background: #dcfae6; color: var(--ok); }
+    .step { display: flex; gap: 12px; margin: 14px 0; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    .step-number { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .quote { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：进程内 CPU 竞争</h1>
+    <p class="subtitle">分析对象：<code>1f231b83-81e2-42c7-b0e3-0d82c3c336f9.json</code>。本次最可信的根因是：同一进程内多个后台 <code>DemoCpuContender-*</code> 线程持续消耗 CPU，主线程当前 Activity 启动消息 wall time 超过 3 秒，但主线程 CPU 只有 160ms，表现为主线程被后台 CPU 竞争拖慢，而不是主线程自身 busy loop。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>结论</h2>
+        <p><span class="badge badge-danger">根因</span>进程内后台 CPU 密集线程抢占调度资源，导致主线程当前消息响应变慢。</p>
+        <p>业务入口是 <code>ProcessCpuContentionScenario.run()</code>，工作负载入口是 <code>DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread()</code>。</p>
+      </div>
+      <div class="card evidence">
+        <h2>关键证据</h2>
+        <p><code>attribution.primary = CURRENT_MESSAGE_SLOW</code></p>
+        <p><code>mainThread.current.wallMs = 3021ms</code></p>
+        <p><code>mainThread.current.cpuMs = 160ms</code></p>
+        <p><code>threadCpu.topThreads[0] = DemoCpuContende / 2570ms</code></p>
+      </div>
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p><code>barrierEvidence.stuckTokens = []</code>，不是 Sync Barrier 泄漏。</p>
+        <p><code>binderBlock.suspected = false</code>，不是 Binder 或跨进程阻塞。</p>
+        <p><code>mainThread.current.cpuMs = 160ms</code>，不符合“主线程自己持续计算”的典型特征。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>JSON 节点目录</h2>
+      <p>第一次打开这份 JSON 时，可以先按下面的目录找证据，不需要从第一行读到最后一行。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>节点</th>
+            <th>本次重点值</th>
+            <th>怎么理解</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>event</code></td>
+            <td><code>eventType = SUSPECT_ANR</code>，<code>eventId = 1f231b83...</code></td>
+            <td>这是 SDK 在 debug 环境捕获到的疑似 ANR 现场，用 eventId 和 logcat 的 report id 对齐。</td>
+          </tr>
+          <tr>
+            <td><code>attribution</code></td>
+            <td><code>primary = CURRENT_MESSAGE_SLOW</code>，<code>confidence = LOW</code></td>
+            <td>SDK 摘要先判断“当前消息慢”。置信度低时要继续看主线程栈和线程 CPU 排名。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current</code></td>
+            <td><code>targetClass = ActivityThread$H</code>，<code>wallMs = 3021</code>，<code>cpuMs = 160</code></td>
+            <td>当前卡住的是 ActivityThread 主消息，执行时间超过 3 秒；主线程 CPU 很低，说明它主要不是自己在烧 CPU。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.stackFrames</code></td>
+            <td><code>Thread.sleep</code>、<code>DefaultProcessCpuContentionWorkload</code>、<code>ProcessCpuContentionScenario</code></td>
+            <td>主线程停在 Demo 场景保留的等待窗口，入口能回溯到进程内 CPU 竞争场景。</td>
+          </tr>
+          <tr>
+            <td><code>threadCpu.topThreads</code></td>
+            <td>前 5 个线程都是 <code>DemoCpuContende</code>，CPU 为 <code>2570ms</code>、<code>2560ms</code>、<code>2480ms</code>、<code>2460ms</code>、<code>2360ms</code></td>
+            <td>真正消耗 CPU 的是后台竞争线程。线程名少了最后几个字符，是 Android 从 <code>/proc</code> 读取线程名时发生了长度截断。</td>
+          </tr>
+          <tr>
+            <td><code>barrierEvidence</code></td>
+            <td><code>stuckTokens = []</code>，<code>nativePollOnceRecords = []</code></td>
+            <td>没有 Sync Barrier 卡住队列的证据。</td>
+          </tr>
+          <tr>
+            <td><code>binderBlock</code></td>
+            <td><code>suspected = false</code>，<code>mainThreadInBinder = false</code></td>
+            <td>没有 Binder 或跨进程阻塞证据。</td>
+          </tr>
+          <tr>
+            <td><code>environmentSnapshot</code></td>
+            <td>内存、存储、进程 I/O 可读；<code>cpuLoadAvailable = false</code></td>
+            <td>整机 CPU load 读取失败，但线程级 CPU 证据可用，足够支持“进程内 CPU 竞争”的结论。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>一步一步定位根因</h2>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>先确认报告类型</h3>
+          <pre>{
+  "eventId": "1f231b83-81e2-42c7-b0e3-0d82c3c336f9",
+  "eventType": "SUSPECT_ANR",
+  "appId": "vibe-anr-demo",
+  "environment": "debug"
+}</pre>
+          <p><code>SUSPECT_ANR</code> 表示 SDK 抓到的是疑似 ANR 现场。它不一定已经被系统弹框确认，但可以用于分析主线程为什么在当时超过阈值。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>看 attribution，拿到第一判断</h3>
+          <pre>{
+  "primary": "CURRENT_MESSAGE_SLOW",
+  "confidence": "LOW",
+  "evidence": [
+    "current message wall=3021ms cpu=160ms",
+    "top thread DemoCpuContende cpu=2570ms"
+  ]
+}</pre>
+          <p>第一判断是“当前消息慢”。但这里已经出现一个重要线索：当前主线程 CPU 只有 160ms，而 CPU 最高的线程是 <code>DemoCpuContende</code>，这提示问题不只是当前消息自身慢，还要继续查后台线程 CPU 竞争。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>确认主线程当前消息是否真的超时</h3>
+          <pre>{
+  "targetClass": "android.app.ActivityThread$H",
+  "isCriticalComponent": true,
+  "wallMs": 3021,
+  "cpuMs": 160
+}</pre>
+          <p><code>wallMs = 3021ms</code> 已经超过 Demo 的疑似 ANR 阈值 3000ms，说明 SDK 捕获窗口成立。<code>cpuMs = 160ms</code> 明显低于 wall time，说明主线程不是一直在 CPU 上计算。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>用主线程栈定位入口</h3>
+          <pre>java.lang.Thread.sleep(Native Method)
+com.valiantyan.vibeanrmonitoring.scenario.DefaultProcessCpuContentionWorkload.waitOnMainThread(DefaultProcessCpuContentionWorkload.kt:115)
+com.valiantyan.vibeanrmonitoring.scenario.DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread(DefaultProcessCpuContentionWorkload.kt:43)
+com.valiantyan.vibeanrmonitoring.scenario.ProcessCpuContentionScenario.run(ProcessCpuContentionScenario.kt:39)
+com.valiantyan.vibeanrmonitoring.MainActivity.runScenarioFromIntent(MainActivity.kt:151)</pre>
+          <p>栈里能看到 Demo 场景入口和工作负载入口。<code>Thread.sleep</code> 是这个 Demo 为了稳定保留当前消息现场设置的等待窗口，不是最终根因。真正需要继续看的，是同时期谁在消耗 CPU。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <h3>看线程 CPU 排名，找真正消耗资源的线程</h3>
+          <pre>{
+  "topThreads": [
+    { "threadName": "DemoCpuContende", "totalCpuMs": 2570 },
+    { "threadName": "DemoCpuContende", "totalCpuMs": 2560 },
+    { "threadName": "DemoCpuContende", "totalCpuMs": 2480 },
+    { "threadName": "DemoCpuContende", "totalCpuMs": 2460 },
+    { "threadName": "DemoCpuContende", "totalCpuMs": 2360 }
+  ]
+}</pre>
+          <p>前 5 个 CPU 最高的线程都来自 Demo 的 CPU 竞争线程。线程名在 JSON 中显示为 <code>DemoCpuContende</code>，这是系统线程名长度截断；从场景日志可以对齐到完整的 <code>DemoCpuContender-*</code>。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div>
+          <h3>区分“主线程 CPU 忙等”和“进程内 CPU 竞争”</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>判断项</th>
+                <th>本次值</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>主线程 wall time</td>
+                <td><code>3021ms</code></td>
+                <td>当前消息确实慢。</td>
+              </tr>
+              <tr>
+                <td>主线程 CPU</td>
+                <td><code>160ms</code></td>
+                <td>主线程自身没有持续占满 CPU。</td>
+              </tr>
+              <tr>
+                <td>后台线程 CPU</td>
+                <td><code>2360ms - 2570ms</code></td>
+                <td>后台竞争线程 CPU 明显高。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>所以本次不能写成“主线程忙等”。更准确的说法是：后台 CPU 密集线程抢占进程内调度资源，主线程当前消息被拖慢。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">7</div>
+        <div>
+          <h3>排除 Sync Barrier / nativePollOnce</h3>
+          <pre>{
+  "barrierEvidence": {
+    "repeatedInfinitePollCount": 0,
+    "alignedWithPendingBarrier": false,
+    "stuckTokens": [],
+    "nativePollOnceRecords": []
+  }
+}</pre>
+          <p>没有队头 Barrier、没有 stuck token、没有 nativePollOnce 专项证据，因此这次不是 Sync Barrier 泄漏导致的主线程假死。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">8</div>
+        <div>
+          <h3>排除 Binder / 跨进程阻塞</h3>
+          <pre>{
+  "binderBlock": {
+    "suspected": false,
+    "mainThreadInBinder": false,
+    "binderThreadWaitsMain": false
+  }
+}</pre>
+          <p>主线程没有卡在 Binder 调用里，Binder 线程也没有等待主线程的证据，因此不应把本次归因为跨进程阻塞。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">9</div>
+        <div>
+          <h3>查看环境证据，确认有没有外部压力干扰</h3>
+          <pre>{
+  "memory": {
+    "availableBytes": 3988459520,
+    "totalBytes": 8011993088
+  },
+  "availableStorageBytes": 183474962432,
+  "processIo": {
+    "readBytes": 28672,
+    "writeBytes": 8192
+  },
+  "failureReasons": [
+    "load average io failed: /proc/loadavg: open failed: EACCES (Permission denied)"
+  ]
+}</pre>
+          <p>内存和存储没有明显异常，进程 I/O 也很小。系统 load 读取失败是权限限制，不影响线程级 CPU 排名的判断。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">10</div>
+        <div>
+          <h3>写出最终根因</h3>
+          <p>本次 ANR 现场由进程内 CPU 竞争场景触发。当前 ActivityThread 主消息执行超过 3 秒，但主线程 CPU 只有 160ms；同时多个 <code>DemoCpuContender-*</code> 后台线程位于 CPU 排名前列，单线程 CPU 约 2.3 到 2.5 秒。Barrier 和 Binder 证据均不成立。因此根因应写为：同一进程内后台 CPU 密集任务持续抢占调度资源，导致主线程当前消息响应延迟。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>修复方案</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>问题点</th>
+            <th>修复建议</th>
+            <th>验收方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>后台 CPU 任务并发过高</td>
+            <td>限制 CPU 密集任务并发数，通常不要超过可用核心数；前台交互期间进一步降并发。</td>
+            <td>再次采集 JSON，<code>threadCpu.topThreads</code> 不应持续被同类业务线程占据前列。</td>
+          </tr>
+          <tr>
+            <td>CPU 密集任务和 UI 抢调度</td>
+            <td>将计算任务放入专用低优先级线程池，避免和主线程、RenderThread、Binder 线程争抢资源。</td>
+            <td>验证主线程 <code>wallMs</code> 下降，且用户操作期间不再触发疑似 ANR。</td>
+          </tr>
+          <tr>
+            <td>批量计算不可中断</td>
+            <td>把大任务拆成小批次，批次之间检查取消标记和业务优先级，必要时让出调度窗口。</td>
+            <td>压测期间观察单个任务耗时、取消成功率和 CPU 峰值。</td>
+          </tr>
+          <tr>
+            <td>线上定位困难</td>
+            <td>给 CPU 密集任务设置清晰线程名和任务名，记录任务来源、开始时间、耗时和取消原因。</td>
+            <td>线上 JSON 中能直接看到业务线程名，而不是匿名线程或通用线程池名。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>最终结论模板</h2>
+      <div class="quote">
+        本次 ANR 是进程内 CPU 竞争导致的当前消息响应延迟。SDK 报告显示当前主线程消息 <code>wallMs=3021ms</code>，但主线程 <code>cpuMs=160ms</code>，说明主线程自身不是持续计算；同时 <code>threadCpu.topThreads</code> 前列均为 Demo CPU 竞争线程，单线程 CPU 约 <code>2360ms - 2570ms</code>。主线程栈能回溯到 <code>ProcessCpuContentionScenario.run</code> 和 <code>DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread</code>。Barrier 与 Binder 证据均不成立，因此根因是同一进程内后台 CPU 密集任务持续抢占调度资源，导致主线程当前消息超过疑似 ANR 阈值。
+      </div>
+    </section>
+  </main>
+</body>
+</html>
