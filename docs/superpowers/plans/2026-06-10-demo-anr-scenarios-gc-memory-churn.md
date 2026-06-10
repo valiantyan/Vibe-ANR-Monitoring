@@ -292,7 +292,7 @@ git commit -m "新增 GC 内存抖动场景类"
 - Modify: `app/src/main/res/layout/activity_main.xml`
 - Modify: `app/src/main/res/values/strings.xml`
 
-- [ ] **Step 1: Add string resource**
+- [x] **Step 1: Add string resource**
 
 Modify `app/src/main/res/values/strings.xml` by adding this line after `demo_thread_pool_exhaustion_wait`:
 
@@ -300,7 +300,7 @@ Modify `app/src/main/res/values/strings.xml` by adding this line after `demo_thr
     <string name="demo_gc_memory_churn">GC / 内存抖动</string>
 ```
 
-- [ ] **Step 2: Add button to layout**
+- [x] **Step 2: Add button to layout**
 
 Modify `app/src/main/res/layout/activity_main.xml` by adding this button after `threadPoolExhaustionWaitButton` and before `binderLikeButton`:
 
@@ -313,7 +313,7 @@ Modify `app/src/main/res/layout/activity_main.xml` by adding this button after `
             android:text="@string/demo_gc_memory_churn" />
 ```
 
-- [ ] **Step 3: Wire MainActivity import and property**
+- [x] **Step 3: Wire MainActivity import and property**
 
 Modify `app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt` imports by adding:
 
@@ -328,7 +328,7 @@ Add this property after `threadPoolExhaustionWaitScenario`:
     private val gcMemoryChurnScenario: GcMemoryChurnScenario = GcMemoryChurnScenario()
 ```
 
-- [ ] **Step 4: Wire button click**
+- [x] **Step 4: Wire button click**
 
 Modify `onCreate()` in `MainActivity.kt` by adding this block after `threadPoolExhaustionWaitButton` click listener:
 
@@ -338,7 +338,7 @@ Modify `onCreate()` in `MainActivity.kt` by adding this block after `threadPoolE
         }
 ```
 
-- [ ] **Step 5: Wire adb intent trigger**
+- [x] **Step 5: Wire adb intent trigger**
 
 Modify `runScenarioFromIntent()` in `MainActivity.kt` so the `when` block contains:
 
@@ -350,7 +350,7 @@ Modify `runScenarioFromIntent()` in `MainActivity.kt` so the `when` block contai
         }
 ```
 
-- [ ] **Step 6: Compile app**
+- [x] **Step 6: Compile app**
 
 Run:
 
@@ -360,7 +360,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add app/src/main/java/com/valiantyan/vibeanrmonitoring/MainActivity.kt app/src/main/res/layout/activity_main.xml app/src/main/res/values/strings.xml

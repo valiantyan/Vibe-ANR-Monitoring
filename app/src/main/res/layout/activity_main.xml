@@ -46,6 +46,13 @@
             android:text="@string/demo_thread_pool_exhaustion_wait" />
 
         <Button
+            android:id="@+id/gcMemoryChurnButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/demo_gc_memory_churn" />
+
+        <Button
             android:id="@+id/binderLikeButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
