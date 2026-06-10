@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>5596b983 ANR 根因分析报告</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6f89;
+      --line: #dce4ef;
+      --primary: #0969da;
+      --danger: #b42318;
+      --warn: #a15c07;
+      --ok: #067647;
+      --code: #eef4ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
+    }
+
+    header {
+      background: #10223f;
+      color: #fff;
+      padding: 32px 24px;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.3; }
+    h1 { font-size: 28px; }
+    h2 { margin-top: 28px; font-size: 22px; border-left: 4px solid var(--primary); padding-left: 10px; }
+    h3 { margin-top: 22px; font-size: 18px; }
+    p { margin: 8px 0; }
+
+    code {
+      background: var(--code);
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #eef3f9; color: #24334d; }
+    tr:last-child td { border-bottom: 0; }
+    ul { padding-left: 22px; }
+
+    .subtitle { color: #d6e4ff; max-width: 980px; margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; box-shadow: 0 1px 2px rgba(16, 34, 63, 0.06); }
+    .result { border-left: 5px solid var(--danger); }
+    .evidence { border-left: 5px solid var(--primary); }
+    .exclude { border-left: 5px solid var(--ok); }
+    .warn { border-left: 5px solid var(--warn); }
+    .badge { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; margin-right: 6px; }
+    .badge-danger { background: #fee4e2; color: var(--danger); }
+    .badge-warn { background: #fff4d6; color: var(--warn); }
+    .badge-ok { background: #dcfae6; color: var(--ok); }
+    .step { display: flex; gap: 12px; margin: 14px 0; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    .step-number { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; }
+    .muted { color: var(--muted); }
+    .quote { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ANR 根因分析报告：线程池耗尽 + 主线程等待</h1>
+    <p class="subtitle">分析对象：<code>5596b983-ec89-4fbd-8eea-460155efc13b.json</code>。本次最可信的根因是：按钮点击回调在主线程中等待线程池排队任务结果，而线程池 worker 已被长任务占满，导致主线程停在 <code>FutureTask.get()</code>，当前点击消息超过 3 秒没有结束。</p>
+  </header>
+
+  <main>
+    <section class="grid">
+      <div class="card result">
+        <h2>结论</h2>
+        <p><span class="badge badge-danger">根因</span>主线程同步等待线程池任务结果。</p>
+        <p>代码入口是 <code>ThreadPoolExhaustionWaitScenario.run()</code>，阻塞点在 <code>ThreadPoolExhaustionWorkload.exhaustPoolAndWait()</code> 内部调用 <code>FutureTask.get()</code>。</p>
+      </div>
+      <div class="card evidence">
+        <h2>关键证据</h2>
+        <p><code>attribution.primary = CURRENT_MESSAGE_SLOW</code></p>
+        <p><code>mainThread.current.wallMs = 3352ms</code></p>
+        <p><code>mainThread.current.cpuMs = 1ms</code></p>
+        <p>耗时很长但 CPU 很低，说明主线程更像是在等待，而不是 CPU 忙等。</p>
+      </div>
+      <div class="card exclude">
+        <h2>排除项</h2>
+        <p><code>barrierEvidence.stuckTokens = []</code>，不是 Sync Barrier 泄漏主因。</p>
+        <p><code>binderBlock.suspected = false</code>，不是 Binder 跨进程阻塞主因。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>JSON 节点目录</h2>
+      <p>第一次打开这类 JSON 时，可以先把它当成一本“现场记录书”。本次最需要看的目录如下：</p>
+      <table>
+        <thead>
+          <tr>
+            <th>节点</th>
+            <th>本次重点值</th>
+            <th>新人读法</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>event</code></td>
+            <td><code>eventType = SUSPECT_ANR</code>，<code>eventId = 5596b983...</code></td>
+            <td>这是一份 SDK 捕获的疑似 ANR 报告，用 eventId 和日志里的 report id 对齐。</td>
+          </tr>
+          <tr>
+            <td><code>systemAnr</code></td>
+            <td><code>available = true</code>，<code>isConfirmedAnr = false</code></td>
+            <td>系统还没有确认 ANR；本报告用于提前分析主线程为什么卡住。</td>
+          </tr>
+          <tr>
+            <td><code>attribution</code></td>
+            <td><code>primary = CURRENT_MESSAGE_SLOW</code>，<code>confidence = LOW</code></td>
+            <td>SDK 摘要告诉你先查“当前主线程消息慢”。置信度低时更要看主线程栈复核。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.current</code></td>
+            <td><code>callbackClass = View$PerformClick</code>，<code>wallMs = 3352</code>，<code>cpuMs = 1</code></td>
+            <td>当前卡住的是按钮点击回调；墙上时间很长但 CPU 时间很低，优先怀疑等待、锁、I/O 或同步阻塞。</td>
+          </tr>
+          <tr>
+            <td><code>mainThread.stackFrames</code></td>
+            <td><code>FutureTask.get</code>、<code>ThreadPoolExhaustionWorkload.exhaustPoolAndWait</code></td>
+            <td>这里是最关键的代码证据，能把问题定位到线程池等待。</td>
+          </tr>
+          <tr>
+            <td><code>pendingQueue</code></td>
+            <td>后续消息 blocked 约 <code>2.5s - 3.3s</code></td>
+            <td>这些是后果：主线程被当前点击消息占住，后面的 UI、手势、动画和 Watchdog 消息排队。</td>
+          </tr>
+          <tr>
+            <td><code>barrierEvidence</code></td>
+            <td><code>stuckTokens = []</code>，<code>nativePollOnceRecords = []</code></td>
+            <td>没有卡住的 Barrier token，也没有 nativePollOnce 无限等待记录。</td>
+          </tr>
+          <tr>
+            <td><code>binderBlock</code></td>
+            <td><code>suspected = false</code>，<code>mainThreadInBinder = false</code></td>
+            <td>没有主线程 Binder 调用证据，不要写成 Binder 阻塞。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>一步一步定位根因</h2>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <h3>先看 event：确认这是什么报告</h3>
+          <pre>{
+  "eventId": "5596b983-ec89-4fbd-8eea-460155efc13b",
+  "eventType": "SUSPECT_ANR",
+  "appId": "vibe-anr-demo",
+  "environment": "debug"
+}</pre>
+          <p>第一步只回答一个问题：这是不是系统已经确认的 ANR？答案是暂时不是，它是 SDK 提前抓到的疑似 ANR 现场。疑似报告仍然有价值，因为它保留了主线程正在卡住时的现场。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <h3>再看 attribution：拿到排查方向，但不要直接下结论</h3>
+          <pre>{
+  "primary": "CURRENT_MESSAGE_SLOW",
+  "secondary": [],
+  "confidence": "LOW",
+  "evidence": [
+    "current message wall=3352ms cpu=1ms",
+    "top thread RenderThread cpu=1100ms"
+  ],
+  "suggestions": [
+    "优化当前消息对应业务逻辑，拆分主线程重计算、同步等待或阻塞 I/O。"
+  ]
+}</pre>
+          <p><code>CURRENT_MESSAGE_SLOW</code> 的意思是：采集发生时，主线程正在执行一条消息，而且这条消息已经执行太久。这里的 <code>confidence = LOW</code> 不代表没有问题，而是说明 SDK 摘要证据还不够强，需要继续用 <code>mainThread.current</code> 和 <code>mainThread.stackFrames</code> 复核。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <h3>看 mainThread.current：判断当前消息是什么，以及慢在哪里</h3>
+          <pre>{
+  "kind": "CURRENT",
+  "messageType": "looper_dispatch",
+  "targetClass": "android.view.ViewRootImpl$ViewRootHandler",
+  "callbackClass": "android.view.View$PerformClick@fa561ec",
+  "wallMs": 3352,
+  "cpuMs": 1,
+  "endUptimeMs": null
+}</pre>
+          <p>这一段有三个关键点：</p>
+          <ul>
+            <li><code>callbackClass = View$PerformClick</code>：卡住的是按钮点击回调。</li>
+            <li><code>wallMs = 3352ms</code>：点击回调已经运行超过 3 秒。</li>
+            <li><code>cpuMs = 1ms</code>：主线程几乎没有消耗 CPU，所以它不是一直在计算，更像是在等待某个条件或结果。</li>
+          </ul>
+          <p>到这一步可以把方向缩小为：点击事件里存在同步等待、锁等待、I/O 等阻塞行为。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>
+          <h3>看主线程栈：找到真正卡住的代码</h3>
+          <pre>jdk.internal.misc.Unsafe.park(Native Method)
+java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:234)
+java.util.concurrent.FutureTask.awaitDone(FutureTask.java:444)
+java.util.concurrent.FutureTask.get(FutureTask.java:203)
+com.valiantyan.vibeanrmonitoring.scenario.ThreadPoolExhaustionWorkload.exhaustPoolAndWait(ThreadPoolExhaustionWorkload.kt:58)
+com.valiantyan.vibeanrmonitoring.scenario.ThreadPoolExhaustionWaitScenario.run(ThreadPoolExhaustionWaitScenario.kt:34)
+com.valiantyan.vibeanrmonitoring.MainActivity.onCreate$lambda$9(MainActivity.kt:99)
+android.view.View.performClick(View.java:7498)</pre>
+          <p>读栈的方法是从上往下看：</p>
+          <ul>
+            <li><code>Unsafe.park</code>、<code>LockSupport.parkNanos</code>：线程被挂起等待。</li>
+            <li><code>FutureTask.get</code>：主线程正在同步等待一个 Future 结果。</li>
+            <li><code>ThreadPoolExhaustionWorkload.exhaustPoolAndWait</code>：等待发生在线程池耗尽工作负载里。</li>
+            <li><code>ThreadPoolExhaustionWaitScenario.run</code> 和 <code>MainActivity</code> 点击回调：可以定位到 Demo 场景入口。</li>
+          </ul>
+          <p>第四步结论：根因已经能落到代码位置，不是“主线程莫名卡住”，而是点击回调中同步等待线程池任务结果。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div>
+          <h3>看 pendingQueue：理解后果，不要误判成根因</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>队列消息</th>
+                <th>等待时间</th>
+                <th>怎么理解</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>index=0</code>，Barrier-like 消息</td>
+                <td><code>blockedMs = 3348</code></td>
+                <td>队头看起来像 Barrier，但专项证据没有支持它是根因。</td>
+              </tr>
+              <tr>
+                <td><code>View$UnsetPressedState</code></td>
+                <td><code>blockedMs = 3288</code></td>
+                <td>按钮按压状态恢复消息被拖住，是点击回调卡住后的后果。</td>
+              </tr>
+              <tr>
+                <td><code>GestureDetector$GestureHandler</code></td>
+                <td><code>blockedMs = 3124</code></td>
+                <td>手势相关消息也在排队，说明主线程已经影响交互响应。</td>
+              </tr>
+              <tr>
+                <td><code>AnrWatchdog</code></td>
+                <td><code>blockedMs = 3008</code></td>
+                <td>Watchdog 探针也被当前慢消息拖住，因此生成疑似 ANR 报告。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>第五步结论：Pending 队列证明“主线程被占用后，后续消息排队等待”，但它不是本次根因入口。根因入口仍然要回到主线程栈里的 <code>FutureTask.get()</code>。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div>
+          <h3>排除 Sync Barrier / nativePollOnce</h3>
+          <pre>{
+  "barrierEvidence": {
+    "available": true,
+    "repeatedInfinitePollCount": 0,
+    "alignedWithPendingBarrier": false,
+    "stuckTokens": [],
+    "nativePollOnceRecords": []
+  }
+}</pre>
+          <p>如果是 Sync Barrier 泄漏或 nativePollOnce 假死，通常会看到卡住的 Barrier token、nativePollOnce 记录，或者主线程栈停在 <code>MessageQueue.nativePollOnce</code>。本次都没有。虽然 Pending 队头有一个 Barrier-like 消息，但专项证据不成立，不能把它写成根因。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">7</div>
+        <div>
+          <h3>排除 Binder 跨进程阻塞</h3>
+          <pre>{
+  "binderBlock": {
+    "available": true,
+    "suspected": false,
+    "mainThreadInBinder": false,
+    "binderThreadWaitsMain": false,
+    "mainThreadEvidence": [],
+    "binderThreadEvidence": []
+  }
+}</pre>
+          <p>主线程栈没有 Binder 调用，SDK 的 Binder 专项证据也为 false。因此本次不是跨进程服务长时间不返回，也不是 Binder 线程互等。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">8</div>
+        <div>
+          <h3>结合 CPU 和环境信息，确认是等待型阻塞</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>证据</th>
+                <th>本次值</th>
+                <th>结论</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>当前主线程 CPU</td>
+                <td><code>cpuMs = 1ms</code></td>
+                <td>主线程不是 CPU 忙等，而是在等待。</td>
+              </tr>
+              <tr>
+                <td>线程 CPU 排名</td>
+                <td><code>RenderThread = 1100ms</code>，进程主线程名 <code>beanrmonitoring = 870ms</code></td>
+                <td>没有出现“主线程 CPU 持续占满”的强证据。</td>
+              </tr>
+              <tr>
+                <td>Checktime</td>
+                <td><code>maxDelayMs = 3ms</code>，<code>severeDelayCount = 0</code></td>
+                <td>SDK 自身采样调度没有被严重拖慢。</td>
+              </tr>
+              <tr>
+                <td>内存和存储</td>
+                <td>可用内存约 4.2 GB，可用存储约 183 GB</td>
+                <td>没有低内存或存储耗尽证据。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>第八步结论：等待型阻塞与主线程栈完全吻合，问题收敛到“主线程等待线程池结果”。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>根因链路</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>链路阶段</th>
+            <th>证据</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>用户触发</td>
+            <td><code>View.performClick</code>、<code>MainActivity.onCreate$lambda$9</code></td>
+            <td>用户点击“线程池耗尽 + 主线程等待”按钮。</td>
+          </tr>
+          <tr>
+            <td>进入 Demo 场景</td>
+            <td><code>ThreadPoolExhaustionWaitScenario.run(ThreadPoolExhaustionWaitScenario.kt:34)</code></td>
+            <td>点击回调进入线程池耗尽等待场景。</td>
+          </tr>
+          <tr>
+            <td>制造线程池耗尽</td>
+            <td><code>ThreadPoolExhaustionWorkload.exhaustPoolAndWait(ThreadPoolExhaustionWorkload.kt:58)</code></td>
+            <td>固定线程池 worker 被长任务占满，后续任务无法立即执行。</td>
+          </tr>
+          <tr>
+            <td>主线程等待结果</td>
+            <td><code>FutureTask.get</code>、<code>LockSupport.parkNanos</code>、<code>Unsafe.park</code></td>
+            <td>主线程同步等待排队任务结果，导致 Looper 无法处理后续消息。</td>
+          </tr>
+          <tr>
+            <td>ANR 现场表现</td>
+            <td><code>wallMs = 3352ms</code>，<code>pendingQueue</code> 后续消息 blocked 超过 3 秒</td>
+            <td>当前点击消息长时间未结束，UI 状态恢复、手势、动画和 Watchdog 消息都被拖住。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>修复方案</h2>
+
+      <h3>直接修复</h3>
+      <ul>
+        <li>不要在主线程调用 <code>Future.get()</code>、<code>CountDownLatch.await()</code>、<code>CompletableFuture.get()</code>、<code>runBlocking</code> 等同步等待 API。</li>
+        <li>点击回调只负责发起任务和更新轻量 UI 状态，例如禁用按钮、展示加载中。</li>
+        <li>耗时任务放到后台线程、协程 <code>Dispatchers.IO</code> / <code>Dispatchers.Default</code>、业务线程池或 WorkManager。</li>
+        <li>任务完成后通过回调、LiveData、Flow、StateFlow 或主线程 Handler 回到 UI 层更新结果。</li>
+      </ul>
+
+      <h3>线程池治理</h3>
+      <ul>
+        <li>不要让“提交任务”和“等待任务结果”的代码使用同一个容易被占满的小线程池。</li>
+        <li>为关键链路配置超时、取消和降级路径，避免主流程无限等待后台资源。</li>
+        <li>按业务类型拆分线程池：CPU 计算、磁盘 I/O、网络、低优先级预加载不要全部挤在同一个池里。</li>
+        <li>监控线程池队列长度、活跃线程数、拒绝次数和任务等待时间，提前发现耗尽风险。</li>
+      </ul>
+
+      <h3>修复后验收</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>验收项</th>
+            <th>期望结果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>再次点击同一按钮</td>
+            <td>不再生成同入口的 <code>CURRENT_MESSAGE_SLOW</code> 报告。</td>
+          </tr>
+          <tr>
+            <td>检查主线程栈</td>
+            <td>不再出现 <code>FutureTask.get</code>、<code>LockSupport.parkNanos</code>、<code>Unsafe.park</code> 等等待栈。</td>
+          </tr>
+          <tr>
+            <td>检查 <code>mainThread.current</code></td>
+            <td><code>wallMs</code> 回落到阈值以内，点击消息能快速结束。</td>
+          </tr>
+          <tr>
+            <td>检查 <code>pendingQueue</code></td>
+            <td>后续 UI、手势、动画和 Watchdog 消息不再长时间 blocked。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>可直接用于评审的结论</h2>
+      <div class="quote">
+        <p>本次 ANR 是“线程池耗尽 + 主线程等待”导致的当前消息慢。SDK 报告显示 <code>attribution.primary = CURRENT_MESSAGE_SLOW</code>，当前主线程消息为 <code>View$PerformClick</code>，已执行 <code>3352ms</code> 且尚未结束；同时 <code>cpuMs = 1ms</code>，说明主线程不是 CPU 忙等，而是在等待。主线程栈明确停在 <code>FutureTask.get</code>，调用链回溯到 <code>ThreadPoolExhaustionWorkload.exhaustPoolAndWait(ThreadPoolExhaustionWorkload.kt:58)</code> 和 <code>ThreadPoolExhaustionWaitScenario.run(ThreadPoolExhaustionWaitScenario.kt:34)</code>。Pending 队列中后续 UI、手势、动画和 Watchdog 消息已经被阻塞约 3 秒；Barrier 与 Binder 专项证据均不成立。因此根因是点击回调在主线程同步等待线程池排队任务结果，而线程池 worker 被长任务占满，导致主线程无法继续处理消息。</p>
+      </div>
+
+      <h3>一句话修复方向</h3>
+      <p>把线程池任务等待从主线程移除，改为异步回调或状态通知；同时治理线程池容量、队列、超时和降级，避免关键交互依赖已经耗尽的线程池。</p>
+    </section>
+  </main>
+</body>
+</html>
