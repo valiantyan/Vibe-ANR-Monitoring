@@ -689,18 +689,63 @@ binderBlock.suspected = false
 
 ### 验收记录
 
-- [ ] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnScenarioTest` 通过。
-- [ ] `./gradlew :app:assembleDebug` 通过。
-- [ ] 真机或模拟器点击“GC / 内存抖动”后生成 JSON。
-- [ ] JSON 中 `attribution.primary=CURRENT_MESSAGE_SLOW`。
-- [ ] JSON 中 `mainThread.current.wallMs >= 3000`。
-- [ ] JSON 中 `mainThread.stackFrames` 包含 `GcMemoryChurnScenario.run`。
-- [ ] JSON 中 `mainThread.stackFrames` 包含 `GcMemoryChurnWorkload.churnMemoryOnMainThread`。
-- [ ] JSON 中 `environmentSnapshot.memory` 可读，或记录不可用原因。
-- [ ] 同一时间窗 logcat 中存在系统 GC 相关日志。
-- [ ] Barrier 和 Binder 证据均不是本次主因。
+- [x] `./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnScenarioTest` 通过。
+- [x] `./gradlew :app:assembleDebug` 通过。
+- [x] 真机或模拟器点击“GC / 内存抖动”后生成 JSON。
+- [x] JSON 中 `attribution.primary=CURRENT_MESSAGE_SLOW`。
+- [x] JSON 中 `mainThread.current.wallMs >= 3000`。
+- [x] JSON 中 `mainThread.stackFrames` 包含 `GcMemoryChurnScenario.run`。
+- [x] JSON 中 `mainThread.stackFrames` 包含 `GcMemoryChurnWorkload.churnMemoryOnMainThread`。
+- [x] JSON 中 `environmentSnapshot.memory` 可读，或记录不可用原因。
+- [x] 同一时间窗 logcat 中存在系统 GC 相关日志。
+- [x] Barrier 和 Binder 证据均不是本次主因。
 
-验收结论：待手动验收后填写。
+验收时间：2026-06-10 18:40 CST
+
+验收设备：`GUKF4DWOYLFU49QW`，OPPO PFGM00，Android 12。
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.GcMemoryChurnScenarioTest
+./gradlew :app:assembleDebug
+adb -s GUKF4DWOYLFU49QW install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s GUKF4DWOYLFU49QW shell run-as com.valiantyan.vibeanrmonitoring rm -rf files/anr-monitor-reports
+adb -s GUKF4DWOYLFU49QW logcat -c
+adb -s GUKF4DWOYLFU49QW shell am start -S -n com.valiantyan.vibeanrmonitoring/.MainActivity --es anr_demo_scenario gc_memory_churn
+adb -s GUKF4DWOYLFU49QW exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/853c292b-8f79-4b16-bbcb-60391f398958.json
+```
+
+关键日志：
+
+```text
+W MainActivity: run demo scenario from intent: gc_memory_churn
+W GcMemoryChurn: GC / 内存抖动场景请求 GC: allocations=30409
+W VibeAnrApplication: suspect ANR captured: 853c292b-8f79-4b16-bbcb-60391f398958
+W VibeAnrApplication: ANR report written: 853c292b-8f79-4b16-bbcb-60391f398958
+I beanrmonitorin: Starting a blocking GC Alloc
+I beanrmonitorin: WaitForGcToComplete blocked Alloc on Background
+W GcMemoryChurn: GC / 内存抖动场景完成: allocations=375690 retained=12
+```
+
+关键 JSON 字段：
+
+```text
+event.eventId = 853c292b-8f79-4b16-bbcb-60391f398958
+event.eventType = SUSPECT_ANR
+attribution.primary = CURRENT_MESSAGE_SLOW
+mainThread.current.wallMs = 3030
+mainThread.current.cpuMs = 1036
+mainThread.stackFrames contains GcMemoryChurnWorkload.churnMemoryOnMainThread
+mainThread.stackFrames contains GcMemoryChurnScenario.run
+environmentSnapshot.memory.availableBytes = 4254867456
+environmentSnapshot.memory.totalBytes = 8011993088
+environmentSnapshot.availability.memoryAvailable = true
+barrierEvidence.stuckTokens = []
+binderBlock.suspected = false
+```
+
+验收结论：GC / 内存抖动场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，当前消息耗时达到 Demo 阈值，主线程栈能定位到 `GcMemoryChurnScenario.run` 与 `GcMemoryChurnWorkload.churnMemoryOnMainThread`；同一时间窗 logcat 出现场景 GC 请求日志和系统 `Starting a blocking GC Alloc` / `WaitForGcToComplete` 日志，`environmentSnapshot.memory` 提供内存快照。Barrier 和 Binder 证据均不是本次主因。因此本次可以写为“按钮点击消息中大量对象分配造成当前消息执行过久，并伴随 GC / 内存压力证据”。
 
 ## 后续批次顺序
 
