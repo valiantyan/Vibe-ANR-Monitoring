@@ -657,7 +657,7 @@ git commit -m "更新进程内CPU竞争场景状态"
 - Optional create after manual pull: `SDK案例分析/进程内 CPU 竞争/JSON/<event-id>.json`
 - Optional create after manual analysis: `SDK案例分析/进程内 CPU 竞争/分析结果/<event-id>-ANR根因分析.html`
 
-- [ ] **Step 1: Run automated checks**
+- [x] **Step 1: Run automated checks**
 
 Run:
 
@@ -669,7 +669,7 @@ Run:
 
 Expected: all commands PASS.
 
-- [ ] **Step 2: Install Demo**
+- [x] **Step 2: Install Demo**
 
 Run:
 
@@ -681,7 +681,7 @@ adb -s <device-id> logcat -c
 
 Expected: install succeeds and logcat is cleared.
 
-- [ ] **Step 3: Trigger scenario by intent**
+- [x] **Step 3: Trigger scenario by intent**
 
 Run:
 
@@ -698,19 +698,19 @@ W VibeAnrApplication: suspect ANR captured: <event-id>
 W VibeAnrApplication: ANR report written: <event-id>
 ```
 
-- [ ] **Step 4: Pull latest JSON**
+- [x] **Step 4: Pull latest JSON**
 
 Run:
 
 ```bash
 mkdir -p SDK案例分析/进程内\ CPU\ 竞争/JSON SDK案例分析/进程内\ CPU\ 竞争/分析结果
 adb -s <device-id> shell run-as com.valiantyan.vibeanrmonitoring ls -t files/anr-monitor-reports
-adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.JSON > SDK案例分析/进程内\ CPU\ 竞争/JSON/<event-id>.json
+adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/<event-id>.json > SDK案例分析/进程内\ CPU\ 竞争/JSON/<event-id>.json
 ```
 
 Expected: JSON file is pulled into `SDK案例分析/进程内 CPU 竞争/JSON/`.
 
-- [ ] **Step 5: Verify JSON evidence**
+- [x] **Step 5: Verify JSON evidence**
 
 Open the pulled JSON and verify these fields:
 
@@ -719,15 +719,15 @@ event.eventType = SUSPECT_ANR
 mainThread.current.wallMs >= 3000
 mainThread.stackFrames contains ProcessCpuContentionScenario.run
 mainThread.stackFrames contains DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread
-threadCpu.topThreads contains DemoCpuContender-
-at least one DemoCpuContender-* totalCpuMs is near the top of threadCpu.topThreads
+threadCpu.topThreads contains DemoCpuContender- or truncated DemoCpuContende
+at least one DemoCpuContender-* / DemoCpuContende totalCpuMs is near the top of threadCpu.topThreads
 barrierEvidence.stuckTokens = []
 binderBlock.suspected = false
 ```
 
-If `attribution.primary` is `CURRENT_MESSAGE_SLOW`, record it as current SDK primary attribution plus CPU contention auxiliary evidence. If `attribution.primary` is `UNKNOWN_INSUFFICIENT_EVIDENCE`, record it as acceptable only when thread CPU evidence clearly shows `DemoCpuContender-*` threads.
+If `attribution.primary` is `CURRENT_MESSAGE_SLOW`, record it as current SDK primary attribution plus CPU contention auxiliary evidence. If `attribution.primary` is `UNKNOWN_INSUFFICIENT_EVIDENCE`, record it as acceptable only when thread CPU evidence clearly shows `DemoCpuContender-*` or truncated `DemoCpuContende` threads.
 
-- [ ] **Step 6: Append acceptance record**
+- [x] **Step 6: Append acceptance record**
 
 Append this template to the “第十三批次：进程内 CPU 竞争” section in `docs-anr/105-Demo-ANR场景实现计划.md`, replacing the concrete values with the actual event:
 
@@ -769,7 +769,7 @@ barrierEvidence.stuckTokens = []
 验收结论：进程内 CPU 竞争场景验收通过。SDK 能捕获疑似 ANR，当前消息 wall time 超过阈值，主线程栈能定位到 `ProcessCpuContentionScenario`，线程 CPU 排名能看到 `DemoCpuContender-*` 后台线程位于 CPU 前列，Binder 和 Barrier 证据均不是本次主因，因此可以把根因写为“同一进程内后台 CPU 密集任务持续抢占调度资源，导致主线程输入响应延迟”。
 ````
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs-anr/105-Demo-ANR场景实现计划.md SDK案例分析/进程内\ CPU\ 竞争/JSON

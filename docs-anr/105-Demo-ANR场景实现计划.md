@@ -759,14 +759,66 @@ binderBlock.suspected = false
 
 ### JSON 读取口径
 
-先看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。再看 `mainThread.stackFrames`，应能看到 `ProcessCpuContentionScenario.run` 或 `DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread`，说明入口是 Demo 进程内 CPU 竞争场景。接着看 `threadCpu.topThreads`，应出现 `DemoCpuContender-*` 线程，并且这些后台线程位于 CPU 排名前列。最后对比 `mainThread.current.cpuMs`，如果主线程 CPU 不高而后台竞争线程 CPU 高，本次根因应写为进程内后台线程 CPU 竞争。
+先看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。再看 `mainThread.stackFrames`，应能看到 `ProcessCpuContentionScenario.run` 或 `DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread`，说明入口是 Demo 进程内 CPU 竞争场景。接着看 `threadCpu.topThreads`，应出现 `DemoCpuContender-*` 线程；如果设备从 `/proc` 读取线程名时发生长度截断，也可能显示为 `DemoCpuContende`。最后对比 `mainThread.current.cpuMs`，如果主线程 CPU 不高而后台竞争线程 CPU 高，本次根因应写为进程内后台线程 CPU 竞争。
 
 ### 排除项
 
 - `barrierEvidence.stuckTokens` 不应该成为主因。
 - `binderBlock.suspected` 不应该为 true。
 - 如果 `mainThread.current.cpuMs` 和主线程线程 CPU 都很高，应检查是否点错了“当前消息忙等”，或是否存在主线程执行与后台竞争混合问题。
-- 如果 `threadCpu.topThreads` 中没有 `DemoCpuContender-*`，应检查线程 CPU 采集是否失败，或当前设备 CPU 核数/调度导致竞争证据不明显。
+- 如果 `threadCpu.topThreads` 中没有 `DemoCpuContender-*` 或截断后的 `DemoCpuContende`，应检查线程 CPU 采集是否失败，或当前设备 CPU 核数/调度导致竞争证据不明显。
+
+### 首次验收记录
+
+验收时间：2026-06-10 19:18 CST
+
+验收设备：`GUKF4DWOYLFU49QW`，OPPO PFGM00，Android 12。
+
+执行命令：
+
+```bash
+./gradlew :app:testDebugUnitTest --tests com.valiantyan.vibeanrmonitoring.scenario.ProcessCpuContentionScenarioTest
+./gradlew :app:testDebugUnitTest
+./gradlew :app:assembleDebug
+adb -s GUKF4DWOYLFU49QW install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s GUKF4DWOYLFU49QW logcat -c
+adb -s GUKF4DWOYLFU49QW shell am start -n com.valiantyan.vibeanrmonitoring/.MainActivity --es anr_demo_scenario process_cpu_contention
+adb -s GUKF4DWOYLFU49QW shell run-as com.valiantyan.vibeanrmonitoring ls -t files/anr-monitor-reports
+adb -s GUKF4DWOYLFU49QW exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-reports/1f231b83-81e2-42c7-b0e3-0d82c3c336f9.json
+```
+
+关键日志：
+
+```text
+W MainActivity: run demo scenario from intent: process_cpu_contention
+W ProcessCpuContention: 进程内 CPU 竞争场景开始: contenders=8
+W VibeAnrApplication: suspect ANR captured: 1f231b83-81e2-42c7-b0e3-0d82c3c336f9
+W VibeAnrApplication: ANR report written: 1f231b83-81e2-42c7-b0e3-0d82c3c336f9
+W ProcessCpuContention: DemoCpuContender-1 finished checksum=160042.7878436638
+W ProcessCpuContention: 进程内 CPU 竞争场景结束
+```
+
+关键 JSON 字段：
+
+```text
+event.eventId = 1f231b83-81e2-42c7-b0e3-0d82c3c336f9
+event.eventType = SUSPECT_ANR
+attribution.primary = CURRENT_MESSAGE_SLOW
+mainThread.current.wallMs = 3021
+mainThread.current.cpuMs = 160
+threadCpu.topThreads[0].threadName = DemoCpuContende
+threadCpu.topThreads[0].totalCpuMs = 2570
+threadCpu.topThreads[1].threadName = DemoCpuContende
+threadCpu.topThreads[1].totalCpuMs = 2560
+mainThread.stackFrames contains ProcessCpuContentionScenario.run
+mainThread.stackFrames contains DefaultProcessCpuContentionWorkload.createContentionAndWaitOnMainThread
+binderBlock.suspected = false
+barrierEvidence.stuckTokens = []
+```
+
+补充说明：本次设备从 `/proc/<pid>/task/<tid>/comm` 读取线程名时把 `DemoCpuContender-*` 截断为 `DemoCpuContende`，但 logcat 中可以看到完整 `DemoCpuContender-*` 线程名，且这些线程位于 `threadCpu.topThreads` 前列。
+
+验收结论：进程内 CPU 竞争场景验收通过。SDK 能捕获疑似 ANR，当前消息 wall time 超过阈值，主线程栈能定位到 `ProcessCpuContentionScenario`，线程 CPU 排名能看到 `DemoCpuContender-*` 后台线程位于 CPU 前列，Binder 和 Barrier 证据均不是本次主因，因此可以把根因写为“同一进程内后台 CPU 密集任务持续抢占调度资源，导致主线程输入响应延迟”。
 
 ## 后续批次顺序
 
