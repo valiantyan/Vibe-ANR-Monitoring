@@ -14,6 +14,7 @@ import com.valiantyan.vibeanrmonitoring.scenario.MainThreadCpuBusyScenario
 import com.valiantyan.vibeanrmonitoring.scenario.MessageStormScenario
 import com.valiantyan.vibeanrmonitoring.scenario.ServiceTimeoutScenario
 import com.valiantyan.vibeanrmonitoring.scenario.SyncBarrierLeakScenario
+import com.valiantyan.vibeanrmonitoring.scenario.ThreadPoolExhaustionWaitScenario
 
 /**
  * ANR SDK 示例入口，提供全量验收所需的主线程慢消息、消息风暴、忙等和等待类场景。
@@ -56,6 +57,10 @@ class MainActivity : AppCompatActivity() {
         IoDatabaseFileBlockScenario(context = this)
     }
 
+    // 线程池耗尽 + 主线程等待场景，按钮点击后占满线程池并等待排队 Future 结果。
+    private val threadPoolExhaustionWaitScenario: ThreadPoolExhaustionWaitScenario =
+        ThreadPoolExhaustionWaitScenario()
+
     /**
      * 初始化 demo 按钮，让手动验收可以直接触发不同 ANR 证据路径。
      */
@@ -90,6 +95,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.ioDatabaseFileBlockButton).setOnClickListener {
             ioDatabaseFileBlockScenario.run()
         }
+        findViewById<Button>(R.id.threadPoolExhaustionWaitButton).setOnClickListener {
+            threadPoolExhaustionWaitScenario.run()
+        }
         runScenarioFromIntent(intent = intent)
     }
 
@@ -121,8 +129,9 @@ class MainActivity : AppCompatActivity() {
     private fun runScenarioFromIntent(intent: Intent?): Unit {
         val scenarioId: String = intent?.getStringExtra(EXTRA_DEMO_SCENARIO) ?: return
         Log.w(TAG, "run demo scenario from intent: $scenarioId")
-        if (scenarioId == ioDatabaseFileBlockScenario.id) {
-            ioDatabaseFileBlockScenario.run()
+        when (scenarioId) {
+            ioDatabaseFileBlockScenario.id -> ioDatabaseFileBlockScenario.run()
+            threadPoolExhaustionWaitScenario.id -> threadPoolExhaustionWaitScenario.run()
         }
     }
 

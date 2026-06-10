@@ -982,6 +982,55 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 - 对用户可感知操作增加超时、进度状态和失败兜底，不让主线程等待 IO 完成。
 - 对线上业务增加慢 IO、慢 SQL 和主线程磁盘访问日志，和 SDK JSON 的栈证据交叉定位。
 
+### Demo 场景：线程池耗尽 + 主线程等待
+
+这个场景用于验证“线程池所有 worker 被长任务占满，主线程同步等待排队任务结果”导致的当前消息慢。按钮点击后，Demo 会创建固定大小线程池，先用长任务占满所有 worker，再提交一个排队任务并在主线程调用 `Future.get()` 等待结果。
+
+#### 操作步骤
+
+1. 安装 debug 包并打开 Demo App。
+2. 点击“线程池耗尽 + 主线程等待”。
+3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report written`。
+4. 拉取 `files/anr-monitor-reports` 目录下最新 JSON。
+5. 按下面字段顺序分析。
+
+#### JSON 判断口径
+
+| 字段 | 期望 | 含义 |
+| --- | --- | --- |
+| `event.eventType` | `SUSPECT_ANR` 或系统确认 ANR | SDK 已捕获一次 ANR 现场 |
+| `attribution.primary` | `CURRENT_MESSAGE_SLOW` | 主因是当前主线程消息执行过慢 |
+| `mainThread.current.wallMs` | 大于 `3000` | 当前消息超过 Demo 疑似 ANR 阈值 |
+| `mainThread.stackFrames` | 包含 `ThreadPoolExhaustionWaitScenario.run` | 能定位到 Demo 场景入口 |
+| `mainThread.stackFrames` | 包含 `ThreadPoolExhaustionWorkload.exhaustPoolAndWait` | 能定位到线程池耗尽工作负载 |
+| `mainThread.stackFrames` | 包含 `FutureTask.get`、`Object.wait` 或 `LockSupport.park` | 说明主线程正在等待排队任务结果 |
+| `barrierEvidence.stuckTokens` | 空数组或不是主证据 | 本次不是 Sync Barrier 泄漏 |
+| `binderBlock.suspected` | `false` 或不是主证据 | 本次不是 Binder 跨进程阻塞 |
+
+#### 根因写法
+
+可以写成：
+
+```text
+本次 ANR 是线程池耗尽后主线程同步等待任务结果。证据是 attribution.primary=CURRENT_MESSAGE_SLOW，当前消息耗时超过阈值，主线程栈能回溯到 ThreadPoolExhaustionWaitScenario.run 和 ThreadPoolExhaustionWorkload.exhaustPoolAndWait，并停在 FutureTask.get / Object.wait / LockSupport.park 等等待调用。Barrier 和 Binder 证据不是本次主因。
+```
+
+不要写成：
+
+```text
+线程池导致 ANR。
+```
+
+更准确的说法是：业务代码把后台线程池 worker 全部占满后，又在主线程同步等待同一个线程池里的排队任务，形成“主线程等后台、后台无空闲 worker”的等待链。
+
+#### 修复建议
+
+- 不在主线程调用 `Future.get()`、`CountDownLatch.await()`、`CompletableFuture.get()` 或阻塞式协程桥接等待后台结果。
+- 不让 UI 关键路径依赖容量很小且可能被长任务占满的共享线程池。
+- 将长任务和短任务拆到不同 executor，给用户交互链路保留独立调度资源。
+- 使用异步回调、协程 `suspend`、LiveData/Flow 或状态机更新 UI，不阻塞主线程等待结果。
+- 对必须等待的任务设置业务超时、降级和取消能力，并把等待链路打点到日志中。
+
 ### Binder / 跨进程阻塞场景
 
 这个场景用于验证：主线程发起同步跨进程调用后，如果远端进程迟迟不返回，SDK 是否能把问题识别为 Binder / 跨进程阻塞疑似，而不是只看到一个普通当前消息慢。

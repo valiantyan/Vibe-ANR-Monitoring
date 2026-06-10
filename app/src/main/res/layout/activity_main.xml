@@ -39,6 +39,13 @@
             android:text="@string/demo_io_database_file_block" />
 
         <Button
+            android:id="@+id/threadPoolExhaustionWaitButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/demo_thread_pool_exhaustion_wait" />
+
+        <Button
             android:id="@+id/binderLikeButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

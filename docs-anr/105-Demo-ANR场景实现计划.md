@@ -23,7 +23,7 @@
 | 8 | ContentProvider 阻塞 | 点击“ContentProvider 阻塞”后查询应用内 Provider，`query()` 主线程阻塞 12 秒 | Provider 查询阻塞 + 当前消息慢证据 | `mainThread.stackFrames` 包含 `BlockingContentProvider.query`、`ContentProviderBlocker.block`、`mainThread.current.wallMs` | 已实现，待手动验收 |
 | 9 | Binder 跨进程阻塞 | 点击“Binder 跨进程阻塞”后主线程同步调用远端 `:remote` AIDL，远端 Binder 线程阻塞 12 秒 | `BINDER_BLOCK_SUSPECTED` | `binderBlock.suspected=true`、`binderBlock.mainThreadInBinder=true`、`mainThread.stackFrames` 包含 `BinderProxy.transact` | 已验收 |
 | 10 | IO / 数据库 / 文件阻塞 | 点击“IO / 数据库 / 文件阻塞”后主线程执行同步文件写入、fsync 和 SQLite 事务 | `CURRENT_MESSAGE_SLOW` + IO/DB 栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `IoDatabaseFileBlockScenario.run` / `FileAndDatabaseBlockingWorkload`、文件或 SQLite 调用帧 | 已验收 |
-| 11 | 线程池耗尽后主线程等待 | 占满线程池后主线程等待结果 | 等待类当前慢消息 | 主线程等待栈、后台线程证据 | 待实现 |
+| 11 | 线程池耗尽后主线程等待 | 点击“线程池耗尽 + 主线程等待”后占满固定线程池 worker，主线程同步等待排队 `Future` 结果 | `CURRENT_MESSAGE_SLOW` + 等待栈证据 | `mainThread.current.wallMs`、`mainThread.stackFrames` 包含 `ThreadPoolExhaustionWaitScenario.run` / `ThreadPoolExhaustionWorkload.exhaustPoolAndWait` / `FutureTask.get` | 已实现，待手动验收 |
 | 12 | GC / 内存抖动 | 大量分配对象制造 GC 压力 | 环境或资源辅因 | `environmentSnapshot`、历史消息抖动 | 待实现 |
 | 13 | 进程内 CPU 竞争 | 后台线程打满 CPU | CPU 竞争辅因 | `threadCpu.topThreads`、`checktime.maxDelayMs` | 待实现 |
 
@@ -605,6 +605,26 @@ barrierEvidence.stuckTokens = []
 
 验收结论：IO / 数据库 / 文件阻塞场景验收通过。SDK 能捕获疑似 ANR，JSON 主归因为 `CURRENT_MESSAGE_SLOW`，当前消息耗时达到 Demo 阈值，主线程栈和慢消息采样都能定位到 `IoDatabaseFileBlockScenario.run` 与 `FileAndDatabaseBlockingWorkload.runIoDatabaseFileWorkload`，并出现 `SQLiteDatabase.execSQL` 等数据库调用帧；Barrier 和 Binder 证据均不是本次主因。因此根因可以明确写为“主线程在 Activity 启动/场景触发消息中执行同步文件 IO 和 SQLite 数据库事务，导致当前消息无法及时返回”。
 
+## 第十一批次：线程池耗尽 + 主线程等待
+
+### 触发步骤
+
+1. 安装 debug 包。
+2. 打开 Demo App。
+3. 点击“线程池耗尽 + 主线程等待”。
+4. 等待线程池 worker 被长任务占满，主线程停在排队任务 `Future.get()`。
+5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
+
+### JSON 读取口径
+
+先看 `attribution.primary`，预期为 `CURRENT_MESSAGE_SLOW`。再看 `mainThread.current.wallMs`，应大于 Demo 配置的 `suspectAnrMs=3000`。最后看 `mainThread.stackFrames`，应能看到 `ThreadPoolExhaustionWaitScenario.run`、`ThreadPoolExhaustionWorkload.exhaustPoolAndWait` 和 `FutureTask.get` / `Object.wait` / `LockSupport.park` 等等待帧，说明根因入口是 Demo 线程池耗尽等待场景。
+
+### 排除项
+
+- `barrierEvidence.stuckTokens` 不应该成为主因。
+- `binderBlock.suspected` 不应该为 true。
+- 如果主线程栈只看到普通 `Thread.sleep`，说明没有命中线程池等待场景，应检查是否点错按钮或报告取错。
+
 ## 后续批次顺序
 
-后续按锁等待、线程池、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
+后续按锁等待、GC、CPU 竞争的顺序逐个实现。每个批次都需要独立测试、独立文档更新和至少一次手动 JSON 验收。
