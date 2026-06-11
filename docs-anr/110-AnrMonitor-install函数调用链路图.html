@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AnrMonitor.install() 完整函数阅读路线图</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --ink: #152033;
+      --muted: #637086;
+      --line: #d8e0ea;
+      --brand: #155eef;
+      --brand-soft: #eaf1ff;
+      --sync: #176a3a;
+      --sync-soft: #e8f6ee;
+      --construct: #8a5a00;
+      --construct-soft: #fff3d8;
+      --async: #7b2cbf;
+      --async-soft: #f5e9ff;
+      --report: #006d77;
+      --report-soft: #e7f7f8;
+      --stop: #b42318;
+      --stop-soft: #fff0ee;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.65;
+    }
+
+    header {
+      padding: 40px 32px 26px;
+      color: #fff;
+      background: #0f1726;
+    }
+
+    header h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    header p {
+      max-width: 1120px;
+      margin: 0;
+      color: #d9e2f2;
+      font-size: 16px;
+    }
+
+    main {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 24px 24px 56px;
+    }
+
+    section {
+      margin: 20px 0;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: #edf2f8;
+      color: #20314d;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .summary-card {
+      min-height: 104px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcff;
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .summary-card span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      margin: 2px 4px 2px 0;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .sync {
+      color: var(--sync);
+      background: var(--sync-soft);
+    }
+
+    .construct {
+      color: var(--construct);
+      background: var(--construct-soft);
+    }
+
+    .async {
+      color: var(--async);
+      background: var(--async-soft);
+    }
+
+    .report {
+      color: var(--report);
+      background: var(--report-soft);
+    }
+
+    .stop {
+      color: var(--stop);
+      background: var(--stop-soft);
+    }
+
+    .note {
+      padding: 14px 16px;
+      border-left: 4px solid var(--brand);
+      border-radius: 6px;
+      background: var(--brand-soft);
+      color: #17345f;
+    }
+
+    .warn {
+      padding: 14px 16px;
+      border-left: 4px solid var(--construct);
+      border-radius: 6px;
+      background: var(--construct-soft);
+      color: #4b3500;
+    }
+
+    .tree {
+      margin: 12px 0 0;
+      padding: 18px;
+      border-radius: 8px;
+      background: #101827;
+      color: #e8eef8;
+      overflow-x: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 14px;
+      line-height: 1.72;
+    }
+
+    .map {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .toc {
+      position: sticky;
+      top: 16px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcff;
+    }
+
+    .toc a {
+      display: block;
+      padding: 8px 0;
+      color: #24466f;
+      text-decoration: none;
+      border-bottom: 1px solid #edf1f6;
+      font-size: 14px;
+    }
+
+    .toc a:last-child {
+      border-bottom: 0;
+    }
+
+    .chapter {
+      margin-bottom: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .chapter-head {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fbff;
+    }
+
+    .chapter-title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.4;
+    }
+
+    .chapter-body {
+      padding: 16px;
+    }
+
+    .chain {
+      margin: 0 0 14px;
+      padding: 14px;
+      border-radius: 8px;
+      background: #f3f6fb;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #26344f;
+      background: #eef3fa;
+    }
+
+    td:first-child {
+      width: 230px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      color: #17243a;
+    }
+
+    .checklist {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    .checklist li {
+      margin: 6px 0;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    @media (max-width: 1020px) {
+      main {
+        padding: 18px 14px 44px;
+      }
+
+      header {
+        padding: 30px 20px 22px;
+      }
+
+      .summary,
+      .map,
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AnrMonitor.install() 完整函数阅读路线图</h1>
+    <p>这份 HTML 面向第一次阅读 SDK 源码的新人：不是展示散点节点图，而是从 <code>AnrMonitor.install()</code> 开始，沿着真实代码执行路径，把安装、消息采集、Watchdog、ANR 现场采集、归因、JSON 写入、上传重试和卸载链路串成可阅读的函数路线。</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>先记住这 4 件事</h2>
+      <p><code>AnrMonitor.install()</code> 不是 SDK 的全部工作，只是把监控能力安装到进程里。真正生成 ANR JSON 的链路，会在 Watchdog 线程发现主线程心跳超时后异步触发。</p>
+      <div>
+        <span class="tag sync">同步调用</span>
+        <span class="tag construct">构造对象</span>
+        <span class="tag async">开启异步线程/回调</span>
+        <span class="tag report">报告生成链路</span>
+        <span class="tag stop">停止卸载链路</span>
+      </div>
+      <div class="summary">
+        <div class="summary-card">
+          <strong>入口在哪里</strong>
+          <span><code>api/AnrMonitor.kt</code> 的 <code>install()</code> 是公开入口。</span>
+        </div>
+        <div class="summary-card">
+          <strong>启动了什么</strong>
+          <span>安装 Looper Printer、启动 Watchdog、可选启动上传重试线程。</span>
+        </div>
+        <div class="summary-card">
+          <strong>JSON 何时生成</strong>
+          <span>Watchdog 判断主线程心跳超时后，调用 <code>captureSuspectAnr()</code>。</span>
+        </div>
+        <div class="summary-card">
+          <strong>怎么继续阅读</strong>
+          <span>按本页 1 到 8 段顺序读，先主干，再看每条分支。</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>完整核心调用树</h2>
+      <pre class="tree">AnrMonitor.install(context, config, uploader, listener)
+  ├─ activeSession 已存在？
+  │   └─ return existingSession
+  ├─ AnrMonitorRuntime(...)
+  │   ├─ AndroidClock()
+  │   ├─ SdkSelfMonitor()
+  │   ├─ ClassNameSanitizer(config.privacyMode)
+  │   ├─ MessageRingBuffer(config.historyBufferSize)
+  │   ├─ MainThreadStackCollector()
+  │   ├─ SlowMessageStackSampler(frameProvider = stackCollector.capture())
+  │   ├─ MainLooperTimelineCollector(...)
+  │   ├─ PendingQueueSnapshotter(...)
+  │   ├─ ThreadCpuSnapshotter()
+  │   ├─ ChecktimeMonitor(...)
+  │   ├─ EnvironmentSnapshotter()
+  │   ├─ BarrierEvidenceCollector(...)
+  │   ├─ BinderBlockClassifier() / BinderThreadStackCollector()
+  │   ├─ AnrInfoCollector.create(appContext)
+  │   ├─ AnrReportAssembler(...)
+  │   ├─ AnrReportJsonEncoder()
+  │   ├─ LocalAnrReportWriter(...)
+  │   ├─ ReportRetryQueue(...) / ReportRetryDispatcher(...)
+  │   ├─ AnrIncidentDeduplicator()
+  │   └─ AnrWatchdog(onSuspectAnr = ::captureSuspectAnr)
+  └─ installRuntimeLocked(config, runtimeHandle)
+      ├─ AnrMonitorSession(config, stopAction)
+      │   └─ stopAction = runtimeHandle.stop() + clearSessionIfCurrent(session)
+      ├─ runtime = runtimeHandle
+      ├─ activeSession = session
+      ├─ runtimeHandle.start()
+      │   └─ AnrMonitorRuntime.start()
+      │       ├─ MainLooperPrinterInstaller().install(timelineCollector)
+      │       │   ├─ readCurrentPrinterFromLooper(requireLooper())
+      │       │   ├─ chainedPrinter.println(line)
+      │       │   │   ├─ timelineCollector.println(line)
+      │       │   │   └─ previousPrinter?.println(line)
+      │       │   └─ Looper.setMessageLogging(chainedPrinter)
+      │       ├─ watchdog.start()
+      │       │   └─ Thread(::loop, "vibe-anr-watchdog").start()
+      │       └─ startUploadRetryLoop()
+      │           └─ uploadEnabled=true 时 Thread(::runUploadRetryLoop, "vibe-anr-upload-retry").start()
+      └─ return session
+
+安装完成后，后续异步触发：
+MainLooperTimelineCollector.println(line)
+  └─ onLooperLog(line)
+      ├─ LooperMessageParser.parse(line)
+      ├─ start: createCurrentRecordStart(event) -> startSlowSampling(start)
+      └─ finish: finishCurrentRecord(event) -> finishSlowSampling(seq) -> historyBuffer.add(record)
+
+AnrWatchdog.loop()
+  ├─ recordChecktimeInterval(now)
+  ├─ heartbeatState.isTimedOut(now)
+  │   └─ timedOut=true: onSuspectAnr() -> AnrMonitorRuntime.captureSuspectAnr()
+  ├─ postHeartbeat()
+  │   └─ mainHandler.post { heartbeatState.markHandled(seq) }
+  └─ sleepInterval()
+
+AnrMonitorRuntime.captureSuspectAnr()
+  ├─ shouldCapture(now)
+  └─ captureAndReport(now)
+      ├─ looperPrinterConflictReporter.record(handle)
+      ├─ buildSnapshot(now)
+      │   ├─ anrInfoCollector.collect()
+      │   ├─ capturePendingQueue() -> pendingSnapshotter.capture()
+      │   ├─ stackCollector.capture()
+      │   ├─ timelineCollector.currentMessage()
+      │   ├─ timelineCollector.historyMessages()
+      │   ├─ timelineCollector.stackSamples()
+      │   ├─ captureThreadCpuRecords() -> threadCpuSnapshotter.captureTopThreads()
+      │   ├─ captureChecktimeSummary() -> checktimeMonitor.summary()
+      │   ├─ captureEnvironmentSnapshot() -> environmentSnapshotter.capture()
+      │   ├─ captureBarrierEvidenceSnapshot() -> barrierEvidenceCollector.collect()
+      │   └─ captureBinderBlockSnapshot() -> binderThreadStackCollector.capture() -> binderBlockClassifier.classify()
+      ├─ incidentDeduplicator.shouldReport(snapshot)
+      ├─ listener.onSuspectAnr(snapshot)
+      ├─ reportAssembler.build(snapshot, buildStartMs)
+      │   └─ AttributionAnalyzer.analyze(snapshot)
+      ├─ localWriter.write(report)
+      │   ├─ AnrReportJsonEncoder.encode(report)
+      │   ├─ File.writeText(...)
+      │   └─ pruneExpiredReports(...)
+      ├─ listener.onConfirmedAnr(report)
+      └─ uploadIfEnabled(report)</pre>
+      <p class="note">这棵树是“核心函数调用关系”，不是把每个数据类构造器和工具函数都无限展开。新手按它读完，就能理解 SDK 从安装到生成 JSON 的主流程。</p>
+    </section>
+
+    <section>
+      <h2>按这个顺序读源码</h2>
+      <div class="map">
+        <nav class="toc">
+          <a href="#chapter-1">1. 公开安装入口</a>
+          <a href="#chapter-2">2. Runtime 构造依赖</a>
+          <a href="#chapter-3">3. 会话绑定与启动</a>
+          <a href="#chapter-4">4. Looper 消息采集</a>
+          <a href="#chapter-5">5. Watchdog 心跳检测</a>
+          <a href="#chapter-6">6. 疑似 ANR 现场采集</a>
+          <a href="#chapter-7">7. 归因、编码、写入、上传</a>
+          <a href="#chapter-8">8. 停止与卸载</a>
+        </nav>
+
+        <div>
+          <article class="chapter" id="chapter-1">
+            <div class="chapter-head">
+              <h3 class="chapter-title">1. 公开安装入口：先弄懂 SDK 怎么被装进去</h3>
+              <span class="tag sync">同步调用</span>
+            </div>
+            <div class="chapter-body">
+              <pre class="chain">AnrMonitor.install(...)
+  ├─ activeSession 非空：return existingSession
+  ├─ AnrMonitorRuntime(...)
+  └─ installRuntimeLocked(config, runtimeHandle)</pre>
+              <table>
+                <thead>
+                  <tr>
+                    <th>函数</th>
+                    <th>所在文件</th>
+                    <th>职责</th>
+                    <th>下一步读哪里</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>AnrMonitor.install()</td>
+                    <td>api/AnrMonitor.kt</td>
+                    <td>公开安装入口；用 <code>@Synchronized</code> 保护单例安装，避免重复启动多个 Watchdog 或 Looper Printer。</td>
+                    <td>看到没有旧 session 后，继续读 <code>AnrMonitorRuntime(...)</code> 构造。</td>
+                  </tr>
+                  <tr>
+                    <td>activeSession</td>
+                    <td>api/AnrMonitor.kt</td>
+                    <td>进程内唯一活跃会话；重复 install 直接返回旧 session。</td>
+                    <td>理解为什么重复调用不会生成多套采集器。</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul class="checklist">
+                <li>读完这一段，要知道 SDK 的公开入口只有一个，重复安装会被短路。</li>
+                <li>这里还没有生成 JSON，也没有立刻采集 ANR。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="chapter" id="chapter-2">
+            <div class="chapter-head">
+              <h3 class="chapter-title">2. Runtime 构造依赖：看 SDK 准备了哪些能力</h3>
+              <span class="tag construct">构造对象</span>
+            </div>
+            <div class="chapter-body">
+              <pre class="chain">AnrMonitorRuntime(...)
+  ├─ clock / sdkSelfMonitor / sanitizer
+  ├─ historyBuffer / stackCollector / slowMessageStackSampler
+  ├─ timelineCollector
+  ├─ pendingSnapshotter / barrierEvidenceCollector / binderBlockClassifier
+  ├─ threadCpuSnapshotter / checktimeMonitor / environmentSnapshotter
+  ├─ anrInfoCollector
+  ├─ reportAssembler / reportEncoder / localWriter
+  ├─ reportRetryQueue / reportRetryDispatcher
+  └─ watchdog(onSuspectAnr = ::captureSuspectAnr)</pre>
+              <table>
+                <thead>
+                  <tr>
+                    <th>对象</th>
+                    <th>所在文件</th>
+                    <th>职责</th>
+                    <th>是否启动线程</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>MainLooperTimelineCollector</td>
+                    <td>collector/looper/MainLooperTimelineCollector.kt</td>
+                    <td>维护当前消息、历史消息、慢消息栈采样，是 JSON 中主线程消息时间线的来源。</td>
+                    <td>否，只是被构造。</td>
+                  </tr>
+                  <tr>
+                    <td>PendingQueueSnapshotter</td>
+                    <td>collector/pending/PendingQueueSnapshotter.kt</td>
+                    <td>疑似 ANR 时读取 MessageQueue pending 消息，用于识别消息堆积和 Sync Barrier。</td>
+                    <td>否。</td>
+                  </tr>
+                  <tr>
+                    <td>BarrierEvidenceCollector</td>
+                    <td>collector/barrier/BarrierEvidenceCollector.kt</td>
+                    <td>聚合 Barrier token 和 nativePollOnce 证据，辅助判断 nativePollOnce 是否被 Sync Barrier 挡住。</td>
+                    <td>否。</td>
+                  </tr>
+                  <tr>
+                    <td>AnrWatchdog</td>
+                    <td>collector/watchdog/AnrWatchdog.kt</td>
+                    <td>后台心跳检测器；构造时把 <code>onSuspectAnr</code> 绑定到 <code>captureSuspectAnr()</code>。</td>
+                    <td>构造时不启动，<code>start()</code> 才启动。</td>
+                  </tr>
+                  <tr>
+                    <td>LocalAnrReportWriter</td>
+                    <td>reporter/local/LocalAnrReportWriter.kt</td>
+                    <td>负责把完整报告写入 app 私有目录下的 <code>anr-monitor-reports</code>。</td>
+                    <td>否。</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul class="checklist">
+                <li>读完这一段，要知道 Runtime 是“编排器”，不是单一 collector。</li>
+                <li>构造阶段只准备对象，真正接线在 <code>AnrMonitorRuntime.start()</code>。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="chapter" id="chapter-3">
+            <div class="chapter-head">
+              <h3 class="chapter-title">3. 会话绑定与启动：install 同步阶段的核心</h3>
+              <span class="tag sync">同步调用</span>
+            </div>
+            <div class="chapter-body">
+              <pre class="chain">installRuntimeLocked(config, runtimeHandle)
+  ├─ AnrMonitorSession(config, stopAction)
+  ├─ runtime = runtimeHandle
+  ├─ activeSession = session
+  ├─ runtimeHandle.start()
+  │   └─ AnrMonitorRuntime.start()
+  │       ├─ MainLooperPrinterInstaller().install(timelineCollector)
+  │       ├─ watchdog.start()
+  │       └─ startUploadRetryLoop()
+  └─ return session</pre>
+              <table>
+                <thead>
+                  <tr>
+                    <th>函数</th>
+                    <th>所在文件</th>
+                    <th>职责</th>
+                    <th>下一步读哪里</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>installRuntimeLocked()</td>
+                    <td>api/AnrMonitor.kt</td>
+                    <td>创建 session，保存 runtime/session，然后启动 runtime。</td>
+                    <td><code>AnrMonitorSession.stop()</code> 和 <code>AnrMonitorRuntime.start()</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>AnrMonitorSession(...)</td>
+                    <td>api/AnrMonitorSession.kt</td>
+                    <td>宿主拿到的会话句柄；保存配置和停止动作。</td>
+                    <td>读 <code>stop()</code> 了解卸载路径。</td>
+                  </tr>
+                  <tr>
+                    <td>AnrMonitorRuntime.start()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>真正接入监控能力：Looper Printer、Watchdog、上传重试线程。</td>
+                    <td>先读 Looper Printer，再读 Watchdog。</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul class="checklist">
+                <li>读完这一段，要知道 install 返回前只完成“安装与启动”，不等待 ANR 发生。</li>
+                <li><code>start()</code> 有 <code>config.enabled</code> 和 <code>isRunning</code> 防重保护。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="chapter" id="chapter-4">
+            <div class="chapter-head">
+              <h3 class="chapter-title">4. Looper 消息采集：JSON 里的 currentMessage/historyMessages 从哪里来</h3>
+              <span class="tag async">主 Looper 回调</span>
+            </div>
+            <div class="chapter-body">
+              <pre class="chain">MainLooperPrinterInstaller.install(timelineCollector)
+  ├─ requireLooper()
+  ├─ readCurrentPrinterFromLooper(looper)
+  ├─ chainedPrinter.println(line)
+  │   ├─ timelineCollector.println(line)
+  │   └─ previousPrinter?.println(line)
+  └─ looper.setMessageLogging(chainedPrinter)
+
+MainLooperTimelineCollector.println(line)
+  └─ onLooperLog(line)
+      ├─ LooperMessageParser.parse(line)
+      ├─ createCurrentRecordStart(event)
+      │   └─ startSlowSampling(start)
+      └─ finishCurrentRecord(event)
+          ├─ finishSlowSampling(seq)
+          └─ historyBuffer.add(record)</pre>
+              <table>
+                <thead>
+                  <tr>
+                    <th>函数</th>
+                    <th>所在文件</th>
+                    <th>职责</th>
+                    <th>读代码时看什么</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>MainLooperPrinterInstaller.install()</td>
+                    <td>collector/looper/MainLooperPrinterInstaller.kt</td>
+                    <td>把 SDK 的 Printer 安装到主 Looper，同时链式调用已有 Printer，降低冲突。</td>
+                    <td>看 <code>previousPrinter</code>、<code>chainedPrinter</code>、<code>InstallHandle</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>onLooperLog()</td>
+                    <td>collector/looper/MainLooperTimelineCollector.kt</td>
+                    <td>解析 Looper 开始/结束日志，分别进入“当前消息开始”和“历史消息结束”。</td>
+                    <td>看 start 分支和 finish 分支怎么改变 <code>currentRecordStart</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>currentMessage()</td>
+                    <td>collector/looper/MainLooperTimelineCollector.kt</td>
+                    <td>Watchdog 捕获现场时读取当前未完成消息，并可能触发慢消息栈采样。</td>
+                    <td>看 <code>wallMs</code>、<code>cpuMs</code>、<code>sampleStackIds</code> 如何计算。</td>
+                  </tr>
+                  <tr>
+                    <td>historyMessages()</td>
+                    <td>collector/looper/MainLooperTimelineCollector.kt</td>
+                    <td>返回环形缓冲区里的已完成历史消息。</td>
+                    <td>看它为什么能帮你找到“ANR 前一个慢消息”。</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul class="checklist">
+                <li>读完这一段，要能解释 JSON 的 <code>mainThread.currentMessage</code> 和 <code>mainThread.historyMessages</code>。</li>
+                <li>这里是主线程消息自然回调，不是 Watchdog 线程主动抓取所有消息。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="chapter" id="chapter-5">
+            <div class="chapter-head">
+              <h3 class="chapter-title">5. Watchdog 心跳检测：SDK 怎么发现疑似 ANR</h3>
+              <span class="tag async">后台线程</span>
+            </div>
+            <div class="chapter-body">
+              <pre class="chain">AnrWatchdog.start()
+  ├─ isRunning.compareAndSet(false, true)
+  └─ Thread(::loop, "vibe-anr-watchdog").start()
+
+AnrWatchdog.loop()
+  ├─ recordChecktimeInterval(now)
+  ├─ heartbeatState.isTimedOut(now)
+  │   ├─ true: onSuspectAnr()
+  │   └─ recovered: onRecovered()
+  ├─ postHeartbeat()
+  │   ├─ heartbeatState.markPosted(seq, postedUptimeMs)
+  │   └─ mainHandler.post { heartbeatState.markHandled(seq) }
+  └─ sleepInterval()</pre>
+              <table>
+                <thead>
+                  <tr>
+                    <th>函数</th>
+                    <th>所在文件</th>
+                    <th>职责</th>
+                    <th>下一步读哪里</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>AnrWatchdog.start()</td>
+                    <td>collector/watchdog/AnrWatchdog.kt</td>
+                    <td>启动后台检测线程，重复调用不会创建多条线程。</td>
+                    <td><code>loop()</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>loop()</td>
+                    <td>collector/watchdog/AnrWatchdog.kt</td>
+                    <td>周期性检查心跳是否超时，超时则回调 <code>onSuspectAnr()</code>。</td>
+                    <td><code>postHeartbeat()</code> 和 <code>HeartbeatState</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>postHeartbeat()</td>
+                    <td>collector/watchdog/AnrWatchdog.kt</td>
+                    <td>向主线程投递一个心跳 Runnable；主线程执行到它，说明消息循环还能推进。</td>
+                    <td>看主线程卡住时为什么 <code>markHandled()</code> 不会执行。</td>
+                  </tr>
+                  <tr>
+                    <td>onSuspectAnr()</td>
+                    <td>构造时绑定到 AnrMonitorRuntime.kt</td>
+                    <td>函数引用，实际调用 <code>AnrMonitorRuntime.captureSuspectAnr()</code>。</td>
+                    <td>进入现场采集链路。</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul class="checklist">
+                <li>读完这一段，要知道 SDK 不是依赖系统 ANR 弹窗才工作，而是自己用心跳提前捕获疑似 ANR。</li>
+                <li>如果主线程卡在 <code>nativePollOnce</code>、Binder、IO、CPU 忙等，心跳都可能无法及时处理。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="chapter" id="chapter-6">
+            <div class="chapter-head">
+              <h3 class="chapter-title">6. 疑似 ANR 现场采集：JSON 主要节点从这里来</h3>
+              <span class="tag report">报告生成链路</span>
+            </div>
+            <div class="chapter-body">
+              <pre class="chain">captureSuspectAnr()
+  ├─ clock.uptimeMillis()
+  ├─ shouldCapture(now)
+  └─ captureAndReport(now)
+      ├─ looperPrinterConflictReporter.record(handle)
+      ├─ buildSnapshot(now)
+      ├─ incidentDeduplicator.shouldReport(snapshot)
+      ├─ listener.onSuspectAnr(snapshot)
+      ├─ reportAssembler.build(snapshot, buildStartMs)
+      ├─ localWriter.write(report)
+      ├─ listener.onConfirmedAnr(report)
+      └─ uploadIfEnabled(report)
+
+buildSnapshot(now)
+  ├─ anrInfoCollector.collect()
+  ├─ capturePendingQueue()
+  ├─ stackCollector.capture()
+  ├─ timelineCollector.currentMessage()
+  ├─ timelineCollector.historyMessages()
+  ├─ timelineCollector.stackSamples()
+  ├─ captureThreadCpuRecords()
+  ├─ captureChecktimeSummary()
+  ├─ captureEnvironmentSnapshot()
+  ├─ captureBarrierEvidenceSnapshot()
+  └─ captureBinderBlockSnapshot()</pre>
+              <table>
+                <thead>
+                  <tr>
+                    <th>函数</th>
+                    <th>所在文件</th>
+                    <th>职责</th>
+                    <th>对应 JSON 内容</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>captureSuspectAnr()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>Watchdog 超时后的入口；做限频和异常兜底。</td>
+                    <td>决定是否产生本次报告。</td>
+                  </tr>
+                  <tr>
+                    <td>shouldCapture()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>运行态和时间窗口限频，避免同一阻塞窗口疯狂生成报告。</td>
+                    <td>影响是否有 JSON。</td>
+                  </tr>
+                  <tr>
+                    <td>buildSnapshot()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>把所有采集器结果合成 <code>AnrSnapshot</code>。</td>
+                    <td><code>event</code>、<code>mainThread</code>、<code>pendingQueue</code>、<code>barrierEvidence</code>、<code>binderBlock</code> 等。</td>
+                  </tr>
+                  <tr>
+                    <td>capturePendingQueue()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>按配置读取 MessageQueue pending 消息；关闭时返回 unavailable。</td>
+                    <td><code>pendingQueue</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>captureBarrierEvidenceSnapshot()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>采集 Sync Barrier token 和 nativePollOnce 增强证据。</td>
+                    <td><code>barrierEvidence</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>captureBinderBlockSnapshot()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>采集主线程 Binder 阻塞疑似和 Binder 线程辅助栈。</td>
+                    <td><code>binderBlock</code>。</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul class="checklist">
+                <li>读完这一段，要能把 JSON 每个大节点对应回一个采集函数。</li>
+                <li>如果某个节点 unavailable，要回到对应 <code>captureXxx()</code> 看配置开关或失败原因。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="chapter" id="chapter-7">
+            <div class="chapter-head">
+              <h3 class="chapter-title">7. 归因、编码、写入、上传：JSON 文件怎么落盘</h3>
+              <span class="tag report">报告出口</span>
+            </div>
+            <div class="chapter-body">
+              <pre class="chain">reportAssembler.build(snapshot, buildStartMs)
+  ├─ AttributionAnalyzer.analyze(snapshot)
+  │   ├─ PendingQueueAnalyzer.analyze(pendingQueue.messages)
+  │   ├─ analyzeBarrier(...)
+  │   ├─ analyzeMessageStorm(...)
+  │   ├─ analyzeBinderBlock(...)
+  │   ├─ analyzeCurrentMessage(...)
+  │   ├─ analyzeHistory(...)
+  │   └─ unknownResult(...)
+  ├─ selfMonitor.recordCost("report_build_cost_ms")
+  └─ AnrReport(schemaVersion, snapshot, attribution, diagnostics)
+
+localWriter.write(report)
+  ├─ ensureReportDirectory()
+  ├─ safeFileName(eventId)
+  ├─ AnrReportJsonEncoder.encode(report)
+  │   ├─ eventJson(report)
+  │   ├─ systemAnrJson(report)
+  │   ├─ mainThreadJson(report)
+  │   ├─ pendingQueueJson(report)
+  │   ├─ barrierEvidenceJson(report)
+  │   ├─ binderBlockJson(report)
+  │   ├─ threadCpuJson(report)
+  │   ├─ checktimeJson(report)
+  │   ├─ environmentJson(report)
+  │   ├─ attributionJson(report)
+  │   └─ diagnosticsJson(report)
+  ├─ File.writeText(json)
+  └─ pruneExpiredReports(now)
+
+uploadIfEnabled(report)
+  ├─ reportRetryDispatcher.enqueueReport(...)
+  ├─ uploader.upload(report)
+  ├─ reportRetryDispatcher.recordUploadResult(...)
+  └─ listener.onMonitorError(...) on failure</pre>
+              <table>
+                <thead>
+                  <tr>
+                    <th>函数</th>
+                    <th>所在文件</th>
+                    <th>职责</th>
+                    <th>新手应该重点看</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>AnrReportAssembler.build()</td>
+                    <td>internal/AnrReportAssembler.kt</td>
+                    <td>把现场快照转为完整报告，补充归因和 SDK 诊断。</td>
+                    <td>看 <code>schemaVersion</code>、<code>attribution</code>、<code>diagnostics</code> 怎么来的。</td>
+                  </tr>
+                  <tr>
+                    <td>AttributionAnalyzer.analyze()</td>
+                    <td>domain/analyzer/AttributionAnalyzer.kt</td>
+                    <td>按优先级判断主因：Barrier、消息风暴、Binder、当前慢消息、历史慢消息、未知。</td>
+                    <td>看归因优先级，不要只看最后一个栈。</td>
+                  </tr>
+                  <tr>
+                    <td>LocalAnrReportWriter.write()</td>
+                    <td>reporter/local/LocalAnrReportWriter.kt</td>
+                    <td>创建目录、编码 JSON、写入 <code>${eventId}.json</code>、执行本地保留策略。</td>
+                    <td>看文件为什么在 app 私有目录的 <code>anr-monitor-reports</code>。</td>
+                  </tr>
+                  <tr>
+                    <td>AnrReportJsonEncoder.encode()</td>
+                    <td>reporter/encoder/AnrReportJsonEncoder.kt</td>
+                    <td>把报告对象编码成稳定 JSON schema。</td>
+                    <td>按 <code>eventJson</code>、<code>mainThreadJson</code>、<code>attributionJson</code> 对照 JSON 看。</td>
+                  </tr>
+                  <tr>
+                    <td>uploadIfEnabled()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>开启上传时入队 gzip payload、调用宿主 uploader、记录失败重试。</td>
+                    <td>理解“本地写入”和“远端上传”是两条出口。</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul class="checklist">
+                <li>读完这一段，要知道 JSON 是先本地写入，再按配置上传。</li>
+                <li>归因优先级很重要：nativePollOnce 场景通常要结合 pendingQueue + barrierEvidence + mainThreadStack。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="chapter" id="chapter-8">
+            <div class="chapter-head">
+              <h3 class="chapter-title">8. 停止与卸载：看 SDK 怎么释放资源</h3>
+              <span class="tag stop">停止链路</span>
+            </div>
+            <div class="chapter-body">
+              <pre class="chain">AnrMonitor.uninstall()
+  ├─ activeSession?.stop()
+  │   └─ AnrMonitorSession.stop()
+  │       └─ stopAction()
+  │           ├─ runtimeHandle.stop()
+  │           │   └─ AnrMonitorRuntime.stop()
+  │           │       ├─ watchdog.stop()
+  │           │       ├─ looperPrinterConflictReporter.record(handle)
+  │           │       ├─ looperPrinterHandle?.uninstall()
+  │           │       ├─ markAnrRecovered()
+  │           │       └─ stopUploadRetryLoop()
+  │           └─ clearSessionIfCurrent(session)
+  ├─ activeSession = null
+  └─ runtime = null</pre>
+              <table>
+                <thead>
+                  <tr>
+                    <th>函数</th>
+                    <th>所在文件</th>
+                    <th>职责</th>
+                    <th>注意点</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>AnrMonitorSession.stop()</td>
+                    <td>api/AnrMonitorSession.kt</td>
+                    <td>宿主主动停止入口；调用 runtime stop，并标记 session 不再运行。</td>
+                    <td>重复 stop 会提前返回。</td>
+                  </tr>
+                  <tr>
+                    <td>AnrMonitorRuntime.stop()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>停止 Watchdog，恢复 Looper Printer，清理去重状态，停止上传线程。</td>
+                    <td>先停 Watchdog，再恢复 Printer，避免停止中继续采集。</td>
+                  </tr>
+                  <tr>
+                    <td>InstallHandle.uninstall()</td>
+                    <td>collector/looper/MainLooperPrinterInstaller.kt</td>
+                    <td>只有当前槽位仍是 SDK 安装的 Printer 时，才恢复 previousPrinter。</td>
+                    <td>避免误覆盖 SDK 之后安装的第三方 Printer。</td>
+                  </tr>
+                  <tr>
+                    <td>stopUploadRetryLoop()</td>
+                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>中断上传重试线程并清空引用。</td>
+                    <td>上传关闭时这个线程本来就可能不存在。</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul class="checklist">
+                <li>读完这一段，要知道 SDK 停止会释放后台线程和 Looper Printer。</li>
+                <li>如果排查重复安装、重复报告、Printer 冲突，停止链路必须一起看。</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>按问题类型继续读哪个函数</h2>
+      <div class="two-col">
+        <div>
+          <h3>想理解 nativePollOnce / Sync Barrier</h3>
+          <table>
+            <tbody>
+              <tr>
+                <td>先读</td>
+                <td><code>buildSnapshot()</code> → <code>capturePendingQueue()</code> → <code>captureBarrierEvidenceSnapshot()</code></td>
+              </tr>
+              <tr>
+                <td>再读</td>
+                <td><code>AttributionAnalyzer.analyzeBarrier()</code> 和 <code>hasStrongBarrierEvidence()</code></td>
+              </tr>
+              <tr>
+                <td>最后对照</td>
+                <td>JSON 的 <code>pendingQueue</code>、<code>barrierEvidence</code>、<code>mainThread.stack</code>。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h3>想理解当前慢消息 / CPU 忙等</h3>
+          <table>
+            <tbody>
+              <tr>
+                <td>先读</td>
+                <td><code>MainLooperTimelineCollector.currentMessage()</code></td>
+              </tr>
+              <tr>
+                <td>再读</td>
+                <td><code>collectSlowStackSampleIfNeeded()</code> 和 <code>currentCpuMs()</code></td>
+              </tr>
+              <tr>
+                <td>最后对照</td>
+                <td>JSON 的 <code>currentMessage.wallMs</code>、<code>cpuMs</code>、<code>stackSamples</code>。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h3>想理解消息风暴</h3>
+          <table>
+            <tbody>
+              <tr>
+                <td>先读</td>
+                <td><code>capturePendingQueue()</code> 和 <code>PendingQueueAnalyzer.analyze()</code></td>
+              </tr>
+              <tr>
+                <td>再读</td>
+                <td><code>AttributionAnalyzer.analyzeMessageStorm()</code></td>
+              </tr>
+              <tr>
+                <td>最后对照</td>
+                <td>JSON 的 <code>pendingQueue.messages</code> 同类 target 数量。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h3>想理解 Binder / 跨进程阻塞</h3>
+          <table>
+            <tbody>
+              <tr>
+                <td>先读</td>
+                <td><code>captureBinderBlockSnapshot()</code></td>
+              </tr>
+              <tr>
+                <td>再读</td>
+                <td><code>BinderThreadStackCollector.capture()</code> 和 <code>BinderBlockClassifier.classify()</code></td>
+              </tr>
+              <tr>
+                <td>最后对照</td>
+                <td>JSON 的 <code>binderBlock</code> 和主线程栈中的 Binder frame。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>这份图的边界</h2>
+      <div class="warn">
+        <p><strong>不是所有工具函数都展开。</strong> 例如 JSON 字符串转义、File 元信息转换、每个 data class 构造器没有逐一展开，因为它们不会帮助新人理解 SDK 主流程。</p>
+        <p><strong>覆盖了核心代码阅读路径。</strong> 从 install 到 start，再到消息采集、Watchdog、现场快照、归因、写入、上传、卸载，已经覆盖新人读懂 SDK 行为需要追踪的主链路。</p>
+        <p><strong>如果要再深入。</strong> 可以沿着表格中的“问题类型”继续钻某个 collector，例如 PendingQueue、Barrier token、Binder、Thread CPU 或 Environment。</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
