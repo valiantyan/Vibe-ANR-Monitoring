@@ -22,6 +22,7 @@ Vibe-ANR-Monitoring
 | `:app` | Demo App，包名 `com.valiantyan.vibeanrmonitoring`，用于接入 SDK 并复现 ANR 场景 |
 | `docs-anr` | 面向研发和评审的技术文档目录 |
 | `SDK案例分析` | 按场景保存 JSON 样本和 HTML 分析报告 |
+| `.gitnexus` | GitNexus 代码索引数据，用于辅助理解代码图谱和调用关系 |
 
 ## SDK 核心能力
 
@@ -171,6 +172,11 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 | [docs-anr/103-ANR监控SDK使用说明.md](docs-anr/103-ANR监控SDK使用说明.md) | SDK 接入、配置、验证和报告读取 |
 | [docs-anr/104-ANR监控JSON日志根因排查指南.md](docs-anr/104-ANR监控JSON日志根因排查指南.md) | 面向新人排查 JSON 根因的步骤 |
 | [docs-anr/105-Demo-ANR场景实现计划.md](docs-anr/105-Demo-ANR场景实现计划.md) | Demo ANR 场景矩阵和验收记录 |
+| [docs-anr/106-Demo-Looper-Printer竞争验收指南.md](docs-anr/106-Demo-Looper-Printer竞争验收指南.md) | Looper Printer 竞争场景验收说明 |
+| [docs-anr/107-GitNexus安装与使用说明.md](docs-anr/107-GitNexus安装与使用说明.md) | GitNexus 安装、索引和代码地图查看说明 |
+| [docs-anr/108-SDK项目架构图.html](docs-anr/108-SDK项目架构图.html) | SDK 项目架构图 HTML |
+| [docs-anr/109-SDK时序图.html](docs-anr/109-SDK时序图.html) | SDK 关键流程时序图 HTML |
+| [docs-anr/110-AnrMonitor-install函数调用链路图.html](docs-anr/110-AnrMonitor-install函数调用链路图.html) | 从 `AnrMonitor.install()` 开始的函数级源码阅读路线图 |
 
 ## 案例分析
 
@@ -182,6 +188,15 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 | `主线程 CPU 忙等` | 主线程持续计算导致疑似 ANR |
 | `消息风暴等` | 大量消息占用主线程导致疑似 ANR |
 | `Sync Barrier 泄漏 - nativePollOnce` | Barrier 泄漏导致 `nativePollOnce` 假死 |
+| `BroadcastReceiver超时` | 广播回调阻塞导致组件超时 |
+| `Service超时` | Service 生命周期回调阻塞导致组件超时 |
+| `ContentProvider 阻塞` | ContentProvider 查询阻塞主线程 |
+| `Binder 跨进程阻塞` | 主线程同步 Binder 调用等待远端返回 |
+| `IO-数据库-文件阻塞` | 主线程执行文件或数据库阻塞任务 |
+| `线程池耗尽-主线程等待` | 线程池耗尽后主线程等待 Future 返回 |
+| `GC 内存抖动` | 高频分配和 GC 压力导致主线程长时间卡顿 |
+| `进程内 CPU 竞争` | 后台高 CPU 线程争抢进程内 CPU 资源 |
+| `LooperPrinter竞争验收` | 验证 SDK 与其他 Looper Printer 的链式兼容和冲突诊断 |
 
 这些案例适合和 JSON 排查指南一起阅读，用来训练从字段到根因的分析路径。
 
