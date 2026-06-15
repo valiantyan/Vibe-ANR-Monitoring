@@ -1,7 +1,7 @@
 {
   "repoPath": "/Users/yanhao/Desktop/demo/Vibe-ANR-Monitoring",
-  "lastCommit": "2145e0b85ac4da2b1a341e51c79a435cadf70d99",
-  "indexedAt": "2026-06-11T01:37:06.454Z",
+  "lastCommit": "15218adecf7a03ced41b2eaa448b19d302532ec9",
+  "indexedAt": "2026-06-12T09:50:51.618Z",
   "remoteUrl": "https://github.com/valiantyan/Vibe-ANR-Monitoring",
   "stats": {
     "files": 127,
@@ -105,10 +105,10 @@
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/retry/ReportRetentionPolicy.kt": "c4de38f2f7d91406eaddded88bf02b03a73c33e92428ea476cd62958d723b1f7",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/retry/ReportQueueModels.kt": "6435fad64b193e35954779b427a24faa97a941b5781e4478db96ce713434cf59",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/local/LocalAnrReportWriter.kt": "fe52a9efa9c082683966bb40da3ba0e29147b4c1490bd4c405933395e7f5a383",
-    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/diagnostics/SdkSelfMonitor.kt": "60355b61c0cedb7a1a106712f8dcb48bb9eda449bafa993c6305545097a56c20",
-    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/diagnostics/LooperPrinterConflictReporter.kt": "40570f1da86604f24cb414a29d67644037e7dcf33c6ce799adb25d4b38f34d01",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/JsonEscaper.kt": "650dc4cafe1de11aeb4b96a5fad4ad6646826a9570dd14eea35579176e37bd92",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt": "0f588cbb160d68672cd4f1c7b2ea3914c1e5b8fdd2fbb19d3f454e565f111a82",
+    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/diagnostics/SdkSelfMonitor.kt": "60355b61c0cedb7a1a106712f8dcb48bb9eda449bafa993c6305545097a56c20",
+    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/internal/diagnostics/LooperPrinterConflictReporter.kt": "40570f1da86604f24cb414a29d67644037e7dcf33c6ce799adb25d4b38f34d01",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/ThreadCpuRecord.kt": "f45515b975ab02724e5c8a0f43c959e0b9818eb4a17872268700a4d54f4de795",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/SystemEnvironmentSnapshot.kt": "a2a8c7ae14cd3e86e78e338028098b474bd648014ba8c915c6d684aa6731628b",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/StackTraceSnapshot.kt": "167489e49172536e4d660c2cad9bd087af4e124fdb24d4e141162dd4d1468627",
@@ -147,13 +147,13 @@
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/looper/MainLooperPrinterInstaller.kt": "8c26ab07a7f3056c07d741a9e40e608b28bc8d5f46f29d9fe0a8200c5d7d4ed0",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/looper/LooperMessageParser.kt": "84dab1eb7567bac4c4fe098bd273bbb82b12178b083f49e6615bb08bd220a846",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/looper/LooperDispatchEvent.kt": "cfdf8cb616b01a52a15a1554b6565ec3df61fb3681971001d55ff5b3f89f51dc",
+    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentSnapshotter.kt": "6fab255c146227e73a6f5140ee6f50efb4b4f6215e6635d00f8ef811eb88d83d",
+    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentDefaultReaders.kt": "5bf42a180e7d3b46bb73975e13f00dd2aced276508eb2ce5e46724039bab1007",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/checktime/ChecktimeMonitor.kt": "14ab8353432d97d7f3686fb191fe71f8e8f1f393e07c16f48eb87ae70762faea",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/binder/BinderThreadStackCollector.kt": "a6f20b2af6f6b76a3c82a9124140b2516d5b346e24bc66e4496f909a633f2dd9",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/binder/BinderBlockClassifier.kt": "875e09693f53979c581d6150d05c7bacaddbe0decd8ae211a9b21713dfee8551",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/barrier/BarrierTokenTracker.kt": "9b7667a094d24c4f927472f53da8682e30d189d344c81c64d9347deb6bf09142",
     "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/barrier/BarrierEvidenceCollector.kt": "88e60aeb1c6387d5b65ee418f51044c732a9c2e732da53dd071eff62032fb648",
-    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/anrinfo/AnrInfoCollector.kt": "243b9a859f50f28fe0a500feef27d60a9b78283b106061209ed79bec92ef5ce2",
-    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentSnapshotter.kt": "6fab255c146227e73a6f5140ee6f50efb4b4f6215e6635d00f8ef811eb88d83d",
-    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/environment/EnvironmentDefaultReaders.kt": "5bf42a180e7d3b46bb73975e13f00dd2aced276508eb2ce5e46724039bab1007"
+    "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/collector/anrinfo/AnrInfoCollector.kt": "243b9a859f50f28fe0a500feef27d60a9b78283b106061209ed79bec92ef5ce2"
   }
 }
