@@ -296,7 +296,7 @@
 
         <rect class="layer reporter" x="628" y="600" width="210" height="74"></rect>
         <text class="title" x="650" y="630">报告出口层</text>
-        <text class="sub" x="650" y="654">Encoder / LocalWriter / RetryQueue</text>
+        <text class="sub" x="650" y="654">AnrReportDelivery</text>
 
         <rect class="layer reporter" x="898" y="600" width="210" height="74"></rect>
         <text class="title" x="920" y="630">本地文件</text>
@@ -357,8 +357,8 @@
         </tr>
         <tr>
           <td>Runtime 编排层</td>
-          <td>统一启动采集器，接收 Watchdog 事件，组装快照，触发归因和写入。</td>
-          <td>向下依赖 collector、domain、reporter，是 SDK 内部主控层。</td>
+          <td>统一启动采集器，接收 Watchdog 事件，组装快照，触发归因，并把报告出口委托给 <code>AnrReportDelivery</code>。</td>
+          <td>向下依赖 collector、domain、reporter delivery，是 SDK 内部主控层。</td>
         </tr>
         <tr>
           <td>Collector 层</td>
@@ -372,8 +372,8 @@
         </tr>
         <tr>
           <td>Reporter 层</td>
-          <td>把报告编码成 JSON，落盘到私有目录，并支持保留策略和上传重试。</td>
-          <td>只消费 <code>AnrReport</code>，不反向影响采集和归因。</td>
+          <td><code>AnrReportDelivery</code> 聚合编码、本地写入、保留策略和上传重试，底层仍由 Encoder、LocalWriter、RetryQueue、Dispatcher 完成实现。</td>
+          <td>作为内部 implementation module 只消费 <code>AnrReport</code>，不反向影响采集和归因。</td>
         </tr>
       </tbody>
     </table>
@@ -385,11 +385,11 @@
       <li>依赖方向是单向的：App 到 Public API，Public API 到 Runtime，Runtime 到 Collector / Domain / Reporter。</li>
       <li>采集器只负责生产证据，归因逻辑集中在 <code>AttributionAnalyzer</code>，避免根因规则散落在采集代码里。</li>
       <li><code>nativePollOnce</code> 类问题不会只依赖主线程栈，而是通过 Pending 队列、Barrier token 和 poll 记录共同确认。</li>
-      <li>报告出口层不参与根因判断，保证写入失败、上传失败不会改变 ANR 现场事实。</li>
+      <li>报告出口层通过 <code>AnrReportDelivery</code> 增加 implementation depth，保证写入失败、上传失败不会改变 ANR 现场事实。</li>
     </ul>
   </section>
 
-  <p class="small">生成依据：GitNexus 代码地图、Cypher 查询、关键实现文件阅读。更新时间：2026-06-10。</p>
+  <p class="small">生成依据：GitNexus 代码地图、关键实现文件阅读。更新时间：2026-06-15。</p>
 </main>
 </body>
 </html>

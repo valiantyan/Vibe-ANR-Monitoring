@@ -425,8 +425,13 @@
         </tr>
         <tr>
           <td>报告写入</td>
-          <td><code>LocalAnrReportWriter.write</code></td>
+          <td><code>AnrReportDelivery.writeLocalReport</code> → <code>LocalAnrReportWriter.write</code></td>
           <td><code>files/anr-monitor-reports/{eventId}.json</code></td>
+        </tr>
+        <tr>
+          <td>可选上传与失败重试</td>
+          <td><code>AnrReportDelivery.uploadReportIfEnabled</code> → <code>ReportRetryDispatcher</code></td>
+          <td>本地 gzip payload、重试队列、宿主 <code>AnrReportUploader</code> 调用结果。</td>
         </tr>
       </tbody>
     </table>
@@ -438,11 +443,12 @@
       <li>持续采集和疑似 ANR 现场采集是两条不同的时序：前者实时记录，后者由 Watchdog 超时触发。</li>
       <li>Watchdog 是异步触发者，它不在主线程执行重采集逻辑，避免进一步阻塞主线程。</li>
       <li>归因发生在快照构造之后，说明报告中的 <code>attribution</code> 是基于同一时刻的证据集合计算出来的。</li>
-      <li>本地写入发生在归因之后，报告出口不反向改变主因判断。</li>
+      <li>本地写入发生在归因之后，报告出口经由 <code>AnrReportDelivery</code>，不反向改变主因判断。</li>
+      <li>上传重试会跳过正在直传的报告文件名，避免首次上传和 retry flush 重复处理同一份报告。</li>
     </ul>
   </section>
 
-  <p class="small">生成依据：GitNexus 代码地图、Cypher 查询、关键实现文件阅读。更新时间：2026-06-10。</p>
+  <p class="small">生成依据：GitNexus 代码地图、关键实现文件阅读。更新时间：2026-06-15。</p>
 </main>
 </body>
 </html>

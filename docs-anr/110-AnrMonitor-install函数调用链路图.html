@@ -342,7 +342,7 @@
         </div>
         <div class="summary-card">
           <strong>启动了什么</strong>
-          <span>安装 Looper Printer、启动 Watchdog、可选启动上传重试线程。</span>
+          <span>安装 Looper Printer、启动 Watchdog，并委托报告交付模块按配置启动上传重试线程。</span>
         </div>
         <div class="summary-card">
           <strong>JSON 何时生成</strong>
@@ -376,9 +376,11 @@
   │   ├─ BinderBlockClassifier() / BinderThreadStackCollector()
   │   ├─ AnrInfoCollector.create(appContext)
   │   ├─ AnrReportAssembler(...)
-  │   ├─ AnrReportJsonEncoder()
-  │   ├─ LocalAnrReportWriter(...)
-  │   ├─ ReportRetryQueue(...) / ReportRetryDispatcher(...)
+  │   ├─ AnrReportDelivery(...)
+  │   │   └─ AnrReportDeliveryFactory.createAndroidParts(...)
+  │   │       ├─ AnrReportJsonEncoder()
+  │   │       ├─ LocalAnrReportWriter(...)
+  │   │       └─ ReportRetryQueue(...) / ReportRetryDispatcher(...)
   │   ├─ AnrIncidentDeduplicator()
   │   └─ AnrWatchdog(onSuspectAnr = ::captureSuspectAnr)
   └─ installRuntimeLocked(config, runtimeHandle)
@@ -396,8 +398,8 @@
       │       │   └─ Looper.setMessageLogging(chainedPrinter)
       │       ├─ watchdog.start()
       │       │   └─ Thread(::loop, "vibe-anr-watchdog").start()
-      │       └─ startUploadRetryLoop()
-      │           └─ uploadEnabled=true 时 Thread(::runUploadRetryLoop, "vibe-anr-upload-retry").start()
+      │       └─ reportDelivery.startRetryLoop(isRunning = { isRunning.get() })
+      │           └─ uploadEnabled=true 时启动 "vibe-anr-upload-retry" 线程
       └─ return session
 
 安装完成后，后续异步触发：
@@ -435,12 +437,13 @@ AnrMonitorRuntime.captureSuspectAnr()
       ├─ listener.onSuspectAnr(snapshot)
       ├─ reportAssembler.build(snapshot, buildStartMs)
       │   └─ AttributionAnalyzer.analyze(snapshot)
-      ├─ localWriter.write(report)
-      │   ├─ AnrReportJsonEncoder.encode(report)
-      │   ├─ File.writeText(...)
-      │   └─ pruneExpiredReports(...)
+      ├─ reportDelivery.writeLocalReport(report)
+      │   └─ LocalAnrReportWriter.write(report)
+      │       ├─ AnrReportJsonEncoder.encode(report)
+      │       ├─ File.writeText(...)
+      │       └─ pruneExpiredReports(...)
       ├─ listener.onConfirmedAnr(report)
-      └─ uploadIfEnabled(report)</pre>
+      └─ reportDelivery.uploadReportIfEnabled(report)</pre>
       <p class="note">这棵树是“核心函数调用关系”，不是把每个数据类构造器和工具函数都无限展开。新手按它读完，就能理解 SDK 从安装到生成 JSON 的主流程。</p>
     </section>
 
@@ -513,8 +516,9 @@ AnrMonitorRuntime.captureSuspectAnr()
   ├─ pendingSnapshotter / barrierEvidenceCollector / binderBlockClassifier
   ├─ threadCpuSnapshotter / checktimeMonitor / environmentSnapshotter
   ├─ anrInfoCollector
-  ├─ reportAssembler / reportEncoder / localWriter
-  ├─ reportRetryQueue / reportRetryDispatcher
+  ├─ reportAssembler
+  ├─ reportDelivery
+  │   └─ factory-created encoder / localWriter / retryQueue / retryDispatcher
   └─ watchdog(onSuspectAnr = ::captureSuspectAnr)</pre>
               <table>
                 <thead>
@@ -551,16 +555,16 @@ AnrMonitorRuntime.captureSuspectAnr()
                     <td>构造时不启动，<code>start()</code> 才启动。</td>
                   </tr>
                   <tr>
-                    <td>LocalAnrReportWriter</td>
-                    <td>reporter/local/LocalAnrReportWriter.kt</td>
-                    <td>负责把完整报告写入 app 私有目录下的 <code>anr-monitor-reports</code>。</td>
-                    <td>否。</td>
+                    <td>AnrReportDelivery</td>
+                    <td>reporter/delivery/AnrReportDelivery.kt</td>
+                    <td>报告出口的内部 implementation module，聚合本地写入、上传、失败重试和 retry loop 生命周期。</td>
+                    <td>构造时不启动，<code>startRetryLoop()</code> 才按配置启动。</td>
                   </tr>
                 </tbody>
               </table>
               <ul class="checklist">
                 <li>读完这一段，要知道 Runtime 是“编排器”，不是单一 collector。</li>
-                <li>构造阶段只准备对象，真正接线在 <code>AnrMonitorRuntime.start()</code>。</li>
+                <li>构造阶段只准备对象，真正接线在 <code>AnrMonitorRuntime.start()</code>；报告出口细节被收束到 <code>AnrReportDelivery</code>。</li>
               </ul>
             </div>
           </article>
@@ -579,7 +583,7 @@ AnrMonitorRuntime.captureSuspectAnr()
   │   └─ AnrMonitorRuntime.start()
   │       ├─ MainLooperPrinterInstaller().install(timelineCollector)
   │       ├─ watchdog.start()
-  │       └─ startUploadRetryLoop()
+  │       └─ reportDelivery.startRetryLoop(isRunning = { isRunning.get() })
   └─ return session</pre>
               <table>
                 <thead>
@@ -606,7 +610,7 @@ AnrMonitorRuntime.captureSuspectAnr()
                   <tr>
                     <td>AnrMonitorRuntime.start()</td>
                     <td>internal/AnrMonitorRuntime.kt</td>
-                    <td>真正接入监控能力：Looper Printer、Watchdog、上传重试线程。</td>
+                    <td>真正接入监控能力：Looper Printer、Watchdog，以及报告交付模块的上传重试 loop。</td>
                     <td>先读 Looper Printer，再读 Watchdog。</td>
                   </tr>
                 </tbody>
@@ -760,9 +764,9 @@ AnrWatchdog.loop()
       ├─ incidentDeduplicator.shouldReport(snapshot)
       ├─ listener.onSuspectAnr(snapshot)
       ├─ reportAssembler.build(snapshot, buildStartMs)
-      ├─ localWriter.write(report)
+      ├─ reportDelivery.writeLocalReport(report)
       ├─ listener.onConfirmedAnr(report)
-      └─ uploadIfEnabled(report)
+      └─ reportDelivery.uploadReportIfEnabled(report)
 
 buildSnapshot(now)
   ├─ anrInfoCollector.collect()
@@ -849,29 +853,31 @@ buildSnapshot(now)
   ├─ selfMonitor.recordCost("report_build_cost_ms")
   └─ AnrReport(schemaVersion, snapshot, attribution, diagnostics)
 
-localWriter.write(report)
-  ├─ ensureReportDirectory()
-  ├─ safeFileName(eventId)
-  ├─ AnrReportJsonEncoder.encode(report)
-  │   ├─ eventJson(report)
-  │   ├─ systemAnrJson(report)
-  │   ├─ mainThreadJson(report)
-  │   ├─ pendingQueueJson(report)
-  │   ├─ barrierEvidenceJson(report)
-  │   ├─ binderBlockJson(report)
-  │   ├─ threadCpuJson(report)
-  │   ├─ checktimeJson(report)
-  │   ├─ environmentJson(report)
-  │   ├─ attributionJson(report)
-  │   └─ diagnosticsJson(report)
-  ├─ File.writeText(json)
-  └─ pruneExpiredReports(now)
+AnrReportDelivery.writeLocalReport(report)
+  └─ LocalAnrReportWriter.write(report)
+      ├─ ensureReportDirectory()
+      ├─ safeFileName(eventId)
+      ├─ AnrReportJsonEncoder.encode(report)
+      │   ├─ eventJson(report)
+      │   ├─ systemAnrJson(report)
+      │   ├─ mainThreadJson(report)
+      │   ├─ pendingQueueJson(report)
+      │   ├─ barrierEvidenceJson(report)
+      │   ├─ binderBlockJson(report)
+      │   ├─ threadCpuJson(report)
+      │   ├─ checktimeJson(report)
+      │   ├─ environmentJson(report)
+      │   ├─ attributionJson(report)
+      │   └─ diagnosticsJson(report)
+      ├─ File.writeText(json)
+      └─ pruneExpiredReports(now)
 
-uploadIfEnabled(report)
-  ├─ reportRetryDispatcher.enqueueReport(...)
+AnrReportDelivery.uploadReportIfEnabled(report)
+  ├─ ReportRetryDispatcher.enqueueReport(...)
   ├─ uploader.upload(report)
-  ├─ reportRetryDispatcher.recordUploadResult(...)
-  └─ listener.onMonitorError(...) on failure</pre>
+  ├─ ReportRetryDispatcher.recordUploadResult(...)
+  ├─ failure -> listener.onMonitorError(...)
+  └─ retry flush 跳过 inFlightFileNames，避免同一报告重复上传</pre>
               <table>
                 <thead>
                   <tr>
@@ -895,10 +901,10 @@ uploadIfEnabled(report)
                     <td>看归因优先级，不要只看最后一个栈。</td>
                   </tr>
                   <tr>
-                    <td>LocalAnrReportWriter.write()</td>
-                    <td>reporter/local/LocalAnrReportWriter.kt</td>
-                    <td>创建目录、编码 JSON、写入 <code>${eventId}.json</code>、执行本地保留策略。</td>
-                    <td>看文件为什么在 app 私有目录的 <code>anr-monitor-reports</code>。</td>
+                    <td>AnrReportDelivery.writeLocalReport()</td>
+                    <td>reporter/delivery/AnrReportDelivery.kt</td>
+                    <td>把 Runtime 的报告出口委托给本地 writer，隔离编码、文件路径和保留策略细节。</td>
+                    <td>看 delivery 如何提高 reporter implementation 的 locality。</td>
                   </tr>
                   <tr>
                     <td>AnrReportJsonEncoder.encode()</td>
@@ -907,15 +913,22 @@ uploadIfEnabled(report)
                     <td>按 <code>eventJson</code>、<code>mainThreadJson</code>、<code>attributionJson</code> 对照 JSON 看。</td>
                   </tr>
                   <tr>
-                    <td>uploadIfEnabled()</td>
-                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>AnrReportDelivery.uploadReportIfEnabled()</td>
+                    <td>reporter/delivery/AnrReportDelivery.kt</td>
                     <td>开启上传时入队 gzip payload、调用宿主 uploader、记录失败重试。</td>
-                    <td>理解“本地写入”和“远端上传”是两条出口。</td>
+                    <td>理解“本地写入”和“远端上传”是由同一个 delivery module 管理的两条出口。</td>
+                  </tr>
+                  <tr>
+                    <td>ReportRetryDispatcher.flushDueReports()</td>
+                    <td>reporter/retry/ReportRetryDispatcher.kt</td>
+                    <td>重试到期报告，并跳过正在首次直传的文件名。</td>
+                    <td>看 <code>inFlightFileNames</code> 如何避免同一报告被并发上传。</td>
                   </tr>
                 </tbody>
               </table>
               <ul class="checklist">
-                <li>读完这一段，要知道 JSON 是先本地写入，再按配置上传。</li>
+                <li>读完这一段，要知道 JSON 是先通过 <code>AnrReportDelivery</code> 本地写入，再按配置上传。</li>
+                <li>首次上传和 retry flush 共享 dispatcher 状态，避免同一报告文件被重复上传。</li>
                 <li>归因优先级很重要：nativePollOnce 场景通常要结合 pendingQueue + barrierEvidence + mainThreadStack。</li>
               </ul>
             </div>
@@ -937,7 +950,7 @@ uploadIfEnabled(report)
   │           │       ├─ looperPrinterConflictReporter.record(handle)
   │           │       ├─ looperPrinterHandle?.uninstall()
   │           │       ├─ markAnrRecovered()
-  │           │       └─ stopUploadRetryLoop()
+  │           │       └─ reportDelivery.stopRetryLoop()
   │           └─ clearSessionIfCurrent(session)
   ├─ activeSession = null
   └─ runtime = null</pre>
@@ -960,7 +973,7 @@ uploadIfEnabled(report)
                   <tr>
                     <td>AnrMonitorRuntime.stop()</td>
                     <td>internal/AnrMonitorRuntime.kt</td>
-                    <td>停止 Watchdog，恢复 Looper Printer，清理去重状态，停止上传线程。</td>
+                    <td>停止 Watchdog，恢复 Looper Printer，清理去重状态，并委托报告交付模块停止上传重试 loop。</td>
                     <td>先停 Watchdog，再恢复 Printer，避免停止中继续采集。</td>
                   </tr>
                   <tr>
@@ -970,8 +983,8 @@ uploadIfEnabled(report)
                     <td>避免误覆盖 SDK 之后安装的第三方 Printer。</td>
                   </tr>
                   <tr>
-                    <td>stopUploadRetryLoop()</td>
-                    <td>internal/AnrMonitorRuntime.kt</td>
+                    <td>AnrReportDelivery.stopRetryLoop()</td>
+                    <td>reporter/delivery/AnrReportDelivery.kt</td>
                     <td>中断上传重试线程并清空引用。</td>
                     <td>上传关闭时这个线程本来就可能不存在。</td>
                   </tr>
