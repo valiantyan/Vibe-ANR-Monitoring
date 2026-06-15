@@ -38,12 +38,7 @@ import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
 import com.valiantyan.anrmonitor.internal.diagnostics.LooperPrinterConflictReporter
 import com.valiantyan.anrmonitor.internal.diagnostics.SdkSelfMonitor
-import com.valiantyan.anrmonitor.reporter.encoder.AnrReportJsonEncoder
-import com.valiantyan.anrmonitor.reporter.local.LocalAnrReportWriter
-import com.valiantyan.anrmonitor.reporter.retry.ReportEnqueueResult
-import com.valiantyan.anrmonitor.reporter.retry.ReportRetentionPolicy
-import com.valiantyan.anrmonitor.reporter.retry.ReportRetryDispatcher
-import com.valiantyan.anrmonitor.reporter.retry.ReportRetryQueue
+import com.valiantyan.anrmonitor.reporter.delivery.AnrReportDelivery
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -59,7 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class AnrMonitorRuntime(
     context: Context,
     private val config: AnrMonitorConfig,
-    private val uploader: AnrReportUploader,
+    uploader: AnrReportUploader,
     private val listener: AnrEventListener,
 ) : AnrMonitor.RuntimeHandle {
     // application context 避免运行时持有 Activity。
@@ -148,38 +143,13 @@ internal class AnrMonitorRuntime(
         selfMonitor = sdkSelfMonitor,
     )
 
-    // JSON 编码器由本地写入和上传重试队列共用，避免报告出口 schema 分叉。
-    private val reportEncoder: AnrReportJsonEncoder = AnrReportJsonEncoder()
-
-    // 本地报告保留策略，防止大量疑似事件导致 app 私有目录无限增长。
-    private val reportRetentionPolicy: ReportRetentionPolicy = ReportRetentionPolicy(
-        maxFileCount = config.reportRetentionMaxFileCount,
-        maxTotalBytes = config.reportRetentionMaxTotalBytes,
-        maxAgeMs = config.reportRetentionMaxAgeMs,
-    )
-
-    // 本地报告写入器，写入后会按保留策略清理历史报告。
-    private val localWriter: LocalAnrReportWriter = LocalAnrReportWriter(
+    // 报告 delivery implementation，隐藏本地写入、上传入队和失败重试细节。
+    private val reportDelivery: AnrReportDelivery = AnrReportDelivery(
         context = appContext,
-        encoder = reportEncoder,
-        retentionPolicy = reportRetentionPolicy,
-        selfMonitor = sdkSelfMonitor,
-    )
-
-    // 报告上传重试队列，上传开关开启时负责采样、限频和 gzip payload。
-    private val reportRetryQueue: ReportRetryQueue = ReportRetryQueue(
-        sampleRate = config.normalizedSampleRate,
-        minEnqueueIntervalMs = config.reportUploadMinIntervalMs,
-        initialRetryDelayMs = config.reportRetryInitialDelayMs,
-        maxRetryDelayMs = config.reportRetryMaxDelayMs,
-        selfMonitor = sdkSelfMonitor,
-    )
-
-    // 上传重试调度器，负责消费到期队列并重新调用宿主 uploader。
-    private val reportRetryDispatcher: ReportRetryDispatcher = ReportRetryDispatcher(
-        retryQueue = reportRetryQueue,
+        config = config,
         clock = clock,
-        uploader = uploader::upload,
+        uploader = uploader,
+        selfMonitor = sdkSelfMonitor,
     )
 
     // 运行态开关，保证 start/stop 幂等。
@@ -191,10 +161,6 @@ internal class AnrMonitorRuntime(
     // Looper Printer 安装句柄，停止时用于恢复宿主安装前状态。
     @Volatile
     private var looperPrinterHandle: MainLooperPrinterInstaller.InstallHandle? = null
-
-    // 上传重试后台线程，只有开启上传时才启动。
-    @Volatile
-    private var uploadRetryThread: Thread? = null
 
     // 最近一次疑似 ANR 报告时间，用于按阈值限频。
     @Volatile
@@ -219,7 +185,7 @@ internal class AnrMonitorRuntime(
         }
         looperPrinterHandle = MainLooperPrinterInstaller().install(printer = timelineCollector)
         watchdog.start()
-        startUploadRetryLoop()
+        reportDelivery.startRetryLoop(isRunning = { isRunning.get() })
     }
 
     /**
@@ -234,7 +200,7 @@ internal class AnrMonitorRuntime(
         looperPrinterHandle?.uninstall()
         looperPrinterHandle = null
         markAnrRecovered()
-        stopUploadRetryLoop()
+        reportDelivery.stopRetryLoop()
     }
 
     /**
@@ -279,9 +245,12 @@ internal class AnrMonitorRuntime(
             snapshot = snapshot,
             buildStartMs = buildStartMs,
         )
-        localWriter.write(report = report)
+        reportDelivery.writeLocalReport(report = report)
         listener.onConfirmedAnr(report = report)
-        uploadIfEnabled(report = report)
+        val uploadResult: UploadResult? = reportDelivery.uploadReportIfEnabled(report = report)
+        if (uploadResult is UploadResult.Failure) {
+            listener.onMonitorError(error = IllegalStateException(uploadResult.reason))
+        }
     }
 
     // 构造疑似 ANR 现场快照，Pending 关闭时保留明确缺失原因。
@@ -402,83 +371,11 @@ internal class AnrMonitorRuntime(
         )
     }
 
-    // 上传开关开启时调用宿主扩展点，失败结果转成监控错误回调。
-    private fun uploadIfEnabled(report: AnrReport): Unit {
-        if (!config.uploadEnabled) {
-            return
-        }
-        val fileName: String = "${report.snapshot.eventId}.json.gz"
-        val enqueueResult: ReportEnqueueResult = reportRetryDispatcher.enqueueReport(
-            fileName = fileName,
-            payloadText = reportEncoder.encode(report = report),
-            report = report,
-        )
-        if (enqueueResult is ReportEnqueueResult.Skipped) {
-            return
-        }
-        val result: UploadResult = uploader.upload(report = report)
-        reportRetryDispatcher.recordUploadResult(
-            fileName = fileName,
-            result = result,
-        )
-        if (result is UploadResult.Failure) {
-            listener.onMonitorError(error = IllegalStateException(result.reason))
-        }
-    }
-
-    // 上传开启时启动重试循环，避免失败报告只停留在内存队列里。
-    private fun startUploadRetryLoop(): Unit {
-        if (!config.uploadEnabled || uploadRetryThread != null) {
-            return
-        }
-        uploadRetryThread = Thread(::runUploadRetryLoop, UPLOAD_RETRY_THREAD_NAME).apply {
-            isDaemon = true
-            start()
-        }
-    }
-
-    // 停止上传重试循环，避免卸载后后台线程继续持有 runtime。
-    private fun stopUploadRetryLoop(): Unit {
-        uploadRetryThread?.interrupt()
-        uploadRetryThread = null
-    }
-
-    // 周期性消费已到期的失败报告；上传器异常由调度器转成失败结果。
-    private fun runUploadRetryLoop(): Unit {
-        while (isRunning.get() && config.uploadEnabled) {
-            reportRetryDispatcher.flushDueReports(maxCount = DEFAULT_RETRY_BATCH_SIZE)
-            sleepUploadRetryInterval()
-        }
-    }
-
-    // 等待下一轮重试；停止时保留中断状态，让线程自然退出循环。
-    private fun sleepUploadRetryInterval(): Unit {
-        try {
-            Thread.sleep(config.reportRetryInitialDelayMs.coerceAtLeast(minimumValue = MIN_RETRY_LOOP_SLEEP_MS))
-        } catch (error: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
-    }
-
     private companion object {
         /**
          * 单次报告最多保留的线程 CPU 记录数，避免报告被线程数量放大。
          */
         private const val DEFAULT_THREAD_CPU_MAX_COUNT: Int = 5
 
-        /**
-         * 单轮最多重试报告数量。
-         */
-        private const val DEFAULT_RETRY_BATCH_SIZE: Int = 3
-
-        /**
-         * 上传重试后台线程名。
-         */
-        private const val UPLOAD_RETRY_THREAD_NAME: String = "vibe-anr-upload-retry"
-
-        /**
-         * 重试循环最小睡眠间隔，避免误配 0ms 导致空转。
-         */
-        private const val MIN_RETRY_LOOP_SLEEP_MS: Long = 1_000L
     }
 }

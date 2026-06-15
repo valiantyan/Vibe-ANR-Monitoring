@@ -19,6 +19,9 @@ class ReportRetryDispatcher(
     // 队列只保存压缩载荷和退避元信息，调度器保存本进程内可重试的报告对象。
     private val reportsByFileName: MutableMap<String, AnrReport> = linkedMapOf()
 
+    // 正在上传的文件名，避免首次上传和后台重试并发上传同一份报告。
+    private val inFlightFileNames: MutableSet<String> = linkedSetOf()
+
     /**
      * 入队报告并记录可重试对象，采样或限频跳过时不保存对象。
      *
@@ -40,6 +43,7 @@ class ReportRetryDispatcher(
         )
         if (result is ReportEnqueueResult.Enqueued) {
             reportsByFileName[fileName] = report
+            inFlightFileNames += fileName
         }
         return result
     }
@@ -60,6 +64,7 @@ class ReportRetryDispatcher(
             result = result,
             nowUptimeMs = clock.uptimeMillis(),
         )
+        inFlightFileNames.remove(element = fileName)
         if (result !is UploadResult.Failure) {
             reportsByFileName.remove(key = fileName)
         }
@@ -72,7 +77,7 @@ class ReportRetryDispatcher(
      * @return 实际触发上传器的报告数量。
      */
     fun flushDueReports(maxCount: Int): Int {
-        val dueReports: List<Pair<String, AnrReport>> = getDueReports(maxCount = maxCount)
+        val dueReports: List<Pair<String, AnrReport>> = getDueReportsAndMarkInFlight(maxCount = maxCount)
         dueReports.forEach { item: Pair<String, AnrReport> ->
             val result: UploadResult = uploadSafely(report = item.second)
             recordUploadResult(
@@ -83,17 +88,23 @@ class ReportRetryDispatcher(
         return dueReports.size
     }
 
-    // 获取当前已到期且仍有原始报告对象的重试项。
+    // 获取当前已到期且仍有原始报告对象的重试项，并标记本轮即将上传的报告。
     @Synchronized
-    private fun getDueReports(maxCount: Int): List<Pair<String, AnrReport>> {
-        return retryQueue.dueReports(
+    private fun getDueReportsAndMarkInFlight(maxCount: Int): List<Pair<String, AnrReport>> {
+        val dueReports: List<Pair<String, AnrReport>> = retryQueue.dueReports(
             nowUptimeMs = clock.uptimeMillis(),
-            maxCount = maxCount,
-        ).mapNotNull { queuedReport: QueuedReport ->
+            maxCount = Int.MAX_VALUE,
+        ).filterNot { queuedReport: QueuedReport ->
+            queuedReport.fileName in inFlightFileNames
+        }.take(n = maxCount.coerceAtLeast(minimumValue = 0)).mapNotNull { queuedReport: QueuedReport ->
             reportsByFileName[queuedReport.fileName]?.let { report: AnrReport ->
                 queuedReport.fileName to report
             }
         }
+        dueReports.forEach { item: Pair<String, AnrReport> ->
+            inFlightFileNames += item.first
+        }
+        return dueReports
     }
 
     // 宿主上传器异常不能杀死 SDK 重试线程，统一转成失败结果继续退避。
