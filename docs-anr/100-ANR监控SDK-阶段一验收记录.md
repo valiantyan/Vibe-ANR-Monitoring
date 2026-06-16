@@ -99,7 +99,7 @@ Logcat 输出：
 $ adb logcat -d -s VibeAnrApplication:W '*:S'
 --------- beginning of main
 06-06 11:43:27.786  5373  5389 W VibeAnrApplication: suspect ANR captured: 6d722839-938b-4d62-a6d5-faf6f3311605
-06-06 11:43:27.797  5373  5389 W VibeAnrApplication: confirmed ANR report: 6d722839-938b-4d62-a6d5-faf6f3311605
+06-06 11:43:27.797  5373  5389 W VibeAnrApplication: ANR report generated: 6d722839-938b-4d62-a6d5-faf6f3311605
 ```
 
 关键 JSON 字段输出：
@@ -145,7 +145,7 @@ Logcat 输出：
 $ adb logcat -d -s VibeAnrApplication:W '*:S'
 --------- beginning of main
 06-06 11:46:44.171  5665  5680 W VibeAnrApplication: suspect ANR captured: e6ab7a35-09ae-4ee5-89c9-eae321e9ee48
-06-06 11:46:44.201  5665  5680 W VibeAnrApplication: confirmed ANR report: e6ab7a35-09ae-4ee5-89c9-eae321e9ee48
+06-06 11:46:44.201  5665  5680 W VibeAnrApplication: ANR report generated: e6ab7a35-09ae-4ee5-89c9-eae321e9ee48
 ```
 
 关键 JSON 字段输出：

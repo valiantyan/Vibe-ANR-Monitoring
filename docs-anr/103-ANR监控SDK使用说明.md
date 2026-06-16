@@ -4,7 +4,7 @@
 
 ## 1. 当前 SDK 能力边界
 
-当前 SDK 模块为 `:anr-monitor-sdk`，包名为 `com.valiantyan.anrmonitor`，最低支持 `minSdk=23`。SDK 不声明额外 Manifest 权限，不需要宿主添加公开反射 keep 规则，报告默认写入宿主 app 私有目录。
+当前 SDK 模块为 `:anr-monitor-sdk`，包名为 `com.valiantyan.anrmonitor`，最低支持 `minSdk=22`。SDK 不声明额外 Manifest 权限，不需要宿主添加公开反射 keep 规则，报告默认写入宿主 app 私有目录。
 
 已覆盖的核心能力：
 
@@ -73,6 +73,7 @@ import android.util.Log
 import com.valiantyan.anrmonitor.api.AnrEventListener
 import com.valiantyan.anrmonitor.api.AnrMonitor
 import com.valiantyan.anrmonitor.api.AnrMonitorConfig
+import com.valiantyan.anrmonitor.api.AnrMonitorSession
 import com.valiantyan.anrmonitor.api.AnrPrivacyMode
 import com.valiantyan.anrmonitor.api.AnrReportUploader
 import com.valiantyan.anrmonitor.api.UploadResult
@@ -83,7 +84,7 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        AnrMonitor.install(
+        val session: AnrMonitorSession? = AnrMonitor.installMainProcessOnly(
             context = this,
             config = AnrMonitorConfig(
                 appId = "your-app-id",
@@ -105,7 +106,7 @@ class App : Application() {
                     Log.w("AnrMonitor", "suspect ANR: ${snapshot.eventId}")
                 }
 
-                override fun onConfirmedAnr(report: AnrReport) {
+                override fun onReportGenerated(report: AnrReport) {
                     Log.w("AnrMonitor", "report generated: ${report.snapshot.eventId}")
                 }
 
@@ -114,18 +115,24 @@ class App : Application() {
                 }
             },
         )
+        if (session == null) {
+            Log.i("AnrMonitor", "skip ANR monitor outside main process")
+            return
+        }
+        Log.i("AnrMonitor", "ANR monitor installed: $session")
     }
 }
 ```
 
 安装语义：
 
+- `AnrMonitor.installMainProcessOnly()` 是普通 App 推荐入口，SDK 会内部判断当前进程是否为主进程，非主进程返回 `null` 并跳过安装。
 - `AnrMonitor.install()` 在当前进程内幂等，重复安装会返回已有会话。
 - `AnrMonitor.uninstall()` 会停止 Watchdog；只有当前 Looper Printer 槽位仍由 SDK 持有时才恢复安装前的 Printer，并允许后续重新安装。
 - `AnrMonitorSession.stop()` 适合调试、自动化测试或动态关闭场景。
 - SDK 内部异常会通过 `AnrEventListener.onMonitorError()` 回调，不应影响宿主主流程。
 
-多进程应用建议由宿主自行判断进程名，只在需要监控的进程安装；否则每个进程都会维护自己的 Watchdog、报告目录和上传链路。
+高级多进程应用如果明确要监控非主进程，可继续在目标进程内显式调用 `AnrMonitor.install()`；否则每个进程都会维护自己的 Watchdog、报告目录和上传链路。
 
 ## 4. 配置项建议
 
@@ -671,7 +678,7 @@ Demo 页面按钮：
 
 1. 打开 Demo App。
 2. 点击目标按钮并等待 3 到 6 秒。
-3. 在 logcat 中查找 `suspect ANR captured` 和 `ANR report written`。
+3. 在 logcat 中查找 `suspect ANR captured` 和 `ANR report generated`。
 4. 使用 `adb shell run-as ... ls files/anr-monitor-reports` 查看报告文件。
 5. `cat` 对应 JSON，按第 6 节五步排查法输出定位结论。
 
@@ -683,7 +690,7 @@ Demo 页面按钮：
 
 1. 安装并打开 debug Demo App。
 2. 点击“当前消息慢”。
-3. 等待 logcat 出现 `suspect ANR captured` 和 `ANR report written`。
+3. 等待 logcat 出现 `suspect ANR captured` 和 `ANR report generated`。
 4. 拉取最新 JSON 报告。
 5. 先看 `attribution.primary`，预期为 `CURRENT_MESSAGE_SLOW`。
 6. 再看 `mainThread.current.wallMs`，预期大于 `3000`。
@@ -703,7 +710,7 @@ Demo 页面按钮：
 
 1. 安装并打开 debug Demo App。
 2. 点击“当前消息忙等”。
-3. 等待 logcat 出现 `suspect ANR captured` 和 `ANR report written`。
+3. 等待 logcat 出现 `suspect ANR captured` 和 `ANR report generated`。
 4. 拉取最新 JSON 报告。
 5. 先看 `attribution.primary`，预期为 `CURRENT_MESSAGE_SLOW`。
 6. 再看 `mainThread.current.wallMs`，预期大于 `3000`。
@@ -725,7 +732,7 @@ Demo 页面按钮：
 
 1. 安装并打开 Demo App。
 2. 点击“消息风暴”。
-3. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+3. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 4. 拉取最新 JSON 报告。
 
 重点看这些字段：
@@ -761,7 +768,7 @@ Demo 页面按钮：
 1. 安装 debug 包并打开 Demo App。
 2. 点击“Sync Barrier 泄漏 ANR”。
 3. 点击后继续点屏幕 5 到 10 秒，让系统输入事件也进入等待窗口。
-4. 观察 Logcat 中 `VibeAnrApplication` 是否输出 `confirmed ANR report: <eventId>`。
+4. 观察 Logcat 中 `VibeAnrApplication` 是否输出 `ANR report generated: <eventId>`。
 5. 从设备拉取 `files/anr-monitor-reports/<eventId>.json`。
 
 优先检查这些字段：
@@ -816,7 +823,7 @@ barrierEvidence.nativePollOnceRecords[].source = STACK_INFERENCE 或 HOOK
 1. 安装 debug 包并打开 Demo App。
 2. 点击“BroadcastReceiver 超时”。
 3. 等待 12 秒左右，期间不要切到其他 App。
-4. 观察 Logcat 中 `VibeAnrApplication` 是否输出 `suspect ANR captured`、`confirmed ANR report` 或 `ANR report written`。
+4. 观察 Logcat 中 `VibeAnrApplication` 是否输出 `suspect ANR captured`、`ANR report generated`。
 5. 从设备拉取 `files/anr-monitor-reports/<eventId>.json`。
 
 优先检查这些字段：
@@ -864,7 +871,7 @@ binderBlock.suspected = false
 
 1. 安装 Debug 包并打开 Demo App。
 2. 点击“Service 超时”。
-3. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+3. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 4. 如果想等待系统确认 Service ANR，可以继续等待到 20 秒以上；不同系统版本可能会直接弹 ANR 对话框，也可能只留下系统 traces。
 5. 从设备拉取最新 JSON：
 
@@ -908,7 +915,7 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 
 1. 安装 Debug 包并打开 Demo App。
 2. 点击“ContentProvider 阻塞”。
-3. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+3. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 4. 从设备拉取最新 JSON：
 
 ```bash
@@ -954,7 +961,7 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 
 1. 安装 debug 包并打开 Demo App。
 2. 点击“IO / 数据库 / 文件阻塞”。
-3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report written`。
+3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report generated`。
 4. 拉取 `files/anr-monitor-reports` 目录下最新 JSON。
 5. 按下面字段顺序分析。
 
@@ -1003,7 +1010,7 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 
 1. 安装 debug 包并打开 Demo App。
 2. 点击“线程池耗尽 + 主线程等待”。
-3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report written`。
+3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report generated`。
 4. 拉取 `files/anr-monitor-reports` 目录下最新 JSON。
 5. 按下面字段顺序分析。
 
@@ -1052,7 +1059,7 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 
 1. 安装 debug 包并打开 Demo App。
 2. 点击“GC / 内存抖动”。
-3. 等待 Logcat 出现 `suspect ANR captured` 和 `ANR report written`。
+3. 等待 Logcat 出现 `suspect ANR captured` 和 `ANR report generated`。
 4. 同时保留触发前后 10 秒的 logcat，方便查看系统 GC 日志。
 5. 拉取 `files/anr-monitor-reports/<eventId>.json`。
 
@@ -1091,7 +1098,7 @@ adb -s <deviceId> shell am start -S -n com.valiantyan.vibeanrmonitoring/.MainAct
 
 1. 安装 debug 包并打开 Demo App。
 2. 点击“进程内 CPU 竞争”。
-3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report written`。
+3. 等待 logcat 输出 `suspect ANR captured` 和 `ANR report generated`。
 4. 拉取最新 JSON：
 
 ```bash
@@ -1128,7 +1135,7 @@ adb -s <device-id> exec-out run-as com.valiantyan.vibeanrmonitoring cat files/an
 2. 等待 1 秒，让主进程完成远端 `:remote` Service 绑定。
 3. 点击“Binder 跨进程阻塞”。
 4. 如果弹出“Binder 场景未就绪，请稍后再点一次”，说明远端 Service 还没连接完成；等 1 秒后再点一次。
-5. 等待 Logcat 出现 `suspect ANR captured` 和 `ANR report written`。
+5. 等待 Logcat 出现 `suspect ANR captured` 和 `ANR report generated`。
 6. 从 `files/anr-monitor-reports` 拉取最新 JSON。
 
 先看这些字段：
@@ -1173,7 +1180,7 @@ binderBlock.mainThreadInBinder = true
 
 ## 9. 线上接入清单
 
-- [ ] 只在目标进程安装 SDK，多进程应用完成进程名判断。
+- [ ] 普通 App 使用 `AnrMonitor.installMainProcessOnly()`；确需监控非主进程时，才在目标进程显式调用 `AnrMonitor.install()`。
 - [ ] `appId`、`environment` 与服务端环境维度一致。
 - [ ] 先关闭 `uploadEnabled` 完成本地报告验证，再灰度打开上传。
 - [ ] 线上 `sampleRate`、`reportUploadMinIntervalMs`、本地保留策略已接远程配置。

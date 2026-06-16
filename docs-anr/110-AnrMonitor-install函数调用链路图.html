@@ -442,7 +442,7 @@ AnrMonitorRuntime.captureSuspectAnr()
       │       ├─ AnrReportJsonEncoder.encode(report)
       │       ├─ File.writeText(...)
       │       └─ pruneExpiredReports(...)
-      ├─ listener.onConfirmedAnr(report)
+      ├─ listener.onReportGenerated(report)
       └─ reportDelivery.uploadReportIfEnabled(report)</pre>
       <p class="note">这棵树是“核心函数调用关系”，不是把每个数据类构造器和工具函数都无限展开。新手按它读完，就能理解 SDK 从安装到生成 JSON 的主流程。</p>
     </section>
@@ -765,7 +765,7 @@ AnrWatchdog.loop()
       ├─ listener.onSuspectAnr(snapshot)
       ├─ reportAssembler.build(snapshot, buildStartMs)
       ├─ reportDelivery.writeLocalReport(report)
-      ├─ listener.onConfirmedAnr(report)
+      ├─ listener.onReportGenerated(report)
       └─ reportDelivery.uploadReportIfEnabled(report)
 
 buildSnapshot(now)

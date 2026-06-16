@@ -18,7 +18,7 @@ Vibe-ANR-Monitoring
 
 | 模块 | 说明 |
 | --- | --- |
-| `:anr-monitor-sdk` | SDK 主体，包名 `com.valiantyan.anrmonitor`，最低支持 `minSdk=23` |
+| `:anr-monitor-sdk` | SDK 主体，包名 `com.valiantyan.anrmonitor`，最低支持 `minSdk=22` |
 | `:app` | Demo App，包名 `com.valiantyan.vibeanrmonitoring`，用于接入 SDK 并复现 ANR 场景 |
 | `docs-anr` | 面向研发和评审的技术文档目录 |
 | `SDK案例分析` | 按场景保存 JSON 样本和 HTML 分析报告 |

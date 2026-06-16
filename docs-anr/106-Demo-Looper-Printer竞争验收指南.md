@@ -74,7 +74,7 @@ adb logcat -d -s VibeAnrApplication MainActivity AnrMonitor
 
 ```text
 VibeAnrApplication: suspect ANR captured: <eventId>
-VibeAnrApplication: ANR report written: <eventId>
+VibeAnrApplication: ANR report generated: <eventId>
 ```
 
 拉取最新报告：
@@ -163,7 +163,7 @@ grep -n "sdkDiagnostics" /tmp/anr-report.json
 | worker Looper 有自己的 Printer，但报告没有 `looper_printer_replaced` | 正常。不同 Looper 是不同槽位，不代表主 Looper 被抢占 |
 | 点击“主 Looper Printer 被替换”后，主线程时间线变少或为空 | 可接受。SDK 的主 Looper Printer 已被后装 Printer 替换，当前 P0 策略只诊断不抢回 |
 | 第二步触发 ANR 时用了 `am start -S` | `-S` 会重启进程，前一步安装的 worker Printer 或主 Looper 替换状态会丢失 |
-| 没有报告文件 | 先看 `VibeAnrApplication` 日志，确认是否出现 `ANR report written`，并确认场景阻塞时间超过 Demo 的 `suspectAnrMs=3000` |
+| 没有报告文件 | 先看 `VibeAnrApplication` 日志，确认是否出现 `ANR report generated`，并确认场景阻塞时间超过 Demo 的 `suspectAnrMs=3000` |
 
 ## 5. 验收清单
 

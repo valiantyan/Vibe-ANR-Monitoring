@@ -1,11 +1,11 @@
 package com.valiantyan.vibeanrmonitoring
 
 import android.app.Application
-import android.os.Build
 import android.util.Log
 import com.valiantyan.anrmonitor.api.AnrEventListener
 import com.valiantyan.anrmonitor.api.AnrMonitor
 import com.valiantyan.anrmonitor.api.AnrMonitorConfig
+import com.valiantyan.anrmonitor.api.AnrMonitorSession
 import com.valiantyan.anrmonitor.domain.model.AnrReport
 import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 
@@ -18,11 +18,7 @@ class VibeAnrApplication : Application() {
      */
     override fun onCreate(): Unit {
         super.onCreate()
-        if (!isMainProcess()) {
-            Log.w(TAG, "skip ANR monitor in process=${currentProcessName()}")
-            return
-        }
-        AnrMonitor.install(
+        val session: AnrMonitorSession? = AnrMonitor.installMainProcessOnly(
             context = this,
             config = AnrMonitorConfig(
                 appId = "vibe-anr-demo",
@@ -47,8 +43,8 @@ class VibeAnrApplication : Application() {
                 /**
                  * 完整报告生成后输出事件 ID，便于确认本地 JSON 已完成编码。
                  */
-                override fun onConfirmedAnr(report: AnrReport): Unit {
-                    Log.w(TAG, "ANR report written: ${report.snapshot.eventId}")
+                override fun onReportGenerated(report: AnrReport): Unit {
+                    Log.w(TAG, "ANR report generated: ${report.snapshot.eventId}")
                 }
 
                 /**
@@ -59,33 +55,11 @@ class VibeAnrApplication : Application() {
                 }
             },
         )
-    }
-
-    /**
-     * 判断当前进程是否为应用主进程，避免远端 Binder 进程也安装 SDK。
-     */
-    private fun isMainProcess(): Boolean {
-        return currentProcessName() == packageName
-    }
-
-    /**
-     * 获取当前进程名，Android P 以下回退到 [android.app.ActivityManager] 查询。
-     */
-    private fun currentProcessName(): String {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            return getProcessName()
+        if (session == null) {
+            Log.w(TAG, "skip ANR monitor outside main process")
+            return
         }
-        val pid: Int = android.os.Process.myPid()
-        val activityManager: android.app.ActivityManager? = getSystemService(
-            android.app.ActivityManager::class.java,
-        )
-        return activityManager
-            ?.runningAppProcesses
-            ?.firstOrNull { processInfo: android.app.ActivityManager.RunningAppProcessInfo ->
-                processInfo.pid == pid
-            }
-            ?.processName
-            ?: packageName
+        Log.i(TAG, "ANR monitor installed: $session")
     }
 
     private companion object {

@@ -246,6 +246,7 @@ internal class AnrMonitorRuntime(
             buildStartMs = buildStartMs,
         )
         reportDelivery.writeLocalReport(report = report)
+        @Suppress("DEPRECATION")
         listener.onConfirmedAnr(report = report)
         val uploadResult: UploadResult? = reportDelivery.uploadReportIfEnabled(report = report)
         if (uploadResult is UploadResult.Failure) {

@@ -240,7 +240,7 @@ AnrMonitor.install(
 ```kotlin
 interface AnrEventListener {
     fun onSuspectAnr(snapshot: AnrSnapshot)
-    fun onConfirmedAnr(report: AnrReport)
+    fun onReportGenerated(report: AnrReport)
     fun onMonitorError(error: AnrMonitorError)
 }
 ```
@@ -751,7 +751,7 @@ SDK 自身要上报：
 
 目标范围：
 
-- `minSdk = 23`。
+- `minSdk = 22`。
 - `targetSdk = 35`。
 - 主进程 P0 全量可用，多进程按配置开启。
 

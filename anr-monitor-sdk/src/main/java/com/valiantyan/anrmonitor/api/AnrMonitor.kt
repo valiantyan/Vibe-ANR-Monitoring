@@ -48,6 +48,33 @@ object AnrMonitor {
     }
 
     /**
+     * 仅在宿主主进程安装 SDK，适合作为普通 App 的默认接入入口。
+     *
+     * @param context 宿主上下文，实际运行时会使用 application context。
+     * @param config 本次安装的不可变配置。
+     * @param uploader 宿主提供的报告上报扩展点。
+     * @param listener 宿主提供的事件监听器。
+     * @return 主进程返回活跃 [AnrMonitorSession]；非主进程返回 `null` 表示本次跳过安装。
+     */
+    @Synchronized
+    fun installMainProcessOnly(
+        context: Context,
+        config: AnrMonitorConfig,
+        uploader: AnrReportUploader = AnrReportUploader { UploadResult.Skip },
+        listener: AnrEventListener = object : AnrEventListener {},
+    ): AnrMonitorSession? {
+        if (!AnrProcessNameResolver.isMainProcess(context = context)) {
+            return null
+        }
+        return install(
+            context = context,
+            config = config,
+            uploader = uploader,
+            listener = listener,
+        )
+    }
+
+    /**
      * 测试专用安装入口，用可控 runtime 验证单例生命周期，不触发 Android Looper 依赖。
      *
      * @param config 本次安装的不可变配置。
@@ -64,6 +91,35 @@ object AnrMonitor {
             return existingSession
         }
         return installRuntimeLocked(
+            config = config,
+            runtimeHandle = runtimeHandle,
+        )
+    }
+
+    /**
+     * 测试主进程安装策略，不触发 Android framework 进程名读取或真实 runtime。
+     *
+     * @param config 本次安装的不可变配置。
+     * @param runtimeHandle 测试注入的运行时句柄。
+     * @param packageName 宿主主进程名，通常等于应用包名。
+     * @param processName 当前进程名。
+     * @return 主进程返回活跃 [AnrMonitorSession]；非主进程返回 `null`。
+     */
+    @Synchronized
+    internal fun installMainProcessRuntimeForTesting(
+        config: AnrMonitorConfig,
+        runtimeHandle: RuntimeHandle,
+        packageName: String,
+        processName: String,
+    ): AnrMonitorSession? {
+        if (!AnrProcessNameResolver.isMainProcess(
+                packageName = packageName,
+                processName = processName,
+            )
+        ) {
+            return null
+        }
+        return installRuntimeForTesting(
             config = config,
             runtimeHandle = runtimeHandle,
         )

@@ -68,7 +68,7 @@ adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/
 
 ```text
 W VibeAnrApplication: suspect ANR captured: b027eea9-1c62-48a9-938c-ee1e1f28da0d
-W VibeAnrApplication: ANR report written: b027eea9-1c62-48a9-938c-ee1e1f28da0d
+W VibeAnrApplication: ANR report generated: b027eea9-1c62-48a9-938c-ee1e1f28da0d
 ```
 
 关键 JSON 字段：
@@ -125,7 +125,7 @@ adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/
 
 ```text
 W VibeAnrApplication: suspect ANR captured: 65ec033f-7411-4fe4-a5b2-2d92dee348ef
-W VibeAnrApplication: ANR report written: 65ec033f-7411-4fe4-a5b2-2d92dee348ef
+W VibeAnrApplication: ANR report generated: 65ec033f-7411-4fe4-a5b2-2d92dee348ef
 ```
 
 关键 JSON 字段：
@@ -152,7 +152,7 @@ barrierEvidence.stuckTokens = []
 1. 安装 debug 包。
 2. 打开 Demo App。
 3. 点击“消息风暴”。
-4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
 
 ### JSON 读取口径
@@ -256,7 +256,7 @@ barrierEvidence.stuckTokens = []
 1. 安装 debug 包。
 2. 打开 Demo App。
 3. 点击“BroadcastReceiver 超时”。
-4. 等待 12 秒左右，直到日志出现 `suspect ANR captured`、`confirmed ANR report` 或 `ANR report written`。
+4. 等待 12 秒左右，直到日志出现 `suspect ANR captured`、`ANR report generated`。
 5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
 
 ### JSON 读取口径
@@ -300,7 +300,7 @@ adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/
 
 ```text
 W VibeAnrApplication: suspect ANR captured: aaf4e3c0-37bd-4ed2-a579-e721ccbe420a
-W VibeAnrApplication: ANR report written: aaf4e3c0-37bd-4ed2-a579-e721ccbe420a
+W VibeAnrApplication: ANR report generated: aaf4e3c0-37bd-4ed2-a579-e721ccbe420a
 ```
 
 关键 JSON 字段：
@@ -330,7 +330,7 @@ barrierEvidence.stuckTokens = []
 1. 安装 debug 包。
 2. 打开 Demo App。
 3. 点击“Service 超时”。
-4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 5. 如果要验证系统确认 Service ANR，继续等待 20 秒以上并查看系统 ANR traces。
 6. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
 
@@ -370,7 +370,7 @@ adb -s emulator-5554 exec-out run-as com.valiantyan.vibeanrmonitoring cat files/
 
 ```text
 W VibeAnrApplication: suspect ANR captured: 5fbba9e4-cdbd-466a-aa03-dc22ec1ddf19
-W VibeAnrApplication: ANR report written: 5fbba9e4-cdbd-466a-aa03-dc22ec1ddf19
+W VibeAnrApplication: ANR report generated: 5fbba9e4-cdbd-466a-aa03-dc22ec1ddf19
 ```
 
 关键 JSON 字段：
@@ -413,7 +413,7 @@ binderBlock.suspected = false
 1. 安装 debug 包。
 2. 打开 Demo App。
 3. 点击“ContentProvider 阻塞”。
-4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
 
 ### JSON 读取口径
@@ -461,7 +461,7 @@ adb -s emulator-5554 shell run-as com.valiantyan.vibeanrmonitoring cat files/anr
 
 ```text
 W VibeAnrApplication: suspect ANR captured: 767fe4bd-dc6b-4f70-b2ca-179b0b104d49
-W VibeAnrApplication: ANR report written: 767fe4bd-dc6b-4f70-b2ca-179b0b104d49
+W VibeAnrApplication: ANR report generated: 767fe4bd-dc6b-4f70-b2ca-179b0b104d49
 ```
 
 关键 JSON 字段：
@@ -497,7 +497,7 @@ binderBlock.suspected = false
 3. 等待 1 秒，让远端 `:remote` Service 完成绑定。
 4. 点击“Binder 跨进程阻塞”。
 5. 如果弹出未就绪提示，等 1 秒后再点击一次。
-6. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+6. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 7. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
 
 ### JSON 读取口径
@@ -553,7 +553,7 @@ barrierEvidence.stuckTokens = []
 1. 安装 debug 包。
 2. 打开 Demo App。
 3. 点击“IO / 数据库 / 文件阻塞”。
-4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
 
 ### JSON 读取口径
@@ -722,7 +722,7 @@ adb -s GUKF4DWOYLFU49QW exec-out run-as com.valiantyan.vibeanrmonitoring cat fil
 W MainActivity: run demo scenario from intent: gc_memory_churn
 W GcMemoryChurn: GC / 内存抖动场景请求 GC: allocations=30409
 W VibeAnrApplication: suspect ANR captured: 853c292b-8f79-4b16-bbcb-60391f398958
-W VibeAnrApplication: ANR report written: 853c292b-8f79-4b16-bbcb-60391f398958
+W VibeAnrApplication: ANR report generated: 853c292b-8f79-4b16-bbcb-60391f398958
 I beanrmonitorin: Starting a blocking GC Alloc
 I beanrmonitorin: WaitForGcToComplete blocked Alloc on Background
 W GcMemoryChurn: GC / 内存抖动场景完成: allocations=375690 retained=12
@@ -754,7 +754,7 @@ binderBlock.suspected = false
 1. 安装 debug 包。
 2. 打开 Demo App。
 3. 点击“进程内 CPU 竞争”。
-4. 等待日志输出 `suspect ANR captured` 和 `ANR report written`。
+4. 等待日志输出 `suspect ANR captured` 和 `ANR report generated`。
 5. 从设备拉取 `anr-monitor-reports` 目录下最新 JSON。
 
 ### JSON 读取口径
@@ -793,7 +793,7 @@ adb -s GUKF4DWOYLFU49QW exec-out run-as com.valiantyan.vibeanrmonitoring cat fil
 W MainActivity: run demo scenario from intent: process_cpu_contention
 W ProcessCpuContention: 进程内 CPU 竞争场景开始: contenders=8
 W VibeAnrApplication: suspect ANR captured: 1f231b83-81e2-42c7-b0e3-0d82c3c336f9
-W VibeAnrApplication: ANR report written: 1f231b83-81e2-42c7-b0e3-0d82c3c336f9
+W VibeAnrApplication: ANR report generated: 1f231b83-81e2-42c7-b0e3-0d82c3c336f9
 W ProcessCpuContention: DemoCpuContender-1 finished checksum=160042.7878436638
 W ProcessCpuContention: 进程内 CPU 竞争场景结束
 ```

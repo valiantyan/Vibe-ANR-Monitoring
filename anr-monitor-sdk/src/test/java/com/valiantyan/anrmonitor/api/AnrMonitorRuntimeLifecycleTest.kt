@@ -3,6 +3,7 @@ package com.valiantyan.anrmonitor.api
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -96,6 +97,48 @@ class AnrMonitorRuntimeLifecycleTest {
         assertTrue(secondSession.isRunning)
         assertEquals(1, firstRuntime.stopCount)
         assertEquals(1, secondRuntime.startCount)
+    }
+
+    /**
+     * 主进程便捷入口应在当前进程等于包名时安装 runtime，降低宿主普通接入成本。
+     */
+    @Test
+    fun installMainProcessRuntimeForTestingInstallsWhenProcessMatchesPackageName(): Unit {
+        val runtime = FakeRuntimeHandle()
+        val config = AnrMonitorConfig(
+            appId = "demo",
+            environment = "debug",
+        )
+        val session: AnrMonitorSession? = AnrMonitor.installMainProcessRuntimeForTesting(
+            config = config,
+            runtimeHandle = runtime,
+            packageName = "com.demo.app",
+            processName = "com.demo.app",
+        )
+
+        assertTrue(session?.isRunning == true)
+        assertEquals(1, runtime.startCount)
+    }
+
+    /**
+     * 非主进程便捷入口必须跳过安装，避免远端进程重复创建 Watchdog 和 Looper Printer。
+     */
+    @Test
+    fun installMainProcessRuntimeForTestingSkipsWhenProcessDiffersFromPackageName(): Unit {
+        val runtime = FakeRuntimeHandle()
+        val config = AnrMonitorConfig(
+            appId = "demo",
+            environment = "debug",
+        )
+        val session: AnrMonitorSession? = AnrMonitor.installMainProcessRuntimeForTesting(
+            config = config,
+            runtimeHandle = runtime,
+            packageName = "com.demo.app",
+            processName = "com.demo.app:remote",
+        )
+
+        assertNull(session)
+        assertEquals(0, runtime.startCount)
     }
 
     /**
