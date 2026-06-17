@@ -93,6 +93,18 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:testDebugUnitTest :app:assembleDebug :anr-monitor-sdk:testDebugUnitTest
 ```
 
+构建 SDK Release AAR：
+
+```bash
+./gradlew :anr-monitor-sdk:assembleRelease
+```
+
+当前本地交付包：
+
+```text
+dist/anr-monitor-sdk-release-minsdk22-20260616.aar
+```
+
 ## SDK 接入示例
 
 Demo App 通过 Gradle project 方式接入：
@@ -106,7 +118,7 @@ dependencies {
 在 `Application.onCreate()` 中尽早安装：
 
 ```kotlin
-AnrMonitor.install(
+val session: AnrMonitorSession? = AnrMonitor.installMainProcessOnly(
     context = this,
     config = AnrMonitorConfig(
         appId = "demo",
@@ -118,9 +130,15 @@ AnrMonitor.install(
         watchdogIntervalMs = 500L,
     ),
 )
+
+if (session == null) {
+    return
+}
 ```
 
-完整接入、配置、上报和隐私说明见 [docs-anr/103-ANR监控SDK使用说明.md](docs-anr/103-ANR监控SDK使用说明.md)。
+普通 App 推荐使用 `AnrMonitor.installMainProcessOnly()`，SDK 会在内部判断当前进程是否为主进程；确需监控非主进程时，再在目标进程显式调用 `AnrMonitor.install()`。
+
+完整接入、配置、上报和隐私说明见 [docs-anr/103-ANR监控SDK使用说明.md](docs-anr/103-ANR监控SDK使用说明.md)。本地 AAR 接入和 monkey 验收步骤见 [docs-anr/111-本地AAR接入与Monkey验收指南.md](docs-anr/111-本地AAR接入与Monkey验收指南.md)。
 
 ## JSON 报告位置
 
@@ -177,6 +195,7 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 | [docs-anr/108-SDK项目架构图.html](docs-anr/108-SDK项目架构图.html) | SDK 项目架构图 HTML |
 | [docs-anr/109-SDK时序图.html](docs-anr/109-SDK时序图.html) | SDK 关键流程时序图 HTML |
 | [docs-anr/110-AnrMonitor-install函数调用链路图.html](docs-anr/110-AnrMonitor-install函数调用链路图.html) | 从 `AnrMonitor.install()` 开始的函数级源码阅读路线图 |
+| [docs-anr/111-本地AAR接入与Monkey验收指南.md](docs-anr/111-本地AAR接入与Monkey验收指南.md) | 本地 AAR 交付、宿主接入、monkey 执行和报告拉取步骤 |
 
 ## 案例分析
 
