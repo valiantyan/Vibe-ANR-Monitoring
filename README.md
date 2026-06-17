@@ -172,6 +172,14 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 | `systemAnr` | 系统是否确认 ANR、组件类型和阈值信息 |
 | `sdkDiagnostics` | SDK 自身运行状态、落盘和上报诊断 |
 
+### `mainThread` 栈字段怎么读
+
+如果只想看这份 JSON 报告触发时主线程真实停在哪里，优先看 `mainThread.stackFrames`。它是 SDK 在疑似或确认 ANR 快照生成时直接抓取的主线程 Java 栈，适合定位当前现场，例如业务入口、同步等待、Binder 调用、I/O 或 `nativePollOnce`。
+
+`mainThread.stackSamples` 不是另一份“最终 ANR 堆栈”，而是慢消息执行过程中的栈采样聚合。`mainThread.current` 和 `mainThread.history` 里的 `sampleStackIds` 会引用这些采样记录；每条采样记录包含 `frames` 和 `hitCount`，用于说明慢消息过程中采到过哪些栈，以及同一个栈热点被命中过几次。简单阻塞场景里，`stackSamples[].frames` 可能和 `stackFrames` 看起来一样，这是因为主线程从采样到最终快照一直停在同一位置；但二者语义不同：`stackFrames` 表示最终现场，`stackSamples` 表示过程证据。
+
+排查根因时建议按这个顺序读：先用 `mainThread.stackFrames` 定位当前主线程现场，再看 `mainThread.current.wallMs`、`cpuMs` 和消息目标确认当前消息是否已经耗尽 ANR 窗口；如果最终现场不能单独解释根因，再结合 `stackSamples`、`history`、`pendingQueue`、`barrierEvidence` 和 `binderBlock` 判断是否存在前序慢消息、消息堆积、Barrier 或 Binder 阻塞。
+
 新人排查 JSON 时建议先读 [docs-anr/104-ANR监控JSON日志根因排查指南.md](docs-anr/104-ANR监控JSON日志根因排查指南.md)。
 
 ## 重点文档
