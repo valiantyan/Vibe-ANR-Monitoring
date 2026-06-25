@@ -82,7 +82,8 @@ MainLooperTimelineCollector
   parses Looper Printer logs, tracks current dispatch, produces MessageRecord and stack sample records
 
 MainThreadEvidenceStore
-  owns recentHistory, slowHistory, aggregatedBursts, retained stack samples, and retention counters
+  owns recentHistory, slowHistory, aggregatedBursts, a short-message burst accumulator,
+  retained stack samples, and retention counters
 
 AnrMonitorRuntime
   reads a stable evidence snapshot during buildSnapshot()
@@ -95,6 +96,8 @@ AttributionAnalyzer
 ```
 
 The timeline collector should remain focused on Looper parsing and current-message state. Evidence retention decisions should move into `MainThreadEvidenceStore`, where they can be tested without Android Looper dependencies.
+
+`MainThreadEvidenceStore` is also responsible for deciding whether an ordinary short message is appended directly to recent history or folded into a burst accumulator. This keeps repeated short messages from occupying the whole recent-history window.
 
 ## Data Flow
 
@@ -109,14 +112,14 @@ flowchart TD
     F --> G
     G --> H["Create MessageRecord"]
     H --> I["MainThreadEvidenceStore.addFinishedMessage"]
-    I --> J["recentHistory window"]
     I --> K{"high-value evidence?"}
     K -- "yes" --> L["slowHistory"]
     K -- "no" --> M{"repeated short-message burst?"}
     M -- "yes" --> N["aggregatedBursts"]
-    M -- "no" --> J
+    M -- "no" --> J["recentHistory window"]
+    L --> J
     L --> O["Retain referenced stackSamples"]
-    N --> P["Update burst count and duration"]
+    N --> P["Append AGGREGATED record to recentHistory"]
     Q["Watchdog suspect ANR"] --> R["buildSnapshot"]
     R --> S["current + history + slowHistory + aggregatedBursts + stackSamples + retention"]
     S --> T["JSON report"]
@@ -128,6 +131,7 @@ flowchart TD
 
 - Keep using `historyBufferSize` as the recent-history limit.
 - Preserve the existing `mainThread.history` meaning as a recent ordered window.
+- Repeated short messages that become a burst should be represented by one `AGGREGATED` record in `history`, not by every individual short message.
 - Count records evicted from recent history in `retention.historyDroppedCount`.
 
 ### Slow History
@@ -154,10 +158,12 @@ Repeated short messages should be summarized instead of filling history. A burst
 targetClass + callbackClass + what + messageType
 ```
 
-A burst can be emitted when repeated messages are contiguous and either:
+A burst is emitted when repeated messages are contiguous and either:
 
 - count reaches `messageBurstCountThreshold = 20`, or
 - accumulated wall time reaches `shortMessageAggregateMs`.
+
+Until a burst is emitted, the store keeps only rolling aggregate state for the current contiguous candidate burst: first sequence, last sequence, first start time, latest end time, accumulated wall time, accumulated CPU time, count, and key. It must not keep every candidate short-message record. Once emitted, individual candidate records are not appended one by one to `history`; one `AGGREGATED` record is appended to `history` and also exposed through `aggregatedBursts`.
 
 Default capacity:
 
@@ -170,6 +176,7 @@ Aggregated records use existing `MessageRecord` shape with:
 ```text
 kind = AGGREGATED
 count > 1
+seq = the first message sequence in the aggregate
 wallMs = accumulated wall time
 cpuMs = accumulated CPU time
 startUptimeMs/endUptimeMs = aggregation range
@@ -248,6 +255,8 @@ When trimming is required, keep referenced samples before unreferenced samples. 
 }
 ```
 
+`truncated` is `true` when any bounded store drops data because of a limit: recent history, slow history, aggregated bursts, or retained stack samples. `historyDroppedCount`, `slowHistoryDroppedCount`, and `aggregatedMessageCount` keep those causes inspectable instead of hiding them behind a single boolean.
+
 ## Attribution Changes
 
 Attribution should prefer high-value stores:
@@ -269,7 +278,26 @@ This avoids over-trusting a clean-looking recent `history` window when `retentio
 - If a message storm continues after a slow message, the storm is summarized and cannot silently erase the slow message.
 - If Looper Printer is replaced by another SDK, existing conflict diagnostics remain the source of truth; this design does not solve printer slot loss.
 - If pending queue reflection fails, retention metadata still helps explain whether main-thread historical evidence was complete.
-- If JSON budget is tight, low-value ordinary history is trimmed before `slowHistory` and referenced stack samples.
+- Byte-level JSON budget enforcement remains a future enhancement. This phase controls report size through bounded stores and aggregation; if a later byte-budget pass is added, it should trim low-value ordinary history before `slowHistory` and referenced stack samples.
+
+## Review Question Coverage
+
+This section makes the expected interview and design-review answers explicit.
+
+| Question | Answer in this design |
+| --- | --- |
+| Why not record every Handler message from app start? | Reports are bounded event snapshots, not full logs; unbounded logging is a non-goal. |
+| Can the current SDK miss the real historical ANR message? | Yes. A count-based recent history can evict a slow message after many later short messages. |
+| What is the root cause of that miss? | Ordinary short messages and high-value slow messages currently compete for the same `MessageRingBuffer` capacity. |
+| What is the main fix? | Add `MainThreadEvidenceStore` with separate recent history, slow history, aggregated bursts, retained stack samples, and retention counters. |
+| Why not just increase `historyBufferSize`? | A larger single buffer still lets storms evict slow evidence and increases report size; layered retention preserves evidence by value. |
+| How is a slow message protected? | It enters bounded `slowHistory` when it is slow, has sample stack IDs, or is a critical component message with `wallMs >= shortMessageAggregateMs`. |
+| How are repeated short messages handled? | Contiguous repeated short messages are folded into rolling aggregate state and emitted as one `AGGREGATED` record. |
+| Does `history` stay compatible? | Yes. It remains present and ordered; bursts appear as `AGGREGATED` records instead of many individual short records. |
+| How are stack samples kept explainable? | Samples referenced by current or `slowHistory` records are retained before unreferenced samples. |
+| How does a reader know evidence was dropped? | `retention` reports limits, dropped counts, aggregated message count, and `truncated`. |
+| What remains unsolved? | Looper Printer slot replacement, pending-queue reflection failure, and byte-level JSON budget enforcement are not solved by this phase. |
+| What proves the fix? | Tests must show a slow message survives hundreds of later short messages and still links to retained stack samples. |
 
 ## Testing Plan
 
