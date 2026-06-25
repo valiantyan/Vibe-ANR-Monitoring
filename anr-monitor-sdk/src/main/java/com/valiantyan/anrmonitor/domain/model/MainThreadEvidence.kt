@@ -24,11 +24,11 @@ data class MainThreadEvidenceSnapshot(
  * @property slowHistoryLimit 慢历史消息窗口容量。
  * @property aggregatedBurstLimit 聚合短消息窗口容量。
  * @property stackSampleLimit 栈采样保留容量。
- * @property historyDroppedCount 最近历史窗口因容量淘汰的记录数。
+ * @property historyDroppedCount 最近历史窗口因容量淘汰或聚合折叠而无法逐条回放的记录数。
  * @property slowHistoryDroppedCount 慢历史窗口因容量淘汰的记录数。
  * @property aggregatedMessageCount 被折叠进聚合记录的原始短消息数量。
  * @property aggregationEnabled 是否启用连续短消息聚合。
- * @property truncated 任一有界窗口因容量限制丢弃证据时为 true。
+ * @property truncated 任一有界窗口因容量限制或聚合折叠导致证据不可逐条回放时为 true。
  */
 data class MainThreadRetentionStats(
     val historyLimit: Int,

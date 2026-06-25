@@ -30,7 +30,7 @@
 | `event` | 这份报告是谁、什么时候、在哪个环境生成的 | `eventId`、`eventType`、`appId`、`environment` |
 | `systemAnr` | Android 系统是否已经确认 ANR | `isConfirmedAnr`、`anrType`、`componentTimeoutMs`、`shortMsg`、`longMsg` |
 | `attribution` | SDK 给出的初始归因结论 | `primary`、`confidence`、`evidence`、`missingEvidence`、`suggestions` |
-| `mainThread` | 主线程当时在做什么 | `current`、`history`、`stackFrames`、`stackSamples` |
+| `mainThread` | 主线程当时在做什么 | `current`、`history`、`slowHistory`、`aggregatedBursts`、`stackFrames`、`stackSamples`、`retention` |
 | `pendingQueue` | 主线程后面还排着什么消息 | `messages[0]` 队头、`blockedMs`、`isBarrierLike`、`isCriticalComponent` |
 | `barrierEvidence` | 是否存在 Sync Barrier 和 `nativePollOnce` 证据 | `stuckTokens`、`nativePollOnceRecords`、`alignedWithPendingBarrier` |
 | `binderBlock` | 是否疑似 Binder 或跨进程阻塞 | `suspected`、`mainThreadInBinder`、`binderThreadWaitsMain` |
@@ -160,6 +160,8 @@
 | `cpuMs` | 主线程 CPU 耗时，帮助区分忙等和等待 |
 | `count` | 归并消息数量，常用于消息风暴 |
 | `sampleStackIds` | 慢消息采样栈 ID |
+
+再看 `mainThread.slowHistory`、`mainThread.aggregatedBursts` 和 `mainThread.retention`。`slowHistory` 是为慢消息和关键组件消息单独保留的价值窗口，避免它们被后续大量短消息冲掉；`aggregatedBursts` 是短消息风暴的折叠摘要；`retention.truncated = true` 表示至少有历史、慢历史、聚合摘要或栈样本发生过容量裁剪，或者原始短消息已经被聚合折叠，结论里要说明证据不是逐条完整时间线。
 
 判断思路：
 

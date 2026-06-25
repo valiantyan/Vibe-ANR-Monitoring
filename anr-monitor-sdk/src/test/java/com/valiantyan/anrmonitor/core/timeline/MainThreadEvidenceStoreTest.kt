@@ -42,6 +42,43 @@ class MainThreadEvidenceStoreTest {
     }
 
     @Test
+    fun slowMessageWithSamplesSurvivesFiveHundredLaterShortMessages(): Unit {
+        val store: MainThreadEvidenceStore = MainThreadEvidenceStore(
+            historyLimit = 120,
+            slowHistoryLimit = 20,
+            aggregatedBurstLimit = 20,
+            stackSampleLimit = 60,
+            slowMessageMs = 1_000L,
+            shortMessageAggregateMs = 300L,
+            messageBurstCountThreshold = 20,
+        )
+        val slowSample: StackSampleRecord = StackSampleRecord(
+            stackId = "slow-stack",
+            frames = listOf("com.example.Database.open(Database.kt:42)"),
+            hitCount = 3,
+        )
+        store.addFinishedMessage(
+            record = message(seq = 1L, wallMs = 4_500L, sampleStackIds = listOf("slow-stack")),
+            stackSamples = listOf(slowSample),
+        )
+        (2L..501L).forEach { seq: Long ->
+            store.addFinishedMessage(
+                record = message(
+                    seq = seq,
+                    wallMs = 1L,
+                    callbackClass = "com.example.ShortRunnable",
+                ),
+            )
+        }
+        val snapshot = store.snapshot(currentMessage = null)
+        assertEquals(listOf(1L), snapshot.slowHistoryMessages.map { record: MessageRecord -> record.seq })
+        assertEquals(listOf("slow-stack"), snapshot.stackSamples.map { record: StackSampleRecord -> record.stackId })
+        assertTrue(snapshot.aggregatedBursts.isNotEmpty())
+        assertEquals(500L, snapshot.retention.historyDroppedCount)
+        assertTrue(snapshot.retention.truncated)
+    }
+
+    @Test
     fun addFinishedMessageAggregatesContiguousShortBurst(): Unit {
         val store: MainThreadEvidenceStore = MainThreadEvidenceStore(
             historyLimit = 10,

@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | `event` | 主索引和环境分流 | `eventId`、`eventType`、`appId`、`environment`、`timeUptimeMs` |
 | `systemAnr` | 系统确认 ANR 和组件阈值解释 | `isConfirmedAnr`、`anrType`、`componentTimeoutMs`、`shortMsg`、`longMsg` |
-| `mainThread` | 当前 Trace、当前消息、历史消息和慢消息栈聚合 | `current`、`history`、`stackId`、`stackFrames`、`sampleStackIds` |
+| `mainThread` | 当前 Trace、当前消息、历史消息、慢消息价值保留和短消息风暴摘要 | `current`、`history`、`slowHistory`、`aggregatedBursts`、`stackId`、`stackFrames`、`sampleStackIds`、`retention` |
 | `pendingQueue` | Pending 队列、同步屏障和消息风暴聚类 | `available`、`truncated`、`maxDepth`、`messages` |
 | `barrierEvidence` | Barrier token 和 nativePollOnce 增强证据 | `stuckTokens`、`nativePollOnceRecords`、`nativePollOnceRecords[].source`、`alignedWithPendingBarrier` |
 | `binderBlock` | Binder 和跨进程等待疑似识别 | `suspected`、`mainThreadInBinder`、`binderThreadWaitsMain` |
@@ -58,6 +58,7 @@
 4. 专项卡片：Barrier token、nativePollOnce、Binder 阻塞疑似、环境负载。
    nativePollOnce 卡片必须展示 `source`：`HOOK` 表示端侧探针直接记录，`STACK_INFERENCE` 表示由主线程栈和 Pending 队头推断。
 5. 缺失证据：展示 collector 失败、权限限制、ROM 限制、隐私模式裁剪和 `UNKNOWN_INSUFFICIENT_EVIDENCE` 的原因。
+   服务端必须保留并展示 `slowHistory` 和 `aggregatedBursts` 两类主线程证据面；`mainThread.retention` 用于解释完整性，`historyDroppedCount` 表示最近历史因容量裁剪或短消息聚合而无法逐条回放的记录数，`slowHistoryDroppedCount` 表示慢历史窗口被裁剪的记录数。只有 `retention.truncated = true` 或 `retention.aggregatedMessageCount > 0` 时，才提示时间线存在不完整逐条回放或折叠证据。
 6. 治理建议：展示 owner hint、版本分布、设备分布、灰度批次、回滚建议和 Barrier 修复建议；SharedPreferences 治理建议归入存储治理专项，不作为通用 ANR 看板默认项。
 
 ## 5. 隐私和权限

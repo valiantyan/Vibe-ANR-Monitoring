@@ -178,6 +178,8 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 
 `mainThread.stackSamples` 不是另一份“最终 ANR 堆栈”，而是慢消息执行过程中的栈采样聚合。`mainThread.current` 和 `mainThread.history` 里的 `sampleStackIds` 会引用这些采样记录；每条采样记录包含 `frames` 和 `hitCount`，用于说明慢消息过程中采到过哪些栈，以及同一个栈热点被命中过几次。简单阻塞场景里，`stackSamples[].frames` 可能和 `stackFrames` 看起来一样，这是因为主线程从采样到最终快照一直停在同一位置；但二者语义不同：`stackFrames` 表示最终现场，`stackSamples` 表示过程证据。
 
+主线程证据保留层还会输出 `mainThread.slowHistory`、`mainThread.aggregatedBursts` 和 `mainThread.retention`。`slowHistory` 用于保留被后续短消息 churn 淹没的慢消息和关键组件消息，`aggregatedBursts` 用于展示连续短消息风暴的摘要，`retention` 用于说明历史窗口、慢历史窗口和聚合摘要是否发生裁剪或折叠。
+
 排查根因时建议按这个顺序读：先用 `mainThread.stackFrames` 定位当前主线程现场，再看 `mainThread.current.wallMs`、`cpuMs` 和消息目标确认当前消息是否已经耗尽 ANR 窗口；如果最终现场不能单独解释根因，再结合 `stackSamples`、`history`、`pendingQueue`、`barrierEvidence` 和 `binderBlock` 判断是否存在前序慢消息、消息堆积、Barrier 或 Binder 阻塞。
 
 新人排查 JSON 时建议先读 [docs-anr/104-ANR监控JSON日志根因排查指南.md](docs-anr/104-ANR监控JSON日志根因排查指南.md)。

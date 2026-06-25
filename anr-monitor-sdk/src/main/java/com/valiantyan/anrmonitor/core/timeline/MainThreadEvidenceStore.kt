@@ -378,7 +378,7 @@ class MainThreadEvidenceStore(
         snapshotHistoryDroppedCount: Long,
         snapshotStackSampleDroppedCount: Long,
     ): MainThreadRetentionStats {
-        val visibleHistoryDroppedCount: Long = historyDroppedCount + snapshotHistoryDroppedCount
+        val visibleHistoryDroppedCount: Long = historyDroppedCount + snapshotHistoryDroppedCount + aggregatedMessageCount
         val visibleStackSampleDroppedCount: Long = stackSampleDroppedCount + snapshotStackSampleDroppedCount
         return MainThreadRetentionStats(
             historyLimit = historyLimit,
