@@ -178,9 +178,13 @@ adb exec-out run-as com.valiantyan.vibeanrmonitoring cat files/anr-monitor-repor
 
 `mainThread.stackSamples` 不是另一份“最终 ANR 堆栈”，而是慢消息执行过程中的栈采样聚合。`mainThread.current` 和 `mainThread.history` 里的 `sampleStackIds` 会引用这些采样记录；每条采样记录包含 `frames` 和 `hitCount`，用于说明慢消息过程中采到过哪些栈，以及同一个栈热点被命中过几次。简单阻塞场景里，`stackSamples[].frames` 可能和 `stackFrames` 看起来一样，这是因为主线程从采样到最终快照一直停在同一位置；但二者语义不同：`stackFrames` 表示最终现场，`stackSamples` 表示过程证据。
 
-主线程证据保留层还会输出 `mainThread.slowHistory`、`mainThread.aggregatedBursts` 和 `mainThread.retention`。`slowHistory` 用于保留被后续短消息 churn 淹没的慢消息和关键组件消息，`aggregatedBursts` 用于展示连续短消息风暴的摘要，`retention` 用于说明历史窗口、慢历史窗口和聚合摘要是否发生裁剪或折叠。
+`mainThread.history` 仍表示最近主线程消息窗口。为了避免历史慢消息被后续大量短消息挤出，报告还会输出 `mainThread.slowHistory`、`mainThread.aggregatedBursts` 和 `mainThread.retention`：
 
-排查根因时建议按这个顺序读：先用 `mainThread.stackFrames` 定位当前主线程现场，再看 `mainThread.current.wallMs`、`cpuMs` 和消息目标确认当前消息是否已经耗尽 ANR 窗口；如果最终现场不能单独解释根因，再结合 `stackSamples`、`history`、`pendingQueue`、`barrierEvidence` 和 `binderBlock` 判断是否存在前序慢消息、消息堆积、Barrier 或 Binder 阻塞。
+- `slowHistory`：独立保留历史慢消息、关联采样栈的消息，以及耗时达到聚合阈值的关键组件消息。
+- `aggregatedBursts`：连续重复短消息的聚合摘要，`kind=AGGREGATED` 且 `count>1`。
+- `retention`：说明各窗口上限、淘汰数量、聚合消息数量和本次证据是否发生裁剪。
+
+排查根因时建议按这个顺序读：先用 `mainThread.stackFrames` 定位当前主线程现场，再看 `mainThread.current.wallMs`、`cpuMs` 和消息目标确认当前消息是否已经耗尽 ANR 窗口；如果最终现场不能单独解释根因，再看 `mainThread.slowHistory` 和它引用的 `stackSamples`，随后结合 `history`、`aggregatedBursts`、`pendingQueue`、`barrierEvidence` 和 `binderBlock` 判断是否存在前序慢消息、消息风暴、Barrier 或 Binder 阻塞。若 `retention.truncated=true`，排查结论要同时记录证据曾因窗口上限淘汰或短消息聚合折叠而无法逐条完整回放；`retention.aggregatedMessageCount` 表示被折叠进聚合摘要的原始短消息数量。
 
 新人排查 JSON 时建议先读 [docs-anr/104-ANR监控JSON日志根因排查指南.md](docs-anr/104-ANR监控JSON日志根因排查指南.md)。
 

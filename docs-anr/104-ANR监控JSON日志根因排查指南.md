@@ -31,6 +31,9 @@
 | `systemAnr` | Android 系统是否已经确认 ANR | `isConfirmedAnr`、`anrType`、`componentTimeoutMs`、`shortMsg`、`longMsg` |
 | `attribution` | SDK 给出的初始归因结论 | `primary`、`confidence`、`evidence`、`missingEvidence`、`suggestions` |
 | `mainThread` | 主线程当时在做什么 | `current`、`history`、`slowHistory`、`aggregatedBursts`、`stackFrames`、`stackSamples`、`retention` |
+| `mainThread.slowHistory` | 被独立保留的历史慢消息和关键慢组件消息 | 优先复核历史慢消息根因 |
+| `mainThread.aggregatedBursts` | 连续重复短消息的聚合摘要 | 复核 `MESSAGE_STORM` |
+| `mainThread.retention` | 主线程证据保留和裁剪状态 | 判断是否存在证据缺口 |
 | `pendingQueue` | 主线程后面还排着什么消息 | `messages[0]` 队头、`blockedMs`、`isBarrierLike`、`isCriticalComponent` |
 | `barrierEvidence` | 是否存在 Sync Barrier 和 `nativePollOnce` 证据 | `stuckTokens`、`nativePollOnceRecords`、`alignedWithPendingBarrier` |
 | `binderBlock` | 是否疑似 Binder 或跨进程阻塞 | `suspected`、`mainThreadInBinder`、`binderThreadWaitsMain` |
@@ -161,7 +164,7 @@
 | `count` | 归并消息数量，常用于消息风暴 |
 | `sampleStackIds` | 慢消息采样栈 ID |
 
-再看 `mainThread.slowHistory`、`mainThread.aggregatedBursts` 和 `mainThread.retention`。`slowHistory` 是为慢消息和关键组件消息单独保留的价值窗口，避免它们被后续大量短消息冲掉；`aggregatedBursts` 是短消息风暴的折叠摘要；`retention.truncated = true` 表示至少有历史、慢历史、聚合摘要或栈样本发生过容量裁剪，或者原始短消息已经被聚合折叠，结论里要说明证据不是逐条完整时间线。
+再看 `mainThread.slowHistory`、`mainThread.aggregatedBursts` 和 `mainThread.retention`。`slowHistory` 是为慢消息和关键组件消息单独保留的价值窗口，避免它们被后续大量短消息冲掉；它单独存在不表示证据已折叠或不完整。`aggregatedBursts` 是短消息风暴的折叠摘要，`retention.aggregatedMessageCount` 表示被折叠进摘要的原始短消息数量。`retention.truncated = true` 表示至少有历史、慢历史、聚合摘要或栈样本发生过容量裁剪，或者连续短消息已经被聚合折叠，结论里要说明证据无法逐条完整回放。
 
 判断思路：
 
@@ -383,8 +386,10 @@ SDK 主因：
 
 - `attribution.primary = HISTORY_MESSAGE_SLOW`。
 - `mainThread.current` 可能为空，或者当前栈不是根因。
-- `mainThread.history` 中存在明显慢消息。
+- `mainThread.history` 或 `mainThread.slowHistory` 中存在明显慢消息。
 - 慢消息的 `targetClass`、`callbackClass` 或 `sampleStackIds` 能定位业务入口。
+
+优先查看 `mainThread.slowHistory`。如果目标消息已经不在 `history`，但仍在 `slowHistory` 并且 `sampleStackIds` 能在 `stackSamples` 中找到对应栈，仍可按历史慢消息分析。若 `retention.slowHistoryDroppedCount > 0`，需要在结论中标注慢历史证据曾发生淘汰。
 
 结论写法：
 
@@ -400,6 +405,8 @@ SDK 主因：
 - `mainThread.history` 中有大量短消息连续出现。
 - 或者存在 `kind = AGGREGATED` 且 `count` 较大。
 - 单条消息不一定慢，但累计占满主线程窗口。
+
+除了 Pending 队列中的重复 target/callback，也要查看 `mainThread.aggregatedBursts`。`kind=AGGREGATED`、`count` 很大或累计 `wallMs` 很高时，说明报告已经把连续短消息折叠为摘要，不能再用 `history` 中短消息数量少来否定消息风暴。
 
 结论写法：
 
