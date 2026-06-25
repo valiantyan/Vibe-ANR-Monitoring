@@ -41,7 +41,10 @@ class AttributionAnalyzer(
                 snapshot = snapshot,
             )
         }
-        val stormResult: AttributionResult? = analyzeMessageStorm(summary = pendingSummary)
+        val stormResult: AttributionResult? = analyzeMessageStorm(
+            summary = pendingSummary,
+            aggregatedBursts = snapshot.aggregatedBursts,
+        )
         if (stormResult != null) {
             return withThreadCpuEvidence(
                 result = stormResult,
@@ -62,7 +65,10 @@ class AttributionAnalyzer(
                 snapshot = snapshot,
             )
         }
-        val historyResult: AttributionResult? = analyzeHistory(history = snapshot.historyMessages)
+        val historyResult: AttributionResult? = analyzeHistory(
+            slowHistory = snapshot.slowHistoryMessages,
+            history = snapshot.historyMessages,
+        )
         if (historyResult != null) {
             return withThreadCpuEvidence(
                 result = historyResult,
@@ -150,8 +156,24 @@ class AttributionAnalyzer(
         return current.wallMs >= toleratedThresholdMs
     }
 
-    // 识别历史消息慢导致当前系统栈看不到真正根因的模式。
-    private fun analyzeHistory(history: List<MessageRecord>): AttributionResult? {
+    // 优先识别保留层慢历史，避免最近 history 被短消息窗口淘汰后丢失真正前因。
+    private fun analyzeHistory(
+        slowHistory: List<MessageRecord>,
+        history: List<MessageRecord>,
+    ): AttributionResult? {
+        val retainedSlowMessage: MessageRecord? = slowHistory.firstOrNull { record: MessageRecord ->
+            record.wallMs >= thresholds.suspectAnrMs
+        }
+        if (retainedSlowMessage != null) {
+            return result(
+                code = AnrAttributionCode.HISTORY_MESSAGE_SLOW,
+                confidence = Confidence.MEDIUM,
+                evidence = listOf(
+                    "slow history message seq=${retainedSlowMessage.seq} wall=${retainedSlowMessage.wallMs}ms",
+                ),
+                suggestion = "优先回看 slowHistory 中保留的前序慢消息和对应 stackSamples。",
+            )
+        }
         val slowMessage: MessageRecord = history.firstOrNull { record ->
             record.wallMs >= thresholds.suspectAnrMs
         } ?: return null
@@ -163,15 +185,26 @@ class AttributionAnalyzer(
         )
     }
 
-    // 识别大量同类 Pending 消息堆积导致主线程窗口被挤占的模式。
-    private fun analyzeMessageStorm(summary: PendingQueueSummary): AttributionResult? {
-        if (summary.repeatedTargetCount < thresholds.messageStormCount) {
-            return null
+    // 结合 Pending 实时队列和保留层聚合摘要识别短消息风暴。
+    private fun analyzeMessageStorm(
+        summary: PendingQueueSummary,
+        aggregatedBursts: List<MessageRecord>,
+    ): AttributionResult? {
+        if (summary.repeatedTargetCount >= thresholds.messageStormCount) {
+            return result(
+                code = AnrAttributionCode.MESSAGE_STORM,
+                confidence = Confidence.MEDIUM,
+                evidence = listOf("pending repeated target count=${summary.repeatedTargetCount}"),
+                suggestion = "合并重复 Handler 消息，增加去重、防抖或队列清理。",
+            )
         }
+        val burst: MessageRecord = aggregatedBursts.firstOrNull { record: MessageRecord ->
+            record.count >= thresholds.messageStormCount || record.wallMs >= thresholds.slowMessageMs
+        } ?: return null
         return result(
             code = AnrAttributionCode.MESSAGE_STORM,
             confidence = Confidence.MEDIUM,
-            evidence = listOf("pending repeated target count=${summary.repeatedTargetCount}"),
+            evidence = listOf("aggregated burst seq=${burst.seq} count=${burst.count} wall=${burst.wallMs}ms"),
             suggestion = "合并重复 Handler 消息，增加去重、防抖或队列清理。",
         )
     }
@@ -210,6 +243,9 @@ class AttributionAnalyzer(
         }
         if (snapshot.historyMessages.isEmpty()) {
             missingEvidence += "history messages empty"
+        }
+        if (snapshot.mainThreadRetention.slowHistoryDroppedCount > 0L) {
+            missingEvidence += "slow history dropped count=${snapshot.mainThreadRetention.slowHistoryDroppedCount}"
         }
         if (!snapshot.barrierEvidenceSnapshot.available) {
             missingEvidence += "barrier evidence unavailable: ${snapshot.barrierEvidenceSnapshot.failureReason}"
