@@ -79,6 +79,30 @@ class AnrReportJsonEncoderTest {
     }
 
     /**
+     * 新增主线程证据字段必须在快照默认值为空时保持可编码，避免破坏旧构造路径。
+     */
+    @Test
+    fun encodeIncludesEmptyMainThreadEvidenceDefaults(): Unit {
+        val report: AnrReport = AnrReport.empty(
+            appId = "demo",
+            environment = "test",
+        )
+
+        val json: String = AnrReportJsonEncoder().encode(report = report)
+
+        assertTrue(json.contains("\"mainThread\""))
+        assertTrue(json.contains("\"history\":[]"))
+        assertTrue(json.contains("\"slowHistory\":[]"))
+        assertTrue(json.contains("\"aggregatedBursts\":[]"))
+        assertTrue(json.contains("\"retention\""))
+        assertTrue(json.contains("\"historyLimit\":0"))
+        assertTrue(json.contains("\"slowHistoryLimit\":0"))
+        assertTrue(json.contains("\"aggregatedBurstLimit\":0"))
+        assertTrue(json.contains("\"stackSampleLimit\":0"))
+        assertTrue(json.contains("\"truncated\":false"))
+    }
+
+    /**
      * 线程 CPU TopN 是进程内资源证据，必须进入 JSON 方便后续平台聚类和人工复核。
      */
     @Test
