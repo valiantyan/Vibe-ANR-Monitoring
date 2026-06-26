@@ -6,6 +6,7 @@ import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
 import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
+import com.valiantyan.anrmonitor.domain.model.MainThreadRetentionStats
 import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.NativePollOnceRecord
@@ -77,8 +78,11 @@ class AnrReportJsonEncoder {
             "\"threadName\":${string(report.snapshot.mainThreadStack.threadName)}",
             "\"current\":${messageOrNull(record = report.snapshot.currentMessage)}",
             "\"history\":${messages(records = report.snapshot.historyMessages)}",
+            "\"slowHistory\":${messages(records = report.snapshot.slowHistoryMessages)}",
+            "\"aggregatedBursts\":${messages(records = report.snapshot.aggregatedBursts)}",
             "\"stackFrames\":${strings(values = report.snapshot.mainThreadStack.frames)}",
             "\"stackSamples\":${stackSamples(samples = report.snapshot.stackSamples)}",
+            "\"retention\":${mainThreadRetention(stats = report.snapshot.mainThreadRetention)}",
         )
         return "{${fields.joinToString(separator = ",")}}"
     }
@@ -234,6 +238,22 @@ class AnrReportJsonEncoder {
             prefix = "[",
             postfix = "]",
         ) { sample: StackSampleRecord -> "{${stackSampleFields(sample = sample).joinToString(separator = ",")}}" }
+    }
+
+    // 编码主线程证据保留状态，让消费者能识别窗口容量、淘汰和聚合情况。
+    private fun mainThreadRetention(stats: MainThreadRetentionStats): String {
+        val fields: List<String> = listOf(
+            "\"historyLimit\":${stats.historyLimit}",
+            "\"slowHistoryLimit\":${stats.slowHistoryLimit}",
+            "\"aggregatedBurstLimit\":${stats.aggregatedBurstLimit}",
+            "\"stackSampleLimit\":${stats.stackSampleLimit}",
+            "\"historyDroppedCount\":${stats.historyDroppedCount}",
+            "\"slowHistoryDroppedCount\":${stats.slowHistoryDroppedCount}",
+            "\"aggregatedMessageCount\":${stats.aggregatedMessageCount}",
+            "\"aggregationEnabled\":${stats.aggregationEnabled}",
+            "\"truncated\":${stats.truncated}",
+        )
+        return "{${fields.joinToString(separator = ",")}}"
     }
 
     // 生成单个栈采样字段。

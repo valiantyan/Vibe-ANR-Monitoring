@@ -286,6 +286,8 @@ interface AnrEventListener {
 | `count` | 聚合消息数量 |
 | `sampleStackIds` | 慢消息采样堆栈 ID 列表 |
 
+实现层使用 `MainThreadEvidenceStore` 分层保存主线程证据：`history` 只承担最近窗口兼容语义；`slowHistory` 独立保留慢消息、带采样栈的消息和关键组件慢消息；`aggregatedBursts` 记录连续重复短消息风暴；`retention` 输出窗口上限、淘汰计数和聚合计数。这样历史慢消息和它引用的 `stackSamples` 不会被普通短消息风暴静默挤出。
+
 聚合策略：
 
 - 连续短消息累计到 `shortMessageAggregateMs` 后合并。

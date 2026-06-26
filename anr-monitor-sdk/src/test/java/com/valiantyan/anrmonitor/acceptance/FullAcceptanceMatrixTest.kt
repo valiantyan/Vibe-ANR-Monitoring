@@ -200,6 +200,37 @@ class FullAcceptanceMatrixTest {
         }
     }
 
+    /**
+     * 主线程证据保留扩展必须同时进入服务端协议、排查指南和 SDK 源码。
+     */
+    @Test
+    fun retainedMainThreadEvidenceContractIsDocumentedAndImplemented(): Unit {
+        val rootDir: File = findProjectRoot()
+        val protocolText: String = rootDir.resolve("docs-anr/102-ANR监控SDK服务端消费协议.md").readText()
+        val guideText: String = rootDir.resolve("docs-anr/104-ANR监控JSON日志根因排查指南.md").readText()
+        val readmeText: String = rootDir.resolve("README.md").readText()
+        val snapshotText: String = rootDir.resolve(
+            "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/domain/model/AnrSnapshot.kt",
+        ).readText()
+        val encoderText: String = rootDir.resolve(
+            "anr-monitor-sdk/src/main/java/com/valiantyan/anrmonitor/reporter/encoder/AnrReportJsonEncoder.kt",
+        ).readText()
+        listOf(
+            protocolText,
+            guideText,
+            readmeText,
+            snapshotText,
+            encoderText,
+        ).forEach { content: String ->
+            assertContains(content, "slowHistory")
+            assertContains(content, "aggregatedBursts")
+            assertContains(content, "retention")
+        }
+        assertContains(protocolText, "historyDroppedCount")
+        assertContains(protocolText, "slowHistoryDroppedCount")
+        assertContains(guideText, "retention.truncated")
+    }
+
     // 从 Gradle 测试工作目录向上查找项目根目录，避免依赖固定执行目录。
     private fun findProjectRoot(): File {
         val userDir: String = requireNotNull(System.getProperty("user.dir"))

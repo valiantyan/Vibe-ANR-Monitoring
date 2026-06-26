@@ -13,11 +13,15 @@ import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
 import com.valiantyan.anrmonitor.domain.model.Confidence
 import com.valiantyan.anrmonitor.domain.model.EnvironmentEvidenceAvailability
+import com.valiantyan.anrmonitor.domain.model.MainThreadRetentionStats
 import com.valiantyan.anrmonitor.domain.model.MemorySnapshot
+import com.valiantyan.anrmonitor.domain.model.MessageRecord
+import com.valiantyan.anrmonitor.domain.model.MessageRecordKind
 import com.valiantyan.anrmonitor.domain.model.NativePollOnceRecord
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.ProcessIoSnapshot
 import com.valiantyan.anrmonitor.domain.model.SdkDiagnostics
+import com.valiantyan.anrmonitor.domain.model.StackSampleRecord
 import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
 import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
 import com.valiantyan.anrmonitor.domain.model.ThreadCpuRecord
@@ -76,6 +80,93 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"primary\":\"UNKNOWN_INSUFFICIENT_EVIDENCE\""))
         assertFalse(json.contains("\"sharedPreferences\""))
         assertFalse(json.contains("obj="))
+    }
+
+    /**
+     * 新增主线程证据字段必须在快照默认值为空时保持可编码，避免破坏旧构造路径。
+     */
+    @Test
+    fun encodeIncludesEmptyMainThreadEvidenceDefaults(): Unit {
+        val report: AnrReport = AnrReport.empty(
+            appId = "demo",
+            environment = "test",
+        )
+
+        val json: String = AnrReportJsonEncoder().encode(report = report)
+
+        assertTrue(json.contains("\"mainThread\""))
+        assertTrue(json.contains("\"history\":[]"))
+        assertTrue(json.contains("\"slowHistory\":[]"))
+        assertTrue(json.contains("\"aggregatedBursts\":[]"))
+        assertTrue(json.contains("\"retention\""))
+        assertTrue(json.contains("\"historyLimit\":0"))
+        assertTrue(json.contains("\"slowHistoryLimit\":0"))
+        assertTrue(json.contains("\"aggregatedBurstLimit\":0"))
+        assertTrue(json.contains("\"stackSampleLimit\":0"))
+        assertTrue(json.contains("\"truncated\":false"))
+    }
+
+    /**
+     * 主线程慢历史、聚合风暴和保留状态必须进入兼容 JSON 扩展字段。
+     */
+    @Test
+    fun encodeIncludesMainThreadRetainedEvidence(): Unit {
+        val report: AnrReport = AnrReport.empty(
+            appId = "demo",
+            environment = "test",
+        ).copy(
+            snapshot = AnrReport.empty(appId = "demo", environment = "test").snapshot.copy(
+                historyMessages = listOf(message(seq = 10L, kind = MessageRecordKind.HISTORY, wallMs = 20L, count = 1)),
+                slowHistoryMessages = listOf(
+                    message(
+                        seq = 1L,
+                        kind = MessageRecordKind.HISTORY,
+                        wallMs = 1_500L,
+                        count = 1,
+                        sampleStackIds = listOf("sample-slow"),
+                    ),
+                ),
+                aggregatedBursts = listOf(
+                    message(
+                        seq = 2L,
+                        kind = MessageRecordKind.AGGREGATED,
+                        wallMs = 600L,
+                        count = 30,
+                    ),
+                ),
+                stackSamples = listOf(
+                    StackSampleRecord(
+                        stackId = "sample-slow",
+                        frames = listOf("com.example.Slow.run(Slow.kt:10)"),
+                        hitCount = 2,
+                    ),
+                ),
+                mainThreadRetention = MainThreadRetentionStats(
+                    historyLimit = 120,
+                    slowHistoryLimit = 20,
+                    aggregatedBurstLimit = 20,
+                    stackSampleLimit = 60,
+                    historyDroppedCount = 380L,
+                    slowHistoryDroppedCount = 0L,
+                    aggregatedMessageCount = 30L,
+                    aggregationEnabled = true,
+                    truncated = true,
+                ),
+            ),
+        )
+
+        val json: String = AnrReportJsonEncoder().encode(report = report)
+
+        assertTrue(json.contains("\"slowHistory\""))
+        assertTrue(json.contains("\"seq\":1"))
+        assertTrue(json.contains("\"sampleStackIds\":[\"sample-slow\"]"))
+        assertTrue(json.contains("\"aggregatedBursts\""))
+        assertTrue(json.contains("\"kind\":\"AGGREGATED\""))
+        assertTrue(json.contains("\"count\":30"))
+        assertTrue(json.contains("\"retention\""))
+        assertTrue(json.contains("\"historyDroppedCount\":380"))
+        assertTrue(json.contains("\"aggregatedMessageCount\":30"))
+        assertTrue(json.contains("\"truncated\":true"))
     }
 
     /**
@@ -464,5 +555,30 @@ class AnrReportJsonEncoderTest {
         assertTrue(json.contains("\"name\":\"report_queue_enqueued\""))
         assertTrue(json.contains("\"count\":1"))
         assertFalse(json.contains("system trace raw content"))
+    }
+
+    // 构造主线程消息记录，避免测试重复展开兼容 JSON 所需字段。
+    private fun message(
+        seq: Long,
+        kind: MessageRecordKind,
+        wallMs: Long,
+        count: Int,
+        sampleStackIds: List<String> = emptyList(),
+    ): MessageRecord {
+        return MessageRecord(
+            seq = seq,
+            kind = kind,
+            messageType = "looper_dispatch",
+            what = null,
+            targetClass = "android.os.Handler",
+            callbackClass = "com.example.RefreshRunnable",
+            isCriticalComponent = false,
+            startUptimeMs = seq * 10L,
+            endUptimeMs = seq * 10L + wallMs,
+            wallMs = wallMs,
+            cpuMs = wallMs,
+            count = count,
+            sampleStackIds = sampleStackIds,
+        )
     }
 }

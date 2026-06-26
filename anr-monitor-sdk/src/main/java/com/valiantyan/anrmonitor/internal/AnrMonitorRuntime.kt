@@ -24,7 +24,7 @@ import com.valiantyan.anrmonitor.collector.watchdog.AnrWatchdog
 import com.valiantyan.anrmonitor.collector.watchdog.HeartbeatState
 import com.valiantyan.anrmonitor.core.clock.AndroidClock
 import com.valiantyan.anrmonitor.core.privacy.ClassNameSanitizer
-import com.valiantyan.anrmonitor.core.timeline.MessageRingBuffer
+import com.valiantyan.anrmonitor.core.timeline.MainThreadEvidenceStore
 import com.valiantyan.anrmonitor.domain.model.AnrEventType
 import com.valiantyan.anrmonitor.domain.model.AnrInfoSnapshot
 import com.valiantyan.anrmonitor.domain.model.AnrReport
@@ -32,6 +32,8 @@ import com.valiantyan.anrmonitor.domain.model.AnrSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
 import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.ChecktimeSummary
+import com.valiantyan.anrmonitor.domain.model.MainThreadEvidenceSnapshot
+import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.PendingQueueSnapshot
 import com.valiantyan.anrmonitor.domain.model.StackTraceSnapshot
 import com.valiantyan.anrmonitor.domain.model.SystemEnvironmentSnapshot
@@ -74,8 +76,15 @@ internal class AnrMonitorRuntime(
     // 类名脱敏器，保证 collector 阶段就只输出安全类名。
     private val sanitizer: ClassNameSanitizer = ClassNameSanitizer(privacyMode = config.privacyMode)
 
-    // Looper 历史消息缓冲区，疑似 ANR 时作为前序消息证据。
-    private val historyBuffer: MessageRingBuffer = MessageRingBuffer(capacity = config.historyBufferSize)
+    // 主线程证据仓库，统一保留完成消息、慢历史、短消息聚合和栈样本。
+    private val mainThreadEvidenceStore: MainThreadEvidenceStore = MainThreadEvidenceStore(
+        historyLimit = config.historyBufferSize,
+        slowHistoryLimit = DEFAULT_SLOW_HISTORY_LIMIT,
+        aggregatedBurstLimit = DEFAULT_AGGREGATED_BURST_LIMIT,
+        stackSampleLimit = DEFAULT_RETAINED_STACK_SAMPLE_LIMIT,
+        slowMessageMs = config.slowMessageMs,
+        shortMessageAggregateMs = config.shortMessageAggregateMs,
+    )
 
     // 主线程 Java 栈采集器，同时供疑似 ANR 快照和慢消息采样复用。
     private val stackCollector: MainThreadStackCollector = MainThreadStackCollector()
@@ -91,7 +100,7 @@ internal class AnrMonitorRuntime(
         clock = clock,
         threadCpuClock = MainThreadCpuClock(),
         sanitizer = sanitizer,
-        historyBuffer = historyBuffer,
+        evidenceStore = mainThreadEvidenceStore,
         slowMessageMs = config.slowMessageMs,
         stackSampleIntervalMs = config.stackSampleIntervalMs,
         slowMessageSampler = slowMessageStackSampler,
@@ -259,6 +268,18 @@ internal class AnrMonitorRuntime(
         val anrInfo: AnrInfoSnapshot = anrInfoCollector.collect()
         val pendingQueue: PendingQueueSnapshot = capturePendingQueue()
         val mainThreadStack: StackTraceSnapshot = stackCollector.capture()
+        val capturedCurrentMessage: MessageRecord? = timelineCollector.currentMessage()
+        val currentStackSamples = timelineCollector.stackSamplesFor(
+            sampleStackIds = capturedCurrentMessage?.sampleStackIds.orEmpty(),
+        )
+        val mainThreadEvidence: MainThreadEvidenceSnapshot = mainThreadEvidenceStore.snapshot(
+            currentMessage = capturedCurrentMessage,
+            currentStackSamples = currentStackSamples,
+        )
+        val currentMessage: MessageRecord? = normalizeCurrentMessage(
+            currentMessage = capturedCurrentMessage,
+            mainThreadEvidence = mainThreadEvidence,
+        )
         return AnrSnapshot(
             eventId = UUID.randomUUID().toString(),
             eventType = eventType(anrInfo = anrInfo),
@@ -267,11 +288,14 @@ internal class AnrMonitorRuntime(
             timeUptimeMs = nowUptimeMs,
             anrInfo = anrInfo,
             componentTimeoutMs = config.componentTimeoutMs[anrInfo.anrType],
-            currentMessage = timelineCollector.currentMessage(),
-            historyMessages = timelineCollector.historyMessages(),
+            currentMessage = currentMessage,
+            historyMessages = mainThreadEvidence.historyMessages,
+            slowHistoryMessages = mainThreadEvidence.slowHistoryMessages,
+            aggregatedBursts = mainThreadEvidence.aggregatedBursts,
             pendingQueue = pendingQueue,
             mainThreadStack = mainThreadStack,
-            stackSamples = timelineCollector.stackSamples(),
+            stackSamples = mainThreadEvidence.stackSamples,
+            mainThreadRetention = mainThreadEvidence.retention,
             threadCpuRecords = captureThreadCpuRecords(),
             checktimeSummary = captureChecktimeSummary(),
             environmentSnapshot = captureEnvironmentSnapshot(),
@@ -378,5 +402,41 @@ internal class AnrMonitorRuntime(
          */
         private const val DEFAULT_THREAD_CPU_MAX_COUNT: Int = 5
 
+        /**
+         * 默认慢消息独立历史窗口容量。
+         */
+        private const val DEFAULT_SLOW_HISTORY_LIMIT: Int = 20
+
+        /**
+         * 默认短消息风暴聚合窗口容量。
+         */
+        private const val DEFAULT_AGGREGATED_BURST_LIMIT: Int = 20
+
+        /**
+         * 默认报告级栈采样保留容量。
+         */
+        private const val DEFAULT_RETAINED_STACK_SAMPLE_LIMIT: Int = 60
     }
+}
+
+// 快照组装晚于 current 读取时，保留层命中的同一 seq 说明 dispatch 已完成。
+private fun normalizeCurrentMessage(
+    currentMessage: MessageRecord?,
+    mainThreadEvidence: MainThreadEvidenceSnapshot,
+): MessageRecord? {
+    val currentSeq: Long = currentMessage?.seq ?: return null
+    if (hasRetainedMessageSeq(seq = currentSeq, mainThreadEvidence = mainThreadEvidence)) {
+        return null
+    }
+    return currentMessage
+}
+
+// 只在报告组装层判断 retained evidence，不回写或修剪证据仓库状态。
+private fun hasRetainedMessageSeq(
+    seq: Long,
+    mainThreadEvidence: MainThreadEvidenceSnapshot,
+): Boolean {
+    return mainThreadEvidence.historyMessages.any { record: MessageRecord -> record.seq == seq } ||
+        mainThreadEvidence.slowHistoryMessages.any { record: MessageRecord -> record.seq == seq } ||
+        mainThreadEvidence.aggregatedBursts.any { record: MessageRecord -> record.seq == seq }
 }

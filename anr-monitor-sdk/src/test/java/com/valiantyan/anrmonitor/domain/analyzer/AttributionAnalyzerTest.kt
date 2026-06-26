@@ -7,6 +7,7 @@ import com.valiantyan.anrmonitor.domain.model.BarrierEvidenceSnapshot
 import com.valiantyan.anrmonitor.domain.model.BarrierTokenRecord
 import com.valiantyan.anrmonitor.domain.model.BinderBlockSnapshot
 import com.valiantyan.anrmonitor.domain.model.Confidence
+import com.valiantyan.anrmonitor.domain.model.MainThreadRetentionStats
 import com.valiantyan.anrmonitor.domain.model.MessageRecord
 import com.valiantyan.anrmonitor.domain.model.MessageRecordKind
 import com.valiantyan.anrmonitor.domain.model.NativePollOnceRecord
@@ -280,6 +281,41 @@ class AttributionAnalyzerTest {
     }
 
     /**
+     * 慢历史保留层比最近 history 更能解释前序慢消息，应优先参与历史慢消息归因。
+     */
+    @Test
+    fun analyzeReturnsHistorySlowFromSlowHistoryWhenRecentHistoryMissesIt(): Unit {
+        val result = AttributionAnalyzer().analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 9L,
+                    wallMs = 20L,
+                    cpuMs = 10L,
+                ),
+                history = listOf(
+                    message(
+                        seq = 10L,
+                        wallMs = 10L,
+                        cpuMs = 5L,
+                    ),
+                ),
+                slowHistory = listOf(
+                    message(
+                        seq = 1L,
+                        wallMs = 7_000L,
+                        cpuMs = 20L,
+                    ),
+                ),
+                pending = emptyList(),
+                frames = emptyList(),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.HISTORY_MESSAGE_SLOW, result.primaryCode)
+        assertTrue(result.evidenceItems.contains("slow history message seq=1 wall=7000ms"))
+    }
+
+    /**
      * Pending 中大量重复 target 时，归因为消息风暴。
      */
     @Test
@@ -307,6 +343,37 @@ class AttributionAnalyzerTest {
         )
 
         assertEquals(AnrAttributionCode.MESSAGE_STORM, result.primaryCode)
+    }
+
+    /**
+     * Pending 队列无法提供重复 target 时，聚合短消息摘要仍可识别消息风暴。
+     */
+    @Test
+    fun analyzeReturnsMessageStormFromAggregatedBursts(): Unit {
+        val result = AttributionAnalyzer().analyze(
+            snapshot = snapshot(
+                current = message(
+                    seq = 9L,
+                    wallMs = 20L,
+                    cpuMs = 10L,
+                ),
+                history = emptyList(),
+                aggregatedBursts = listOf(
+                    message(
+                        seq = 2L,
+                        wallMs = 800L,
+                        cpuMs = 600L,
+                        count = 30,
+                        kind = MessageRecordKind.AGGREGATED,
+                    ),
+                ),
+                pending = emptyList(),
+                frames = emptyList(),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.MESSAGE_STORM, result.primaryCode)
+        assertTrue(result.evidenceItems.contains("aggregated burst seq=2 count=30 wall=800ms"))
     }
 
     /**
@@ -409,11 +476,43 @@ class AttributionAnalyzerTest {
         assertFalse(result.evidenceItems.contains("binder thread waits main or lock"))
     }
 
+    /**
+     * 慢历史窗口发生淘汰时，未知归因必须显式提示证据缺口。
+     */
+    @Test
+    fun analyzeUnknownMentionsSlowHistoryTruncation(): Unit {
+        val result = AttributionAnalyzer().analyze(
+            snapshot = snapshot(
+                current = null,
+                history = emptyList(),
+                pending = emptyList(),
+                frames = emptyList(),
+                mainThreadRetention = MainThreadRetentionStats(
+                    historyLimit = 120,
+                    slowHistoryLimit = 20,
+                    aggregatedBurstLimit = 20,
+                    stackSampleLimit = 60,
+                    historyDroppedCount = 0L,
+                    slowHistoryDroppedCount = 2L,
+                    aggregatedMessageCount = 0L,
+                    aggregationEnabled = true,
+                    truncated = true,
+                ),
+            ),
+        )
+
+        assertEquals(AnrAttributionCode.UNKNOWN_INSUFFICIENT_EVIDENCE, result.primaryCode)
+        assertTrue(result.missingEvidence.contains("slow history dropped count=2"))
+    }
+
     private fun snapshot(
         current: MessageRecord?,
         history: List<MessageRecord>,
+        slowHistory: List<MessageRecord> = emptyList(),
+        aggregatedBursts: List<MessageRecord> = emptyList(),
         pending: List<PendingMessage>,
         frames: List<String>,
+        mainThreadRetention: MainThreadRetentionStats = MainThreadRetentionStats.empty(),
         threadCpuRecords: List<ThreadCpuRecord> = emptyList(),
         barrierEvidenceSnapshot: BarrierEvidenceSnapshot = BarrierEvidenceSnapshot.unavailable(
             reason = "barrier evidence not provided",
@@ -430,6 +529,8 @@ class AttributionAnalyzerTest {
             timeUptimeMs = 10_000L,
             currentMessage = current,
             historyMessages = history,
+            slowHistoryMessages = slowHistory,
+            aggregatedBursts = aggregatedBursts,
             pendingQueue = PendingQueueSnapshot(
                 available = true,
                 truncated = false,
@@ -442,6 +543,7 @@ class AttributionAnalyzerTest {
                 threadName = "main",
                 frames = frames,
             ),
+            mainThreadRetention = mainThreadRetention,
             threadCpuRecords = threadCpuRecords,
             barrierEvidenceSnapshot = barrierEvidenceSnapshot,
             binderBlockSnapshot = binderBlockSnapshot,
@@ -481,10 +583,12 @@ class AttributionAnalyzerTest {
         wallMs: Long,
         cpuMs: Long,
         sampleStackIds: List<String> = emptyList(),
+        count: Int = 1,
+        kind: MessageRecordKind = MessageRecordKind.HISTORY,
     ): MessageRecord {
         return MessageRecord(
             seq = seq,
-            kind = MessageRecordKind.HISTORY,
+            kind = kind,
             messageType = "looper_dispatch",
             what = null,
             targetClass = "android.os.Handler",
@@ -494,6 +598,7 @@ class AttributionAnalyzerTest {
             endUptimeMs = wallMs,
             wallMs = wallMs,
             cpuMs = cpuMs,
+            count = count,
             sampleStackIds = sampleStackIds,
         )
     }
